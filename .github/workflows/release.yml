@@ -39,7 +39,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 20
-          cache: pnpm
+          # 不启用 cache: pnpm：本项目 .gitignore 忽略 pnpm-lock.yaml，CI 无 lockfile 会触发
+          # "Dependencies lock file is not found"。pnpm 自身 store 仍会缓存，仅少一层 CI 加速。
       - run: pnpm install
       - run: pnpm typecheck
       - run: pnpm test
@@ -69,7 +70,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 20
-          cache: pnpm
+          # 不启用 cache: pnpm：本项目 .gitignore 忽略 pnpm-lock.yaml，CI 无 lockfile 会触发
+          # "Dependencies lock file is not found"。pnpm 自身 store 仍会缓存，仅少一层 CI 加速。
       - run: pnpm install
       # electron-builder 默认 publish=onTagOrDraft：有 v* tag 时创建/更新对应 GitHub Release
       # 并上传本平台安装包 + latest*.yml + blockmap；无 tag（手动触发）则只构建。
