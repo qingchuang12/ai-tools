@@ -19,6 +19,7 @@ import type {ConsistencyItem, ConsistencyReport} from '../../../main/cloud-consi
 import type {CloudSyncConfig, CloudSyncConfigInput, CloudSyncResult} from '../../../shared/cloud-sync-constants';
 import {defaultCloudSyncConfig} from '../../../shared/cloud-sync-constants';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../../../shared/sync-task-types';
+import type {UpdateEventPayload} from '../../../main/updater';
 import type {McpServerConfig} from '../../../main/config/types';
 // Skill 导出结果：与本文件共用（data 声明为 Uint8Array 而非 main 侧的 Node Buffer，
 // 避免 renderer 类型图引入 node Buffer 导致 Blob 构造参数类型冲突）
@@ -512,6 +513,15 @@ interface ElectronAPI {
         /** 订阅任务列表变化（主进程每次状态更新都会回调最新列表），返回取消订阅函数 */
         onUpdated: (callback: (tasks: SyncTask[]) => void) => () => void;
     };
+
+    /** 在线更新（plan-19.0）：动作走 invoke，状态经 onStatus 订阅 */
+    updater: {
+        getStatus: () => Promise<UpdateEventPayload>;
+        check: () => Promise<boolean>;
+        download: () => Promise<boolean>;
+        quitAndInstall: () => Promise<boolean>;
+        onStatus: (callback: (payload: UpdateEventPayload) => void) => () => void;
+    };
 }
 
 // 获取 Electron API
@@ -982,6 +992,21 @@ const mockAPI: ElectronAPI = {
         clear: async () => {
         },
         onUpdated: () => () => {
+        },
+    },
+
+    // 在线更新：浏览器预览无实际更新源，统一回退为「不支持」
+    updater: {
+        getStatus: async (): Promise<UpdateEventPayload> => ({
+            state: 'unsupported',
+            unsupported: true,
+            message: '浏览器预览环境不支持在线更新。',
+            currentVersion: '1.0.0-dev',
+        }),
+        check: async () => false,
+        download: async () => false,
+        quitAndInstall: async () => false,
+        onStatus: () => () => {
         },
     },
 };

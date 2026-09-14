@@ -50,6 +50,35 @@ export default function Settings() {
     // 关于弹窗
     const [showAbout, setShowAbout] = useState(false);
 
+    // 在线更新（plan-19.0）：状态由主进程 autoUpdater 事件推送
+    const [update, setUpdate] = useState<{
+        state: string;
+        version?: string;
+        percent?: number;
+        message?: string;
+        currentVersion?: string;
+    }>({state: 'idle'});
+
+    useEffect(() => {
+        const off = api.updater.onStatus(st => setUpdate(prev => ({...prev, ...st})));
+        api.updater.getStatus().then(st => setUpdate(prev => ({...prev, ...st}))).catch(() => {});
+        return off;
+    }, [api]);
+
+    const handleCheckUpdate = () => {
+        setUpdate(prev => ({...prev, state: 'checking'}));
+        void api.updater.check();
+    };
+    const handleDownloadUpdate = () => {
+        void api.updater.download();
+    };
+    const handleQuitInstall = () => {
+        void api.updater.quitAndInstall();
+    };
+    const openDownloadPage = () => {
+        void api.system.openExternal('https://www.ywhome.top');
+    };
+
     useEffect(() => {
         loadData(true);
     }, [api]);
@@ -713,6 +742,65 @@ export default function Settings() {
                     <img src={mcpDockIcon} alt="AI-Tools" className="w-16 h-16 rounded-2xl mb-3"/>
                     <h3 className="text-[16px] font-semibold text-[var(--color-text)]">AI-Tools</h3>
                     <p className="text-[12px] text-[var(--color-muted2)] mt-0.5">{version ? `Version ${version}` : 'Loading...'}</p>
+                    {/* 检查更新（plan-19.0）：状态由主进程推送 */}
+                    <div className="w-full mt-4 p-3 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-left">
+                        <div className="flex items-center justify-between">
+                            <p className="text-[12px] text-[var(--color-muted2)] font-medium">更新</p>
+                            <p className="text-[12px] text-[var(--color-muted)]">{update.currentVersion ? `v${update.currentVersion}` : ''}</p>
+                        </div>
+                        <div className="mt-2 text-[12px] text-[var(--color-muted)]">
+                            {(update.state === 'idle' || update.state === 'checking') && (
+                                <button
+                                    type="button"
+                                    onClick={handleCheckUpdate}
+                                    disabled={update.state === 'checking'}
+                                    className="text-[var(--color-accent)] hover:underline disabled:opacity-50"
+                                >
+                                    {update.state === 'checking' ? '检查中…' : '检查更新'}
+                                </button>
+                            )}
+                            {update.state === 'available' && (
+                                <div className="flex items-center justify-between gap-3">
+                                    <span>发现新版本 {update.version ? `v${update.version}` : ''}</span>
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadUpdate}
+                                        className="text-[var(--color-accent)] hover:underline"
+                                    >
+                                        下载并安装
+                                    </button>
+                                </div>
+                            )}
+                            {update.state === 'downloading' && (
+                                <div>正在下载 {update.percent ? `${update.percent.toFixed(0)}%` : '…'}</div>
+                            )}
+                            {update.state === 'downloaded' && (
+                                <div className="flex items-center justify-between gap-3">
+                                    <span>更新已就绪，重启后生效</span>
+                                    <button
+                                        type="button"
+                                        onClick={handleQuitInstall}
+                                        className="text-[var(--color-accent)] hover:underline"
+                                    >
+                                        立即重启
+                                    </button>
+                                </div>
+                            )}
+                            {update.state === 'not-available' && <span>当前已是最新版本</span>}
+                            {(update.state === 'error' || update.state === 'unsupported') && (
+                                <div className="flex flex-col gap-1.5">
+                                    <span>{update.message || '无法自动更新'}</span>
+                                    <button
+                                        type="button"
+                                        onClick={openDownloadPage}
+                                        className="text-[var(--color-accent)] hover:underline text-left"
+                                    >
+                                        前往官网手动下载
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                     <p className="text-[12px] text-[var(--color-muted2)] mt-3 leading-relaxed">
                         {t('settings.aboutIntro')}
                     </p>

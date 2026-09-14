@@ -1,0 +1,91 @@
+# AI-Tools 自动化构建与发布（plan-19.0）
+#
+# 用法：
+#   - 手动触发：Actions → Run workflow（仅 build + 产物，不发布到 Release）
+#   - 发布触发：推送 `v*` tag（先确认 package.json 版本已升）
+#
+# 流程：test → 三平台 build/package（tag 时经 electron-builder 的 github publish
+#       `onTagOrDraft` 自动创建/更新 GitHub Release 并上传安装包 + latest*.yml + blockmap）
+#       → 同时上传 GitHub Actions Artifacts 作备份。
+#
+# feed = GitHub Releases：electron-updater 的 github provider 会自动拉到
+#       `https://github.com/qingchuang12/ai-tools/releases/latest/download` 下的安装包，
+# 即最终用户的应用在线升级从这里取文件，无需自建服务器目录。
+#
+# 前端自理事项：
+#   - 仓库需已存在且远端指向 github.com/qingchuang12/ai-tools（本机 remote 已配置）。
+#   - macOS/Windows 代码签名本期未启用：CSC_IDENTITY_AUTO_DISCOVERY=false 优雅跳过
+#     （未签名 Windows 有 SmartScreen 提示；mac 走官网/手动下载降级）。
+name: Build & Publish
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  test:
+    name: Test / Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: package:win
+            label: win
+          - os: macos-latest
+            script: package:mac
+            label: mac
+          - os: ubuntu-latest
+            script: package:linux
+            label: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install
+      # electron-builder 默认 publish=onTagOrDraft：有 v* tag 时创建/更新对应 GitHub Release
+      # 并上传本平台安装包 + latest*.yml + blockmap；无 tag（手动触发）则只构建。
+      # 用仓库的 GITHUB_TOKEN 授权发布到 Releases。
+      - run: pnpm ${{ matrix.script }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # 备份产物到 Artifacts（无论是否 tag），便于检查与手动补传
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-tools-${{ matrix.label }}
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest*.yml
+            release/*.dmg
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: warn

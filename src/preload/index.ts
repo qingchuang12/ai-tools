@@ -19,6 +19,7 @@ import type {CloudSyncConfig, CloudSyncConfigInput, CloudSyncResult} from '../sh
 import type {ConsistencyReport} from '../main/cloud-consistency';
 import type {SkillsExportResult} from '../main/skills-export';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
+import type {UpdateEventPayload} from '../main/updater';
 import type {McpServerConfig} from '../main/config/types';
 
 // 类型定义
@@ -302,6 +303,24 @@ const api = {
             ipcRenderer.invoke('system:open-config-directory', client),
         openSkillsDirectory: (client: SkillClientType): Promise<string> =>
             ipcRenderer.invoke('system:open-skills-directory', client),
+    },
+
+    // 在线更新（plan-19.0）：动作走 invoke，状态经 onStatus 订阅
+    updater: {
+        getStatus: (): Promise<UpdateEventPayload> =>
+            ipcRenderer.invoke('update:get-status'),
+        check: (): Promise<boolean> =>
+            ipcRenderer.invoke('update:check'),
+        download: (): Promise<boolean> =>
+            ipcRenderer.invoke('update:download'),
+        quitAndInstall: (): Promise<boolean> =>
+            ipcRenderer.invoke('update:quit-and-install'),
+        // 主进程每次状态变化都推送；订阅返回卸载函数
+        onStatus: (callback: (payload: UpdateEventPayload) => void): (() => void) => {
+            const listener = (_e: unknown, payload: UpdateEventPayload) => callback(payload);
+            ipcRenderer.on('update:status', listener);
+            return () => ipcRenderer.removeListener('update:status', listener);
+        },
     },
 
     // 对话框（渲染进程复用系统原生选择框）

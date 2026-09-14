@@ -1,12 +1,16 @@
 {
   "name": "ai-tools",
-  "version": "1.2.5",
+  "version": "1.3.0",
   "description": "AI-Tools - A beautiful desktop app for managing MCP servers and AI agent skills",
   "author": {
     "name": "AI-Tools Team",
     "email": "mail@folay.top"
   },
   "homepage": "https://www.ywhome.top",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qingchuang12/ai-tools.git"
+  },
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "concurrently \"pnpm run dev:main\" \"pnpm run dev:renderer\"",
@@ -59,6 +63,7 @@
     "cross-env": "^10.1.0",
     "electron": "43.0.0",
     "electron-builder": "^24.9.0",
+    "electron-updater": "^6.3.9",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "terser": "^5.46.0",
@@ -72,7 +77,13 @@
     "appId": "com.ai-tools.app",
     "npmRebuild": false,
     "productName": "AI-Tools",
-    "publish": null,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "qingchuang12",
+        "repo": "ai-tools"
+      }
+    ],
     "directories": {
       "output": "release"
     },

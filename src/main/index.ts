@@ -45,6 +45,13 @@ import {checkCloudConsistency, type ConsistencyReport, readCompareEnds} from './
 import {getSyncTaskManager, initSyncTaskManager} from './sync-task-manager';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
 import type {CloudSyncConfig, CloudSyncConfigInput, CloudSyncResult} from '../shared/cloud-sync-constants';
+import {
+    checkForUpdatesAndNotify,
+    downloadUpdateAndInstall,
+    getUpdateStatus,
+    initUpdater,
+    quitAndInstall
+} from './updater';
 
 /** 仅允许 http/https 外部链接，避免 file:// 等被带出（P1-6） */
 function isSafeExternalUrl(url: string): boolean {
@@ -218,6 +225,13 @@ app.whenReady().then(() => {
         BrowserWindow.getAllWindows().forEach(w => w.webContents.send('sync-tasks:updated', list));
     });
 
+    // 初始化在线更新（订阅 autoUpdater 事件，广播给渲染层）；不触发检测，检测由 IPC/渲染层发起。
+    initUpdater();
+
+    // 启动后静默检查一次更新：不下载、只在有新版时由渲染层收到 available 后询问用户。
+    // 仅在支持该形态（打包 + NSIS/AppImage）时真正发起；dev / portable / mac 会广播 unsupported。
+    setTimeout(() => checkForUpdatesAndNotify(), 3000);
+
     // 启动后后台异步以云端为准拉取一次（覆盖本地暂存区），不阻塞启动。
     // 经由同步队列执行（P1-1），与手动 push 串行；拉取完成（无论成败）通知渲染层刷新；
     // 仅在已配置云同步时执行。
@@ -374,6 +388,24 @@ ipcMain.handle('system:get-platform', () => {
 
 ipcMain.handle('system:get-version', () => {
     return app.getVersion();
+});
+
+// ============ 在线更新（plan-19.0） ============
+// 主进程只提供 IPC 动作与状态查询；autoUpdater 事件经 `update:status` 推给渲染层。
+ipcMain.handle('update:get-status', () => {
+    return getUpdateStatus();
+});
+ipcMain.handle('update:check', () => {
+    checkForUpdatesAndNotify();
+    return true;
+});
+ipcMain.handle('update:download', () => {
+    downloadUpdateAndInstall();
+    return true;
+});
+ipcMain.handle('update:quit-and-install', () => {
+    quitAndInstall();
+    return true;
 });
 
 ipcMain.handle('system:open-external', async (_, url: string) => {
