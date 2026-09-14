@@ -328,6 +328,17 @@ describe('bailian.mapServer', () => {
         expect(item.isVerified).toBe(true);
         expect(item.source).toBe('bailian');
     });
+
+    it('在线形态（含 serverCode）id 采用 serverCode，extra 透出 serverCode（2026-09-14 在线化）', () => {
+        const withCode = mapServer({serverName: '快递100', serverCode: 'kuaidi100-mcp', source: 'PARTNER'}, 0);
+        expect(withCode.id).toBe('bailian:kuaidi100-mcp');
+        expect(withCode.extra?.serverCode).toBe('kuaidi100-mcp');
+        expect(withCode.sourceUrl).toContain('kuaidi100-mcp');
+        // 缺 serverCode 时回退旧稳定编码（不破坏既有 id 契约）
+        const legacy = mapServer({serverName: 'svc', source: 'ALIYUN'}, 5);
+        expect(legacy.id).toBe('bailian:ALIYUN:svc');
+        expect(legacy.extra?.serverCode).toBeNull();
+    });
 });
 
 /**
@@ -365,7 +376,7 @@ describe('bailian.fetchServerDetail', () => {
     it('不存在的稳定 ID 返回明确错误', async () => {
         await expect(
             bailianAdapter.fetchServerDetail!({query: '', page: 1, pageSize: 1, baseUrl: ''}, 'bailian:ALIYUN:not-found')
-        ).rejects.toThrow('离线索引中不存在');
+        ).rejects.toThrow('本地缓存中不存在');
     });
 });
 
