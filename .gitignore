@@ -1,7 +1,8 @@
 # Dependencies
 node_modules/
 package-lock.json
-pnpm-lock.yaml
+# pnpm-lock.yaml 由 .gitignore 解除忽略：提交它以保证 GitHub Actions/CI 可复现与依赖缓存可用
+#（此前忽略导致 setup-node 的 cache: pnpm 在 CI 找不到 lockfile 而失败）。
 
 # Build outputs
 dist/
