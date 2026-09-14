@@ -27,6 +27,11 @@ on:
 env:
   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
+# 允许 GITHUB_TOKEN 创建/更新 GitHub Release（投稿安装包 + latest.yml）。
+# 缺省 GITHUB_TOKEN 仅 read，创建 Release 需要 contents: write，否则报 403 "Resource not accessible by integration"。
+permissions:
+  contents: write
+
 jobs:
   test:
     name: Test / Typecheck
