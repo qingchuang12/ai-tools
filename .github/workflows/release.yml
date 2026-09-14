@@ -32,11 +32,11 @@ jobs:
     name: Test / Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      # 不指定 pnpm 版本：pnpm/action-setup 读取 package.json 的 packageManager(pnpm@12.4.1)，
+      # 避免与 workflow 里的 `version` 双重指定导致 ERR_PNPM_BAD_PM_VERSION。
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: pnpm
@@ -62,11 +62,11 @@ jobs:
             label: linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      # 不指定 pnpm 版本：pnpm/action-setup 读取 package.json 的 packageManager(pnpm@12.4.1)，
+      # 避免与 workflow 里的 `version` 双重指定导致 ERR_PNPM_BAD_PM_VERSION。
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: pnpm
