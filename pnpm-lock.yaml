@@ -178,6 +178,9 @@ importers:
       electron-store:
         specifier: ^8.1.0
         version: 8.2.0
+      electron-updater:
+        specifier: ^6.3.9
+        version: 6.8.9(supports-color@8.1.1)
       fuse.js:
         specifier: ^7.0.0
         version: 7.5.0
@@ -248,9 +251,6 @@ importers:
       electron-builder:
         specifier: ^24.9.0
         version: 24.13.3(electron-builder-squirrel-windows@24.13.3)(supports-color@8.1.1)
-      electron-updater:
-        specifier: ^6.3.9
-        version: 6.8.9(supports-color@8.1.1)
       postcss:
         specifier: ^8.4.32
         version: 8.5.26

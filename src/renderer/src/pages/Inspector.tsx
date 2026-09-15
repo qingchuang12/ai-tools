@@ -152,26 +152,40 @@ export default function Inspector() {
   //   则复用同一会话，从而保留已建立的连接与调试上下文（左侧菜单切回时）。
   // - 若 presetKey 变化（从「我的库」点了另一台 server 的「调试」），则新建会话并重置运行时，
   //   避免显示/连接错乱到上一台。
+  // 懒初始化 sessionId（纯计算，不在渲染期写 store）：
+  // - 若当前 store 会话的 presetKey 与本次预设配置一致（含两侧均为 null 的手动模式），
+  //   则复用同一会话，从而保留已建立的连接与调试上下文（左侧菜单切回时）。
+  // - 若 presetKey 变化（从「我的库」点了另一台 server 的「调试」），则新建会话并重置运行时，
+  //   避免显示/连接错乱到上一台。
+  // 注意：原先把 setInspectorRuntime 写在 useMemo 里（渲染期写 store，React 反模式），
+  // 会在首帧布局窗口强制额外重渲染，偶发导致 flex 高度解析异常 → 排版错位（切菜单重挂载反而正常）。
+  // 现改为：useMemo 仅负责派生 id，真正的 store 写入下放到 useEffect（挂载/会话变化时执行一次）。
   const sessionId = useMemo(() => {
     if (inspectorRuntime.sessionId && inspectorRuntime.presetKey === presetKey) {
       return inspectorRuntime.sessionId;
     }
-    const id = `inspector-${Date.now()}`;
-    setInspectorRuntime({
-      sessionId: id,
-      presetKey,
-      status: 'disconnected',
-      serverInfo: null,
-      tools: [],
-      resources: [],
-      prompts: [],
-      selectedToolName: null,
-      activeTab: 'tools',
-      logs: [],
-    });
-    return id;
+    return `inspector-${Date.now()}`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetKey]);
+
+  useEffect(() => {
+    if (!(inspectorRuntime.sessionId && inspectorRuntime.presetKey === presetKey)) {
+      setInspectorRuntime({
+        sessionId,
+        presetKey,
+        status: 'disconnected',
+        serverInfo: null,
+        tools: [],
+        resources: [],
+        prompts: [],
+        selectedToolName: null,
+        activeTab: 'tools',
+        logs: [],
+      });
+    }
+    // 仅当 sessionId（会话身份）变化时写 store；inspectorRuntime 有意省略以避免循环
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   // 以下值由 store 派生，导航切换卸载组件后重新挂载仍可恢复
   const status = inspectorRuntime.status;
@@ -605,9 +619,9 @@ export default function Inspector() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-bg)]" id="inspector-container">
+    <div className="flex flex-col flex-1 min-h-0 bg-[var(--color-bg)]" id="inspector-container">
       {/* 顶部控制栏（一体化标题栏：mac 上兼作拖拽区并为交通灯留白） */}
-      <div className={`flex items-center justify-between px-4 h-[38px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
+      <div className={`flex items-center justify-between px-4 h-[38px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] flex-shrink-0 ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
         <div className="flex items-center gap-3 no-drag">
           <h1 className="text-[14px] font-semibold text-[var(--color-text)] tracking-tight">
             {t('inspector.title') || 'MCP Inspector'}
@@ -652,11 +666,11 @@ export default function Inspector() {
       </div>
 
       {/* 主内容区 - 三栏布局 */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 左侧：配置 + 工具列表 */}
-        <div className="w-72 border-r border-[var(--color-border)] flex flex-col overflow-hidden">
+        <div className="w-72 border-r border-[var(--color-border)] flex flex-col overflow-hidden flex-shrink-0">
           {/* 配置区域 */}
-          <div className="p-3 border-b border-[var(--color-border)] space-y-3">
+          <div className="p-3 border-b border-[var(--color-border)] space-y-3 flex-shrink-0">
             {/* 传输类型选择 */}
             <div>
               <label className="block text-[12px] text-[var(--color-muted)] uppercase mb-1">
@@ -738,7 +752,7 @@ export default function Inspector() {
                         onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
                         disabled={status === 'connected'}
                         placeholder={t('inspector.keyPlaceholder')}
-                        className="flex-1 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                       />
                       <input
                         type="text"
@@ -746,7 +760,7 @@ export default function Inspector() {
                         onChange={(e) => updateEnvVar(index, 'value', e.target.value)}
                         disabled={status === 'connected'}
                         placeholder={t('inspector.valuePlaceholder')}
-                        className="flex-1 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                       />
                       <button
                         type="button"
@@ -799,7 +813,7 @@ export default function Inspector() {
                         onChange={(e) => updateHeader(index, 'key', e.target.value)}
                         disabled={status === 'connected'}
                         placeholder={t('inspector.headerNamePlaceholder')}
-                        className="flex-1 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                       />
                       <input
                         type="text"
@@ -807,7 +821,7 @@ export default function Inspector() {
                         onChange={(e) => updateHeader(index, 'value', e.target.value)}
                         disabled={status === 'connected'}
                         placeholder={t('inspector.valuePlaceholder')}
-                        className="flex-1 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                       />
                       <button
                         type="button"
@@ -825,7 +839,7 @@ export default function Inspector() {
           </div>
 
           {/* Tabs: Tools / Resources / Prompts */}
-          <div className="flex border-b border-[var(--color-border)]">
+          <div className="flex border-b border-[var(--color-border)] flex-shrink-0">
             <button
               onClick={() => setActiveTab('tools')}
               className={`flex-1 px-2 py-2 text-[12px] font-medium transition-colors ${
@@ -859,7 +873,7 @@ export default function Inspector() {
           </div>
 
           {/* 列表内容 */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {/* Tools Tab */}
             {activeTab === 'tools' && (
               tools.length === 0 ? (
@@ -1062,7 +1076,7 @@ export default function Inspector() {
       />
 
       {/* 底部日志区域 */}
-      <div className="border-t border-[var(--color-border)] overflow-hidden flex flex-col" style={{ height: logHeight }}>
+      <div className="border-t border-[var(--color-border)] overflow-hidden flex flex-col flex-shrink-0" style={{ height: logHeight }}>
         <div className="px-3 py-1.5 text-[12px] text-[var(--color-muted)] uppercase border-b border-[var(--color-border)] flex-shrink-0 flex items-center justify-between">
           <span>{t('inspector.logs') || 'Logs'}</span>
           <button

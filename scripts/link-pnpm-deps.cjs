@@ -14,7 +14,7 @@
 // electron-builder 打包进 asar 后无法被 Electron 的 asar 文件系统跟随，问题依旧。故改为真实复制。
 //
 // 实现要点（纯 Node，不依赖外部命令，避免 Windows 对 robocopy/powershell 调用的环境限制）：
-//  - 仅处理 ROOTS（默认 ssh2 + ssh2-sftp-client，即主进程 SFTP 栈）的生产传递闭包；
+//  - 仅处理 ROOTS（默认 ssh2 + ssh2-sftp-client + electron-updater，即主进程 SFTP 栈与在线升级依赖）的生产传递闭包；
 //    闭包由各包 package.json 的 dependencies/optionalDependencies/peerDependencies 递归收集。
 //    —— 只针对会漏打包的主进程依赖，不波及渲染进程依赖（已被 Vite 内联）与 dev 依赖，避免复制 GB 级内容。
 //  - copyDirReal 递归复制：文件 copyFileSync；目录 mkdirSync；遇到符号链接/junction 用 realpathSync
@@ -50,7 +50,7 @@ const directDeps = new Set([
   ...Object.keys(pkg.dependencies || {}),
   ...Object.keys(pkg.devDependencies || {}),
 ]);
-const ROOTS = (process.env.LINK_DEPS_ROOTS || 'ssh2,ssh2-sftp-client')
+const ROOTS = (process.env.LINK_DEPS_ROOTS || 'ssh2,ssh2-sftp-client,electron-updater')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
