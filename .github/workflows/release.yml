@@ -37,11 +37,11 @@ jobs:
     name: Test / Typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       # 不指定 pnpm 版本：pnpm/action-setup 读取 package.json 的 packageManager(pnpm@12.4.1)，
       # 避免与 workflow 里的 `version` 双重指定导致 ERR_PNPM_BAD_PM_VERSION。
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           # 依赖缓存：pnpm-lock.yaml 已提交到仓库（不再 gitignore），cache: pnpm 可正常定位 lockfile
@@ -68,11 +68,11 @@ jobs:
             label: linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       # 不指定 pnpm 版本：pnpm/action-setup 读取 package.json 的 packageManager(pnpm@12.4.1)，
       # 避免与 workflow 里的 `version` 双重指定导致 ERR_PNPM_BAD_PM_VERSION。
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           # 依赖缓存：pnpm-lock.yaml 已提交到仓库（不再 gitignore），cache: pnpm 可正常定位 lockfile
@@ -85,7 +85,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       # 备份产物到 Artifacts（无论是否 tag），便于检查与手动补传
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: ai-tools-${{ matrix.label }}
           path: |
