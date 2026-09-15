@@ -7,13 +7,7 @@ import {ReactNode, useCallback, useEffect, useRef, useState} from 'react';
 import {NavLink, useLocation} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {useElectronAPI} from '../lib/electron';
-import {
-    StoreNavIcon,
-    InstalledNavIcon,
-    InspectorNavIcon,
-    HistoryNavIcon,
-    SettingsNavIcon,
-} from './Icons';
+import {HistoryNavIcon, InspectorNavIcon, InstalledNavIcon, SettingsNavIcon, StoreNavIcon,} from './Icons';
 import SyncTasksPanel from './SyncTasksPanel';
 
 interface LayoutProps {
@@ -187,9 +181,13 @@ export default function Layout({children}: LayoutProps) {
             </aside>
 
             {/* 主内容区域 */}
-            <main className="flex-1 flex flex-col overflow-hidden">
-                {/* 内容区域（标题栏由各页面头部自绘，含拖拽区，避免窗口与内容间多余空白） */}
-                <div className="flex-1 overflow-hidden">
+            <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+                {/* 内容区域（标题栏由各页面头部自绘，含拖拽区，避免窗口与内容间多余空白）
+                    改为 flex 列容器并加 min-h-0：让子页面用 flex-1 拿到「由 flex 推导的确定高度」，
+                    而非依赖 height:100% 去解析一个「由 flex 推导」的祖先高度——
+                    后者在懒加载冷挂载首帧会被 Chromium 解析为不确定高度，导致内容区高度算错、
+                    中间栏错位（表现为连接后排版错乱，切菜单重挂载反而正常）。 */}
+                <div className="flex-1 overflow-hidden flex flex-col min-h-0">
                     {children}
                 </div>
             </main>
