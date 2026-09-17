@@ -21,6 +21,7 @@ import {defaultCloudSyncConfig} from '../../../shared/cloud-sync-constants';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../../../shared/sync-task-types';
 import type {UpdateEventPayload} from '../../../main/updater';
 import type {McpServerConfig} from '../../../main/config/types';
+import type {ActivationApi, ActivationState} from '../../../shared/activation-types';
 // Skill 导出结果：与本文件共用（data 声明为 Uint8Array 而非 main 侧的 Node Buffer，
 // 避免 renderer 类型图引入 node Buffer 导致 Blob 构造参数类型冲突）
 export interface SkillsExportResult {
@@ -61,6 +62,7 @@ export type {
 // McpServerConfig 统一 re-export 主进程单一事实源（config/types.ts），不再本地重复定义——
 // 本地旧定义缺少 cwd / enable 可选字段，存在类型漂移隐患（与 preload 同款改法）
 export type {McpServerConfig} from '../../../main/config/types';
+export type {ActivationApi, ActivationState, ActivationStatus} from '../../../shared/activation-types';
 
 export interface RuntimeInfo {
     available: boolean;
@@ -461,6 +463,8 @@ interface ElectronAPI {
     };
     // MCP Inspector
     mcp: McpApi;
+    // 激活（授权）
+    activation: ActivationApi;
     // 本地持久化缓存（落盘 ~/.ai-tools/cache/，用于 store 列表 SWR 秒开）
     cache: {
         get: <T>(key: string) => Promise<{
@@ -944,6 +948,37 @@ const mockAPI: ElectronAPI = {
         },
         onError: () => () => {
         },
+    },
+    activation: {
+        getState: async (): Promise<ActivationState> => ({
+            status: 'trial',
+            trialExpiresAt: Date.now() + 30 * 86400000,
+            activatedExpiresAt: null,
+            activatedAt: null,
+            machineCode: null,
+        }),
+        getMachineCode: async (): Promise<string> => 'AI-MOCK-MACHINE-CODE-0001',
+        offlineActivate: async (_mc: string, code: string) => {
+            if (!code) return { success: false, error: '请输入激活码' };
+            return {
+                success: true,
+                state: {
+                    status: 'activated',
+                    trialExpiresAt: null,
+                    activatedExpiresAt: null,
+                    activatedAt: Date.now(),
+                    machineCode: _mc,
+                },
+            };
+        },
+        onlineActivate: async () => ({ success: false, error: '在线激活占位（浏览器预览）' }),
+        deactivate: async (): Promise<ActivationState> => ({
+            status: 'inactive',
+            trialExpiresAt: null,
+            activatedExpiresAt: null,
+            activatedAt: null,
+            machineCode: null,
+        }),
     },
     cache: {
         get: async () => null,

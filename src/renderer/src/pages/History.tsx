@@ -2,13 +2,13 @@
  * 历史记录页面 - Surge 风格
  */
 
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useElectronAPI, type AnyClientId, type DiffResult } from '../lib/electron';
-import { useIsMac } from '../lib/useIsMac';
+import {useEffect, useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import {type AnyClientId, type DiffResult, useElectronAPI} from '../lib/electron';
+import {useIsMac} from '../lib/useIsMac';
 import Modal from '../components/Modal';
 import ClientIcon from '../components/ClientIcon';
-import { toast } from '../components/Toast';
+import {toast} from '../components/Toast';
 import WindowControls from '../components/WindowControls';
 
 interface BackupInfo {
@@ -50,7 +50,6 @@ export default function History() {
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDiff, setSelectedDiff] = useState<DiffResult | null>(null);
-  const [isRestoring, setIsRestoring] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
@@ -81,26 +80,6 @@ export default function History() {
       setSelectedDiff(diff);
     } catch (error) {
       console.error('Failed to get diff:', error);
-    }
-  };
-
-  const handleRestore = async (timestamp: string) => {
-    if (!confirm(t('history.confirmRestore'))) return;
-
-    setIsRestoring(true);
-    try {
-      const success = await api.history.restore(timestamp);
-      if (success) {
-        alert(t('history.restoreSuccess'));
-        loadBackups();
-      } else {
-        alert(t('history.restoreFailed'));
-      }
-    } catch (error) {
-      console.error('Failed to restore:', error);
-      alert(t('history.restoreFailed'));
-    } finally {
-      setIsRestoring(false);
     }
   };
 
@@ -278,13 +257,6 @@ export default function History() {
                       className="px-2.5 py-1 rounded text-[12px] text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-colors"
                     >
                       {t('history.view')}
-                    </button>
-                    <button
-                      onClick={() => handleRestore(backup.timestamp)}
-                      disabled={isRestoring}
-                      className="px-2.5 py-1 rounded text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors disabled:opacity-50"
-                    >
-                      {t('history.restore')}
                     </button>
                   </div>
                 </div>

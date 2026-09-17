@@ -10,13 +10,8 @@ import {useElectronAPI} from '../lib/electron';
 import {useIsMac} from '../lib/useIsMac';
 import {useStore} from '../store/useStore';
 import {getEffectiveTheme} from '../lib/useTheme';
-import {Light as SyntaxHighlighter} from 'react-syntax-highlighter';
-import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
-import {atomOneDark, docco} from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import WindowControls from '../components/WindowControls';
-
-// 注册 JSON 语言
-SyntaxHighlighter.registerLanguage('json', json);
+import JsonTree from '../components/JsonTree';
 
 interface McpTool {
   name: string;
@@ -342,6 +337,7 @@ export default function Inspector() {
   const [toolArgs, setToolArgs] = useState<Record<string, string>>({});
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<unknown>(null);
+  const [viewMode, setViewMode] = useState<'tree' | 'text'>('tree');
   const [resultError, setResultError] = useState<string>('');
   const runningToolRef = useRef<string | null>(null);
 
@@ -1029,20 +1025,39 @@ export default function Inspector() {
                     <p className="text-[13px] text-[#ff3b30]">{resultError}</p>
                   </div>
                 ) : result !== null ? (
-                  <div className="rounded-lg overflow-hidden">
-                    <SyntaxHighlighter
-                      language="json"
-                      style={isDark ? atomOneDark : docco}
-                      customStyle={{
-                        margin: 0,
-                        padding: '12px',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        backgroundColor: 'var(--color-surface)',
-                      }}
-                    >
-                      {JSON.stringify(result, null, 2)}
-                    </SyntaxHighlighter>
+                  <div>
+                    {/* 视图切换：树视图（可折叠）/ 文本视图 */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <button
+                        onClick={() => setViewMode('tree')}
+                        className={`px-2.5 py-1 rounded-md text-[12px] transition-colors ${
+                          viewMode === 'tree'
+                            ? 'bg-[var(--color-accent)] text-white'
+                            : 'border border-[var(--color-border)] text-[var(--color-muted2)] hover:bg-[var(--color-surface-hover)]/40'
+                        }`}
+                      >
+                        树视图
+                      </button>
+                      <button
+                        onClick={() => setViewMode('text')}
+                        className={`px-2.5 py-1 rounded-md text-[12px] transition-colors ${
+                          viewMode === 'text'
+                            ? 'bg-[var(--color-accent)] text-white'
+                            : 'border border-[var(--color-border)] text-[var(--color-muted2)] hover:bg-[var(--color-surface-hover)]/40'
+                        }`}
+                      >
+                        文本查看
+                      </button>
+                    </div>
+                    {viewMode === 'tree' && typeof result === 'object' ? (
+                      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 overflow-auto max-h-[60vh]">
+                        <JsonTree data={result} isDark={isDark} />
+                      </div>
+                    ) : (
+                      <pre className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 overflow-auto max-h-[60vh] text-[12px] font-mono text-[var(--color-text)] whitespace-pre-wrap">
+                        {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
+                      </pre>
+                    )}
                   </div>
                 ) : (
                   <div className="text-[13px] text-[var(--color-muted)]">

@@ -190,7 +190,6 @@ declare const api: {
     };
     history: {
         list: () => Promise<BackupInfo[]>;
-        restore: (timestamp: string) => Promise<boolean>;
         getDiff: (timestamp: string) => Promise<DiffResult | null>;
         clearAll: () => Promise<boolean>;
     };

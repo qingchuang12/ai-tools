@@ -38,6 +38,8 @@ export function computeDefaultSkillsPaths(home: string = os.homedir()): Record<S
         trae: path.join(home, '.trae', 'skills'),
         'trae-cn': path.join(home, '.trae-cn', 'skills'),
         'trae-solo-cn': path.join(home, '.trae-cn', 'skills'),
+        // Antigravity（Google）：skills 目录为 ~/.gemini/config/skills（Google Cloud 官方文档确认，与 gemini-cli 的 ~/.gemini/skills 区分）
+        antigravity: path.join(home, '.gemini', 'config', 'skills'),
         cloud: path.join(home, '.ai-tools', 'cloud', CLOUD_ROOT_DIR, 'skills'),
     };
 }

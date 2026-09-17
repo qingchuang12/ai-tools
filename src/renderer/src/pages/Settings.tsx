@@ -18,7 +18,7 @@ import McpSourceManager from '../components/McpSourceManager';
 import CloudSyncManager from '../components/CloudSyncManager';
 import WindowControls from '../components/WindowControls';
 import {type ThemeMode, useStore} from '../store/useStore';
-import {ensureLanguageLoaded} from '../i18n';
+import {ensureLanguageLoaded, SUPPORTED_LANGUAGES} from '../i18n';
 
 export default function Settings() {
     const {t, i18n} = useTranslation();
@@ -267,32 +267,19 @@ export default function Settings() {
                             {t('settings.languageDesc')}
                         </p>
 
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => handleLanguageChange('en')}
-                                className={`
-                  flex-1 px-3 py-2 rounded-md text-[13px] font-medium transition-colors
-                  ${currentLang === 'en'
-                                    ? 'bg-[var(--color-accent)] text-white'
-                                    : 'bg-[var(--color-surface-hover)] text-[var(--color-muted2)] hover:text-[var(--color-text)]'
-                                }
-                `}
-                            >
-                                {t('settings.english')}
-                            </button>
-                            <button
-                                onClick={() => handleLanguageChange('zh')}
-                                className={`
-                  flex-1 px-3 py-2 rounded-md text-[13px] font-medium transition-colors
-                  ${currentLang === 'zh'
-                                    ? 'bg-[var(--color-accent)] text-white'
-                                    : 'bg-[var(--color-surface-hover)] text-[var(--color-muted2)] hover:text-[var(--color-text)]'
-                                }
-                `}
-                            >
-                                {t('settings.chinese')}
-                            </button>
-                        </div>
+                        {/* 9 种语言：G8 主要语种 + 联合国六大官方语言（去重）。
+                            选项一律显示母语写法，避免用户看不懂自己要选的语言。 */}
+                        <select
+                            value={SUPPORTED_LANGUAGES.some(l => l.code === currentLang) ? currentLang : 'en'}
+                            onChange={(e) => handleLanguageChange(e.target.value)}
+                            className="w-full px-3 py-2 rounded-md text-[13px] bg-[var(--color-surface-hover)] text-[var(--color-text)] border border-[var(--color-border)] outline-none cursor-pointer"
+                        >
+                            {SUPPORTED_LANGUAGES.map((l) => (
+                                <option key={l.code} value={l.code}>
+                                    {l.label}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
                     {/* 主题设置 */}

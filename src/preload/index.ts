@@ -21,6 +21,7 @@ import type {SkillsExportResult} from '../main/skills-export';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
 import type {UpdateEventPayload} from '../main/updater';
 import type {McpServerConfig} from '../main/config/types';
+import type {ActivationApi, ActivationState} from '../shared/activation-types';
 
 // 类型定义
 // McpServerConfig 统一 re-export 主进程单一事实源（config/types.ts），不再本地重复定义——
@@ -279,8 +280,6 @@ const api = {
     history: {
         list: (): Promise<BackupInfo[]> =>
             ipcRenderer.invoke('history:list'),
-        restore: (timestamp: string): Promise<boolean> =>
-            ipcRenderer.invoke('history:restore', timestamp),
         getDiff: (timestamp: string): Promise<DiffResult | null> =>
             ipcRenderer.invoke('history:get-diff', timestamp),
         clearAll: (): Promise<boolean> =>
@@ -626,6 +625,17 @@ const api = {
             return () => ipcRenderer.removeListener('theme:system-changed', listener);
         },
     },
+
+    // 激活（授权）
+    activation: {
+        getState: (): Promise<ActivationState> => ipcRenderer.invoke('activation:get-state'),
+        getMachineCode: (): Promise<string> => ipcRenderer.invoke('activation:get-machine-code'),
+        offlineActivate: (machineCode: string, code: string): Promise<{ success: boolean; error?: string; state?: ActivationState }> =>
+            ipcRenderer.invoke('activation:offline-activate', machineCode, code),
+        onlineActivate: (payload: unknown): Promise<{ success: boolean; error?: string; state?: ActivationState }> =>
+            ipcRenderer.invoke('activation:online-activate', payload),
+        deactivate: (): Promise<ActivationState> => ipcRenderer.invoke('activation:deactivate'),
+    } as ActivationApi,
 };
 
 // 暴露 API 到渲染进程

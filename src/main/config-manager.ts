@@ -11,6 +11,7 @@
  */
 
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import os from 'os';
 import {getCloudSyncStore} from './cloud-sync-store';
@@ -33,7 +34,7 @@ import {
     getClientAppPaths,
     getClientConfigMarkers,
     getClientDisplayName,
-    getDefaultClientPaths,
+    getClientMcpCandidatePaths,
     getEnhancedPathEnv,
 } from './config/client-probe';
 import {
@@ -109,7 +110,6 @@ async function removeInstalledLicense(serverId: string): Promise<void> {
 }
 
 export class ConfigManager {
-    private defaultClientPaths: Record<ClientType, string>;
     private userSettingsPath: string;
     private userSettings: UserSettings = {};
     // 客户端列表缓存：安装状态在会话内很少变化，重复进入「我的库」时直接返回，避免每次重跑检测（含 CLI 的 where/which）。
@@ -120,13 +120,9 @@ export class ConfigManager {
 
     constructor() {
         const home = os.homedir();
-        const platform = process.platform;
 
         // 用户设置文件路径
         this.userSettingsPath = path.join(home, '.ai-tools', 'settings.json');
-
-        // 根据平台设置各客户端默认配置路径（下沉到 ./config/client-probe）
-        this.defaultClientPaths = getDefaultClientPaths(home, platform);
 
         // 异步加载用户设置（可 await 的 ready Promise）
         this.ready = this.loadUserSettings();
@@ -516,7 +512,12 @@ export class ConfigManager {
     }
 
     /**
-     * 获取客户端配置路径（优先使用用户自定义路径）
+     * 获取客户端配置路径（优先用户自定义，否则在候选路径中探测首个存在者）。
+     *
+     * 关键增强：内置客户端的 MCP 配置文件可能存在多形态（如 Trae 的 fork/扁平布局、
+     * CodeBuddy 的 .mcp.json/mcp.json/legacy），此处用同步 existsSync 在候选列表里
+     * 挑第一个真实存在的文件；都不存在时回退到首选（写路径）。读取与写入因此永远落在
+     * 同一文件，保证往返一致，且能兼容多种安装布局（需求 G：尽量做好自动识别客户端能力）。
      */
     private getClientConfigPath(client: ClientType | string): string {
         // 自定义客户端：直接返回其配置路径
@@ -528,7 +529,19 @@ export class ConfigManager {
             if (customPath) return customPath;
             return this.resolvedJetBrainsPath || '';
         }
-        return this.userSettings.customConfigPaths?.[client as ClientType] || this.defaultClientPaths[client as ClientType];
+        const customOverride = this.userSettings.customConfigPaths?.[client as ClientType];
+        if (customOverride) return customOverride;
+
+        const candidates = getClientMcpCandidatePaths(client as AnyClientId, process.platform);
+        for (const candidate of candidates) {
+            try {
+                fsSync.accessSync(candidate);
+                return candidate;
+            } catch {
+                // 该候选不存在，尝试下一个
+            }
+        }
+        return candidates[0] || '';
     }
 
     /**

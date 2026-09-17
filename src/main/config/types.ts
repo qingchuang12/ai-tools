@@ -80,10 +80,11 @@ export type SkillClientType =
     | 'trae'
     | 'trae-cn'
     | 'trae-solo-cn'
+    | 'antigravity'
     | 'cloud';
 
 // 客户端是否支持 Skills
-export const SKILL_SUPPORTED_CLIENTS: SkillClientType[] = ['cursor', 'claude-code', 'gemini-cli', 'codex-cli', 'opencode', 'agent-skills', 'codebuddy', 'workbuddy', 'qoder', 'zcode', 'marscode', 'trae', 'trae-cn', 'trae-solo-cn', 'cloud'];
+export const SKILL_SUPPORTED_CLIENTS: SkillClientType[] = ['cursor', 'claude-code', 'gemini-cli', 'codex-cli', 'opencode', 'agent-skills', 'codebuddy', 'workbuddy', 'qoder', 'zcode', 'marscode', 'trae', 'trae-cn', 'trae-solo-cn', 'antigravity', 'cloud'];
 
 /** 所有内置客户端类型（单一来源：备份/遍历统一复用，避免硬编码遗漏，P1-3/P2-4）。'cloud' 为暂存区非真实配置，单独排除。 */
 export const ALL_BUILTIN_CLIENTS: ClientType[] = [

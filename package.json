@@ -19,7 +19,7 @@
     "build": "pnpm run build:icons && pnpm run link:deps && pnpm run build:main && pnpm run build:renderer",
     "build:icons": "node scripts/build-icons.cjs",
     "link:deps": "node scripts/link-pnpm-deps.cjs",
-    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-platform-data.mjs",
+    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-platform-data.mjs && node scripts/obfuscate-main.mjs",
     "build:renderer": "cross-env CONTINUOUS_INTEGRATION=1 vite build",
     "typecheck": "npx tsc -p tsconfig.main.json --noEmit && npx tsc -p tsconfig.json --noEmit",
     "aggregate:registry": "node scripts/aggregate-mcp-registry.mjs",

@@ -39,6 +39,8 @@ import {getCacheManager} from './cache-manager';
 import {getSecretStore, TokenMeta, TokenScope} from './secret-store';
 import {ApiConnection, getConnectionsStore} from './connections-store';
 import {createMcpClient, disconnectAllClients, getMcpClient, removeMcpClient} from './mcp-client';
+import {deactivate, getActivationState, offlineActivate} from './activation-store';
+import {getMachineCode} from './machine-code';
 import {getCloudSyncStore} from './cloud-sync-store';
 import {getCloudSyncService} from './cloud-sync-service';
 import {checkCloudConsistency, type ConsistencyReport, readCompareEnds} from './cloud-consistency';
@@ -369,10 +371,6 @@ ipcMain.handle('history:list', async () => {
     return historyManager.listBackups();
 });
 
-ipcMain.handle('history:restore', async (_, timestamp: string) => {
-    return historyManager.restore(timestamp);
-});
-
 ipcMain.handle('history:get-diff', async (_, timestamp: string) => {
     return historyManager.getDiff(timestamp);
 });
@@ -584,8 +582,28 @@ ipcMain.handle('mcp:list-prompts', async (_, sessionId: string) => {
     }
 });
 
-// ============ Skills IPC 处理器 ============
+// ============ 激活（授权）IPC 处理器 ============
+// 读取当前激活状态（主进程顺带做到期降级并持久化）
+ipcMain.handle('activation:get-state', async () => getActivationState());
 
+// 生成本机机器码（CPU 序列号 + 主板 UUID + 网卡 MAC 派生）
+ipcMain.handle('activation:get-machine-code', async () => getMachineCode());
+
+// 离线激活：校验激活码（本地签名校验，占位）
+ipcMain.handle('activation:offline-activate', async (_, machineCode: string, code: string) =>
+    offlineActivate(machineCode, code)
+);
+
+// 在线激活：当前为占位，未接入后端（后续对接 billing-license-service）
+ipcMain.handle('activation:online-activate', async () => ({
+    success: false,
+    error: '在线激活尚未接入后端（占位实现）',
+}));
+
+// 去激活：回到未激活
+ipcMain.handle('activation:deactivate', async () => deactivate());
+
+// ============ Skills IPC 处理器 ============
 // 获取指定客户端的已安装 Skills
 ipcMain.handle('skills:get-installed', async (_, client: SkillClientType) => {
     return skillsManager.getInstalledSkills(client);

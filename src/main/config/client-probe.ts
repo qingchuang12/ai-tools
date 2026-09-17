@@ -34,7 +34,7 @@ export function getDefaultClientPaths(home: string, platform: NodeJS.Platform): 
             kiro: path.join(home, '.kiro', 'settings', 'mcp.json'),
             opencode: path.join(home, '.config', 'opencode', 'opencode.json'),
             jetbrains: '', // resolved dynamically via findJetBrainsConfigPath
-            antigravity: path.join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+            antigravity: path.join(home, '.gemini', 'config', 'mcp_config.json'),
             openclaw: path.join(home, '.openclaw', 'openclaw.json'),
             codebuddy: path.join(home, '.codebuddy', 'mcp.json'),
             workbuddy: path.join(home, '.workbuddy', 'mcp.json'),
@@ -60,7 +60,7 @@ export function getDefaultClientPaths(home: string, platform: NodeJS.Platform): 
             kiro: path.join(home, '.kiro', 'settings', 'mcp.json'),
             opencode: path.join(home, '.config', 'opencode', 'opencode.json'),
             jetbrains: '', // resolved dynamically
-            antigravity: path.join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+            antigravity: path.join(home, '.gemini', 'config', 'mcp_config.json'),
             openclaw: path.join(home, '.openclaw', 'openclaw.json'),
             codebuddy: path.join(home, '.codebuddy', 'mcp.json'),
             workbuddy: path.join(home, '.workbuddy', 'mcp.json'),
@@ -86,7 +86,7 @@ export function getDefaultClientPaths(home: string, platform: NodeJS.Platform): 
             kiro: path.join(home, '.kiro', 'settings', 'mcp.json'),
             opencode: path.join(home, '.config', 'opencode', 'opencode.json'),
             jetbrains: '', // resolved dynamically
-            antigravity: path.join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+            antigravity: path.join(home, '.gemini', 'config', 'mcp_config.json'),
             openclaw: path.join(home, '.openclaw', 'openclaw.json'),
             codebuddy: path.join(home, '.codebuddy', 'mcp.json'),
             workbuddy: path.join(home, '.workbuddy', 'mcp.json'),
@@ -95,6 +95,54 @@ export function getDefaultClientPaths(home: string, platform: NodeJS.Platform): 
             zcode: path.join(home, '.zcode', 'cli', 'config.json'),
             cloud: path.join(home, '.ai-tools', 'cloud', CLOUD_ROOT_DIR, 'mcp', 'mcp.json'),
         };
+    }
+}
+
+/**
+ * 返回某客户端的 MCP 配置文件「候选路径」有序列表（用于自动识别）。
+ *
+ * 设计动机：单一硬编码路径在以下场景会漏判——
+ * - Trae / Trae CN 同时存在「VS Code fork 布局」(`AppData/Roaming/Trae/User/mcp.json`)
+ *   与「扁平布局」(`~/.trae/mcp.json`) 两种形态，随版本而异；
+ * - CodeBuddy 官方优先级为 `~/.codebuddy/.mcp.json`(推荐) > `~/.codebuddy/mcp.json`(弃用) > `~/.codebuddy.json`(legacy)；
+ * - antigravity 旧代码误写成 `~/.gemini/antigravity/...`，真实路径为 `~/.gemini/config/mcp_config.json`。
+ *
+ * 列表第一项即「首选写路径」（无已有配置时的落盘位置），其余为「探测回退」。
+ * 解析时取首个 `fs.existsSync` 命中的候选；全不存在则回退到第一项（首选）。
+ * 这样读取与写入永远落在同一文件，保证往返一致、且能兼容多种布局。
+ */
+export function getClientMcpCandidatePaths(client: AnyClientId, platform: NodeJS.Platform): string[] {
+    const home = os.homedir();
+    const primary = getDefaultClientPaths(home, platform)[client as ClientType];
+
+    switch (client) {
+        case 'antigravity':
+            return [
+                path.join(home, '.gemini', 'config', 'mcp_config.json'),
+                // 旧误写路径：仅作读取回退，便于迁移现有用户（若有手工配置落在此处）
+                path.join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+            ];
+        case 'codebuddy':
+            return [
+                path.join(home, '.codebuddy', '.mcp.json'), // 官方推荐
+                path.join(home, '.codebuddy', 'mcp.json'), // 弃用但有效
+                path.join(home, '.codebuddy.json'), // legacy
+            ];
+        case 'trae':
+            return [
+                primary, // VS Code fork 布局（当前默认，保持向后兼容）
+                path.join(home, '.trae', 'mcp.json'), // 扁平布局
+            ];
+        case 'trae-cn':
+            return [
+                primary,
+                path.join(home, '.trae-cn', 'mcp.json'),
+            ];
+        case 'trae-solo-cn':
+            // 官方论坛确认此即全局路径，单路径即可，无需回退
+            return [primary];
+        default:
+            return [primary];
     }
 }
 

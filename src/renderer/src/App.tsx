@@ -1,9 +1,11 @@
-import {lazy, Suspense} from 'react';
+import {lazy, Suspense, useEffect} from 'react';
 import {Navigate, Route, Routes} from 'react-router-dom';
 import Layout from './components/Layout';
 import {ToastContainer} from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
+import ActivationModal from './components/ActivationModal';
 import {useApplyTheme} from './lib/useTheme';
+import {useActivationStore} from './store/activationStore';
 
 // 页面懒加载：避免 Settings / Inspector 等重依赖（CloudSyncManager、react-syntax-highlighter）
 // 进入首屏 bundle，减小首屏解析/执行体积，加快启动到可交互。
@@ -18,6 +20,11 @@ const Settings = lazy(() => import('./pages/Settings'));
 function App() {
   // 根据主题（浅/暗/自动）在 <html> 切换 dark 类，自动模式随系统配色变化
   useApplyTheme();
+
+  // 初始化激活状态（全局单例 ticker：加载状态 + 每秒倒计时 / 到期降级）
+  useEffect(() => {
+    useActivationStore.getState().init();
+  }, []);
 
   return (
     <>
@@ -42,6 +49,8 @@ function App() {
         </Suspense>
       </Layout>
       <ToastContainer />
+      {/* 激活管理弹窗：全局单例，状态由 activationStore 驱动（徽标位于 Layout 左上角） */}
+      <ActivationModal />
     </>
   );
 }

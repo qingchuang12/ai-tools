@@ -7,8 +7,10 @@ import {ReactNode, useCallback, useEffect, useRef, useState} from 'react';
 import {NavLink, useLocation} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {useElectronAPI} from '../lib/electron';
+import {useIsMac} from '../lib/useIsMac';
 import {HistoryNavIcon, InspectorNavIcon, InstalledNavIcon, SettingsNavIcon, StoreNavIcon,} from './Icons';
 import SyncTasksPanel from './SyncTasksPanel';
+import ActivationBadge from './ActivationBadge';
 
 interface LayoutProps {
     children: ReactNode;
@@ -23,6 +25,7 @@ export default function Layout({children}: LayoutProps) {
     const {t} = useTranslation();
     const location = useLocation();
     const api = useElectronAPI();
+    const isMac = useIsMac();
     const [version, setVersion] = useState('');
 
     // 侧边栏宽度状态
@@ -116,8 +119,13 @@ export default function Layout({children}: LayoutProps) {
                 style={{width: sidebarWidth}}
                 className="flex-shrink-0 bg-content-card flex flex-col border-r border-content-border relative"
             >
-                {/* 顶部拖拽区域 - 支持窗口拖动（mac 交通灯占位，更紧凑） */}
-                <div className="h-[30px] drag-region flex-shrink-0"/>
+                {/* 顶部条：窗口拖拽区 + 全局激活状态指示器（界面左上角）。
+                    mac 上为交通灯预留左侧空间，避免徽标压住红绿灯；Windows 直接贴左。 */}
+                <div className={`h-[38px] drag-region flex items-center flex-shrink-0 ${isMac ? 'pl-20' : 'pl-3'}`}>
+                    <div className="no-drag">
+                        <ActivationBadge />
+                    </div>
+                </div>
 
                 {/* 导航菜单：设为拖拽区，空白处可拖动窗口；导航项加 no-drag 保持可点击 */}
                 <nav className="flex-1 py-2 overflow-y-auto drag-region">

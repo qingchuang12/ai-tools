@@ -11,7 +11,7 @@ import {DiscoveredSkill, SkillsManager, SkillSourceMeta} from '../main/skills-ma
 
 // Mock electron 的 config-manager 依赖
 vi.mock('../main/config-manager', () => ({
-  SKILL_SUPPORTED_CLIENTS: ['cursor', 'claude-code', 'gemini-cli', 'codex-cli', 'opencode', 'agent-skills', 'codebuddy', 'workbuddy', 'qoder', 'zcode', 'marscode', 'trae', 'trae-cn', 'trae-solo-cn', 'cloud'],
+  SKILL_SUPPORTED_CLIENTS: ['cursor', 'claude-code', 'gemini-cli', 'codex-cli', 'opencode', 'agent-skills', 'codebuddy', 'workbuddy', 'qoder', 'zcode', 'marscode', 'trae', 'trae-cn', 'trae-solo-cn', 'antigravity', 'cloud'],
 }));
 
 let manager: SkillsManager;
