@@ -732,7 +732,7 @@ export default function Settings() {
                     {/* 检查更新（plan-19.0）：状态由主进程推送 */}
                     <div className="w-full mt-4 p-3 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-left">
                         <div className="flex items-center justify-between">
-                            <p className="text-[12px] text-[var(--color-muted2)] font-medium">更新</p>
+                            <p className="text-[12px] text-[var(--color-muted2)] font-medium">{t('update.title')}</p>
                             <p className="text-[12px] text-[var(--color-muted)]">{update.currentVersion ? `v${update.currentVersion}` : ''}</p>
                         </div>
                         <div className="mt-2 text-[12px] text-[var(--color-muted)]">
@@ -743,46 +743,46 @@ export default function Settings() {
                                     disabled={update.state === 'checking'}
                                     className="text-[var(--color-accent)] hover:underline disabled:opacity-50"
                                 >
-                                    {update.state === 'checking' ? '检查中…' : '检查更新'}
+                                    {update.state === 'checking' ? t('update.checking') : t('update.check')}
                                 </button>
                             )}
                             {update.state === 'available' && (
                                 <div className="flex items-center justify-between gap-3">
-                                    <span>发现新版本 {update.version ? `v${update.version}` : ''}</span>
+                                    <span>{t('update.available', {version: update.version ? `v${update.version}` : ''})}</span>
                                     <button
                                         type="button"
                                         onClick={handleDownloadUpdate}
                                         className="text-[var(--color-accent)] hover:underline"
                                     >
-                                        下载并安装
+                                        {t('update.downloadInstall')}
                                     </button>
                                 </div>
                             )}
                             {update.state === 'downloading' && (
-                                <div>正在下载 {update.percent ? `${update.percent.toFixed(0)}%` : '…'}</div>
+                                <div>{t('update.downloading', {percent: update.percent ? `${update.percent.toFixed(0)}%` : '…'})}</div>
                             )}
                             {update.state === 'downloaded' && (
                                 <div className="flex items-center justify-between gap-3">
-                                    <span>更新已就绪，重启后生效</span>
+                                    <span>{t('update.ready')}</span>
                                     <button
                                         type="button"
                                         onClick={handleQuitInstall}
                                         className="text-[var(--color-accent)] hover:underline"
                                     >
-                                        立即重启
+                                        {t('update.restart')}
                                     </button>
                                 </div>
                             )}
-                            {update.state === 'not-available' && <span>当前已是最新版本</span>}
+                            {update.state === 'not-available' && <span>{t('update.latest')}</span>}
                             {(update.state === 'error' || update.state === 'unsupported') && (
                                 <div className="flex flex-col gap-1.5">
-                                    <span>{update.message || '无法自动更新'}</span>
+                                    <span>{update.message || t('update.failed')}</span>
                                     <button
                                         type="button"
                                         onClick={openDownloadPage}
                                         className="text-[var(--color-accent)] hover:underline text-left"
                                     >
-                                        前往官网手动下载
+                                        {t('update.manual')}
                                     </button>
                                 </div>
                             )}

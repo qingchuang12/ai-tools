@@ -346,4 +346,23 @@ describe('门面状态机', () => {
         mocks.config.enabled = false;
         expect((await license.assertFeature('cloud_sync')).allowed).toBe(true);
     });
+
+    it('试用期内未注册 → gate 视作 pro 全量放行（含 cloud_sync / remote_connect）', async () => {
+        await seedTrial({first_run_at: Date.now()});
+        const st = await license.getState(null);
+        expect(st.status).toBe('trial');
+        expect(st.features).toContain('pro');
+        expect((await license.assertFeature('cloud_sync')).allowed).toBe(true);
+        expect((await license.assertFeature('remote_connect')).allowed).toBe(true);
+    });
+
+    it('试用到期且未注册 → gate 拒绝 cloud_sync（LIC_FEATURE_MISSING）', async () => {
+        await seedTrial({first_run_at: Date.now() - 61 * DAY_MS});
+        const st = await license.getState(null);
+        expect(st.status).toBe('inactive');
+        expect(st.degraded).toBe('trial_expired');
+        const res = await license.assertFeature('cloud_sync');
+        expect(res.allowed).toBe(false);
+        expect(res.code).toBe('LIC_FEATURE_MISSING');
+    });
 });

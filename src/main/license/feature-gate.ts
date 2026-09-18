@@ -15,7 +15,7 @@
 import {getConfig} from './config';
 import type {LicenseErrorCode} from './errors';
 import {logLicenseEvent, PUBLIC_LOCKED_KEY} from './errors';
-import {effectiveNow} from './trial';
+import {effectiveNow, evaluateTrial} from './trial';
 import {readVault} from './vault';
 import {verifyToken} from './verifier';
 import type {TokenPayload} from './types';
@@ -45,6 +45,11 @@ export async function assertFeature(feature: string): Promise<GateResult> {
     const vault = await readVault();
     const token = vault.license?.signed_token;
     if (!token) {
+        // 试用期内（未注册）视作全量权益（pro）：所有被 gate 的功能均开放；
+        // 仅当「试用已到期且未注册」才拦截。注册用户（持有合法 token）走下方验签路径。
+        if (vault.trial && evaluateTrial(vault.trial, cfg, Date.now()).status === 'trial') {
+            return {allowed: true, code: 'LIC_TRIAL_OK', payload: null};
+        }
         logLicenseEvent('LIC_FEATURE_MISSING', {event: 'gate_no_token', feature});
         return {allowed: false, code: 'LIC_FEATURE_MISSING', payload: null};
     }

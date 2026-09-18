@@ -1,5 +1,4 @@
-import type {TFunction} from 'i18next';
-import type {i18n as I18nType} from 'i18next';
+import type {i18n as I18nType, TFunction} from 'i18next';
 
 /** 紧凑数字：1234 → 1.2K，2500000 → 2.5M；null/NaN → 空串 */
 export function formatCompactNumber(count?: number | null): string {
@@ -30,6 +29,23 @@ export function formatRelativeTime(t: TFunction, dateStr: string): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * 紧凑剩余时长（用于激活/试用徽标）：自动取最大单位，避免过长影响排版。
+ * 例：30天 / 2年 / 12小时 / 45分；过期返回 i18n「已过期」；expiresAt 为 null 返回空串（调用方省略时间段）。
+ */
+export function formatCompactDuration(t: TFunction, expiresAt: number | null): string {
+  if (expiresAt == null) return '';
+  const diff = expiresAt - Date.now();
+  if (diff <= 0) return t('license.modal.expired');
+  const days = Math.floor(diff / 86400000);
+  if (days >= 365) return `${Math.floor(days / 365)}${t('license.badge.unitYear')}`;
+  if (days >= 1) return `${days}${t('license.badge.unitDay')}`;
+  const hours = Math.floor(diff / 3600000);
+  if (hours >= 1) return `${hours}${t('license.badge.unitHour')}`;
+  const mins = Math.max(1, Math.floor(diff / 60000));
+  return `${mins}${t('license.badge.unitMin')}`;
 }
 
 /**

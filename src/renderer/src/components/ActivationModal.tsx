@@ -13,6 +13,7 @@ import {useTranslation} from 'react-i18next';
 import Modal from './Modal';
 import {useActivationStore} from '../store/activationStore';
 import {useElectronAPI} from '../lib/electron';
+import {FEATURE_CLOUD_SYNC} from '../../../shared/license-constants';
 
 type Mode = 'choose' | 'redeem';
 
@@ -26,9 +27,87 @@ function formatRemaining(ms: number | null, t: (k: string, opts?: Record<string,
     return t('license.modal.remaining', { d, h, m });
 }
 
+function FeatureList({
+    t,
+    hasFeature,
+}: {
+    t: (k: string, opts?: Record<string, unknown>) => string;
+    hasFeature: (feature: string) => boolean;
+}) {
+    const cloudOpen = hasFeature(FEATURE_CLOUD_SYNC);
+    return (
+        <div className="pt-4 mt-1 border-t border-[var(--color-border)]">
+            <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-[var(--color-text)]">
+                {/* 钥匙图标：锚定「需试用/激活方可开放」的语义。刻意不用锁——列表项已用勾/锁表达单项状态，
+                    区块级再用锁会与之混淆。 */}
+                <svg
+                    className="shrink-0 text-[var(--color-accent)]"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <circle cx="5" cy="5" r="2.5" />
+                    <path d="M6.8 6.8 13 13" />
+                    <path d="M10.5 10.5 12 9" />
+                </svg>
+                {t('license.modal.openFeatures')}
+            </p>
+            <ul className="space-y-1.5">
+                <li className="flex items-center gap-2 text-[13px]">
+                    {cloudOpen ? (
+                        <svg
+                            className="text-[#34c759]"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="M3.5 8.5l3 3 6-7" />
+                        </svg>
+                    ) : (
+                        <svg
+                            className="text-[var(--color-muted2)]"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <rect x="4" y="7" width="8" height="6" rx="1.5" />
+                            <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+                        </svg>
+                    )}
+                    <span className={cloudOpen ? 'text-[var(--color-text)]' : 'text-[var(--color-muted)]'}>
+                        {t('license.feature.cloudSync')}
+                    </span>
+                </li>
+                <li className="flex items-center gap-2 text-[13px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted2)]/70" />
+                    <span className="text-[var(--color-muted2)]">{t('license.feature.moreComing')}</span>
+                </li>
+            </ul>
+            {!cloudOpen && (
+                <p className="mt-2 text-[11px] text-[var(--color-muted2)]">{t('license.modal.featureLocked')}</p>
+            )}
+        </div>
+    );
+}
+
 export default function ActivationModal() {
     const { t } = useTranslation();
-    const { state, modalOpen, closeModal, refresh } = useActivationStore();
+    const { state, modalOpen, closeModal, refresh, hasFeature } = useActivationStore();
     const api = useElectronAPI();
     const [mode, setMode] = useState<Mode>('choose');
     const [code, setCode] = useState('');
@@ -286,6 +365,7 @@ export default function ActivationModal() {
                     </button>
                 </div>
             )}
+            <FeatureList t={t} hasFeature={hasFeature} />
         </Modal>
     );
 }

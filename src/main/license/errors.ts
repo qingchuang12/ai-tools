@@ -12,6 +12,7 @@ import {createHash} from 'crypto';
 /** 内部错误码：仅进日志，绝不出现在 UI 或 IPC 返回值里 */
 export type LicenseErrorCode =
     | 'LIC_OK'
+    | 'LIC_TRIAL_OK'            // 试用期内（未注册）视作全量权益，gate 放行
     | 'LIC_DISABLED'            // license.enabled=false，模块整体不介入
     | 'LIC_MALFORMED'           // 非 3 段 / base64url 或 JSON 解析失败
     | 'LIC_UNKNOWN_KID'         // header.kid 无对应公钥

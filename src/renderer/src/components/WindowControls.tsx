@@ -1,6 +1,7 @@
 import {useEffect, useState} from 'react';
 import {useElectronAPI} from '../lib/electron';
 import {useIsMac} from '../lib/useIsMac';
+import {useTranslation} from 'react-i18next';
 
 /**
  * 无边框窗口的自定义控制按钮（最小化 / 最大化·还原 / 关闭）。
@@ -9,6 +10,7 @@ import {useIsMac} from '../lib/useIsMac';
 export default function WindowControls() {
     const api = useElectronAPI();
     const isMac = useIsMac();
+    const {t} = useTranslation();
     const [isMaximized, setIsMaximized] = useState(false);
 
     useEffect(() => {
@@ -28,8 +30,8 @@ export default function WindowControls() {
             <button
                 className="win-ctrl"
                 onClick={() => api.window.minimize()}
-                title="最小化"
-                aria-label="最小化"
+                title={t('window.minimize')}
+                aria-label={t('window.minimize')}
             >
                 <svg viewBox="0 0 12 12">
                     <rect x="2" y="5.4" width="8" height="1.2" fill="currentColor"/>
@@ -38,8 +40,8 @@ export default function WindowControls() {
             <button
                 className="win-ctrl"
                 onClick={() => api.window.toggleMaximize()}
-                title={isMaximized ? '还原' : '最大化'}
-                aria-label={isMaximized ? '还原' : '最大化'}
+                title={isMaximized ? t('window.restore') : t('window.maximize')}
+                aria-label={isMaximized ? t('window.restore') : t('window.maximize')}
             >
                 {isMaximized ? (
                     <svg viewBox="0 0 12 12">
@@ -55,8 +57,8 @@ export default function WindowControls() {
             <button
                 className="win-ctrl win-ctrl-close"
                 onClick={() => api.window.close()}
-                title="关闭"
-                aria-label="关闭"
+                title={t('window.close')}
+                aria-label={t('window.close')}
             >
                 <svg viewBox="0 0 12 12">
                     <path d="M3 3 L9 9 M9 3 L3 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>

@@ -8,7 +8,7 @@ package-lock.json
 dist/
 build/
 release/
-release-verify/
+release_verify/
 
 # IDE
 .idea/

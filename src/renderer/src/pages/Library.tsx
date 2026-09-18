@@ -258,7 +258,7 @@ export default function Library() {
             setSkillClients(skillClientsMap);
         } catch (error) {
             console.error('Failed to load data:', error);
-            toast.error('加载数据失败，请刷新重试');
+            toast.error(t('library.loadDataFailed'));
         } finally {
             setHasLoaded(true);
         }
@@ -465,7 +465,7 @@ export default function Library() {
             loadData();
         } catch (error) {
             console.error('Failed to remove server:', error);
-            toast.error('移除服务器失败，请重试');
+            toast.error(t('library.removeServerFailed'));
         }
     };
 
@@ -478,7 +478,7 @@ export default function Library() {
             loadData();
         } catch (error) {
             console.error('Failed to remove skill:', error);
-            toast.error('移除技能失败，请重试');
+            toast.error(t('library.removeSkillFailed'));
         }
     };
 
@@ -592,8 +592,7 @@ export default function Library() {
                         });
                         if (diverged) {
                             toast.warning(
-                                t('library.skillDiverged') ||
-                                '该 Skill 在多个客户端内容不一致，保存将以当前回填内容覆盖所有已选客户端'
+                                t('library.skillDiverged')
                             );
                         }
                     }
@@ -702,14 +701,12 @@ export default function Library() {
 
             if (result.synced > 0) {
                 toast.success(
-                    t('library.skillsSynced', {count: result.synced}) ||
-                    `已同步 ${result.synced} 个 Skill 到 ${result.details[0]?.success.length ?? 0} 个客户端`
+                    t('library.skillsSyncedToClients', {count: result.synced, clients: result.details[0]?.success.length ?? 0})
                 );
             }
             if (result.failed > 0) {
                 toast.error(
-                    t('library.skillsSyncFailed', {count: result.failed}) ||
-                    `${result.failed} 个 Skill 同步失败`
+                    t('library.skillsSyncFailed', {count: result.failed})
                 );
             }
         } catch (error) {
@@ -1062,8 +1059,8 @@ export default function Library() {
                                 onClick={handleCloudUpload}
                                 disabled={cloudBusy !== null}
                                 title={activeTab === 'skills'
-                                    ? '把当前库的 Skill 上传到云端 ai-tools 目录'
-                                    : '把当前库的 MCP 上传到云端 ai-tools 目录'}
+                                    ? t('library.cloudUploadTipSkill')
+                                    : t('library.cloudUploadTipMcp')}
                                 className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-surface-hover)] text-[var(--color-text)] rounded-md text-[12px] font-medium hover:bg-[var(--color-surface-active)] transition-colors disabled:opacity-50"
                             >
                                 <svg className={`w-3.5 h-3.5 ${cloudBusy === 'push' ? 'animate-pulse' : ''}`}
@@ -1071,7 +1068,7 @@ export default function Library() {
                                     <path strokeLinecap="round" strokeLinejoin="round"
                                           d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
                                 </svg>
-                                {cloudBusy === 'push' ? '上传中…' : '云上传'}
+                                {cloudBusy === 'push' ? t('library.cloudUploading') : t('library.cloudUpload')}
                             </button>
                             <span className="w-px h-4 bg-[var(--color-surface-hover)]"/>
                         </>
@@ -1119,7 +1116,7 @@ export default function Library() {
                                 <button
                                     onClick={handleExportMcp}
                                     className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-surface-hover)] text-[var(--color-text)] rounded-md text-[12px] font-medium hover:bg-[var(--color-surface-active)] transition-colors"
-                                    title={serverSelectMode && selectedServers.length > 0 ? '导出选中' : '导出全部'}
+                                    title={serverSelectMode && selectedServers.length > 0 ? t('library.exportSelected') : t('library.exportAll')}
                                 >
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
@@ -1191,7 +1188,7 @@ export default function Library() {
                                 <button
                                     onClick={handleExportSkills}
                                     className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-surface-hover)] text-[var(--color-text)] rounded-md text-[12px] font-medium hover:bg-[var(--color-surface-active)] transition-colors"
-                                    title={selectMode && selectedSkills.length > 0 ? '导出选中' : '导出全部'}
+                                    title={selectMode && selectedSkills.length > 0 ? t('library.exportSelected') : t('library.exportAll')}
                                 >
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
@@ -1315,8 +1312,7 @@ export default function Library() {
             <ClientPickerModal
                 open={serverSyncOpen}
                 title={t('installed.batchSyncTitle') || 'Sync Servers to Other Clients'}
-                subtitle={t('installed.batchSyncHint', {count: serverSyncList.length}) ||
-                    `选择要将 ${serverSyncList.length} 个服务器同步到的客户端：`}
+                subtitle={t('installed.batchSyncHint', {count: serverSyncList.length})}
                 clients={clients.filter(c => {
                     if (!c.installed) return false;
                     const alreadyAll = serverSyncList.every(s => s.clients.includes(c.id));
@@ -1336,8 +1332,7 @@ export default function Library() {
             <ClientPickerModal
                 open={syncModalOpen}
                 title={t('library.syncTitle') || 'Sync Skill to Other Clients'}
-                subtitle={t('library.syncHint', {count: syncModalSkills.length}) ||
-                    `选择要将 ${syncModalSkills.length} 个 Skill 同步到的客户端：`}
+                subtitle={t('library.syncHint', {count: syncModalSkills.length})}
                 clients={clients.filter(c => {
                     if (!c.installed || !c.supportsSkills) return false;
                     const alreadyAll = syncModalSkills.every(
@@ -1366,10 +1361,8 @@ export default function Library() {
                 <div className="space-y-4">
                     <p className="text-[13px] text-[var(--color-muted2)]">
                         {activeTab === 'skills'
-                            ? (t('library.cloudUploadSkillConfirmMsg') ||
-                                '此操作将把本地所有 Skill 上传到云端并覆盖现有内容，确认继续？')
-                            : (t('library.cloudUploadMcpConfirmMsg') ||
-                                '此操作将把本地所有 MCP 上传到云端并覆盖现有内容，确认继续？')}
+                            ? t('library.cloudUploadSkillConfirmMsg')
+                            : t('library.cloudUploadMcpConfirmMsg')}
                     </p>
                     <div className="flex justify-end gap-2 pt-2">
                         <button
@@ -1644,7 +1637,7 @@ export default function Library() {
                     <div className="space-y-4" style={{minWidth: 420}}>
                         <p className="text-[12px] text-[var(--color-muted2)]">
                             {t('library.mcpDownloadConflictHint', {name: mcpDownloadConfirm?.serverId || ''})
-                                || `Server「${mcpDownloadConfirm?.serverId || ''}」在以下客户端的本地配置与云端版本内容不同，继续将用云端版本覆盖：`}
+                            }
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                             {(mcpDownloadConfirm?.targets || []).map(tgt => (
@@ -1677,7 +1670,7 @@ export default function Library() {
                             {t('library.mcpOverwriteHint', {
                                 total: mcpOverwriteConfirm?.total ?? 0,
                                 existing: mcpOverwriteConfirm?.existing ?? 0,
-                            }) || `将上传 ${mcpOverwriteConfirm?.total ?? 0} 个 MCP Server 到云端，其中 ${mcpOverwriteConfirm?.existing ?? 0} 个与云端现有配置同名，同名配置将被本地版本覆盖。差异明细可先在顶部一致性提示中对照查看。`}
+                            })}
                         </p>
                         <div className="flex justify-end gap-2 pt-1">
                             <button onClick={() => setMcpOverwriteConfirm(null)}

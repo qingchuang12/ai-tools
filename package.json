@@ -97,7 +97,10 @@
       "LICENSE"
     ],
     "extraResources": [
-      "LICENSE",
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      },
       "THIRD_PARTY_LICENSES.md",
       {
         "from": "src/public.key",

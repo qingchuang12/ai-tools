@@ -241,7 +241,7 @@ export default function CloudSyncManager({runtimes, onChanged}: Props) {
                                 <input
                                     value={cfg.git.repoUrl}
                                     onChange={e => setCfg({...cfg, git: {...cfg.git, repoUrl: e.target.value}})}
-                                    placeholder="git@github.com:user/ai-tool-sync.git 或 https://github.com/user/ai-tool-sync.git"
+                                    placeholder={t('cloudSync.repoUrlPlaceholder')}
                                     className={inputCls + ' font-mono'}
                                 />
                             </Field>

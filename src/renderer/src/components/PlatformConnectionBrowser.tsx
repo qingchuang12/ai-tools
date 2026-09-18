@@ -65,7 +65,7 @@ export default function PlatformConnectionBrowser({
         } catch (e: any) {
             if (seq !== reqSeq.current) return;
             console.error('search platform failed', e);
-            toast.error(e?.message || '搜索失败');
+            toast.error(e?.message || t('platformBrowser.searchFailed'));
             setItems([]);
             setPageInfo(null);
             const d = await api.apiConnections.searchDiagnostics(id).catch(() => null);
@@ -97,7 +97,7 @@ export default function PlatformConnectionBrowser({
         try {
             const resolved: any = await api.apiConnections.resolveSkill(connection!.id, item.sourceUrl);
             if (!resolved?.success || !resolved.skills?.length) {
-                toast.error(resolved?.error || '无法解析该 skill 源');
+                toast.error(resolved?.error || t('platformBrowser.resolveFailed'));
                 return;
             }
             const clients = (await api.clients.getAll())
@@ -107,14 +107,14 @@ export default function PlatformConnectionBrowser({
                 .filter(c => c.supportsSkills && c.id !== 'cloud' && c.installed)
                 .map(c => c.id as SkillClientType);
             if (clients.length === 0) {
-                toast.error('未检测到已安装的客户端，请先在设置中配置');
+                toast.error(t('platformBrowser.noClientInstalled'));
                 return;
             }
             const r = await api.skills.installFromDiscovered(resolved.skills[0], clients);
-            if (r.success) toast.success(`已安装 ${item.name}`);
-            else toast.error(r.error || '安装失败');
+            if (r.success) toast.success(t('platformBrowser.installedSuccess', {name: item.name}));
+            else toast.error(r.error || t('platformBrowser.installFailed'));
         } catch (e: any) {
-            toast.error(e?.message || '安装失败');
+            toast.error(e?.message || t('platformBrowser.installFailed'));
         } finally {
             setInstalling(null);
         }
@@ -124,12 +124,12 @@ export default function PlatformConnectionBrowser({
         <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
         <span className="text-[12px] text-[var(--color-muted2)]">
-          直连来源：<span className="text-[var(--color-text)]">{sourceName}</span>
+          {t('platformBrowser.directSource')}：<span className="text-[var(--color-text)]">{sourceName}</span>
           <span
               className="ml-1 px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)] text-[12px]">{platformLabel(t, platformType)}</span>
         </span>
                 {query && (
-                    <span className="text-[12px] text-[var(--color-muted)]">关键词：<span className="text-[var(--color-muted2)]">{query}</span></span>
+                    <span className="text-[12px] text-[var(--color-muted)]">{t('platformBrowser.keywords')}：<span className="text-[var(--color-muted2)]">{query}</span></span>
                 )}
             </div>
 
@@ -146,8 +146,8 @@ export default function PlatformConnectionBrowser({
                     </div>
                     <p className="text-[12px] text-[var(--color-muted2)] max-w-md mx-auto">
                         {unsupported
-                            ? `「${sourceName}」是 SPA 站点，未开放公开的 skills 列表接口，无法在此直接浏览。如需安装其技能，请用「粘贴 GitHub 仓库链接」方式导入。`
-                            : (diag?.hint || (page > 1 ? `第 ${page} 页没有更多技能了。` : '暂无结果。'))}
+                            ? t('platformBrowser.spaUnsupported', {name: sourceName})
+                            : (diag?.hint || (page > 1 ? t('platformBrowser.noMoreOnPage', {page}) : t('platformBrowser.noResults')))}
                     </p>
 
                     {page > 1 && (
@@ -155,7 +155,7 @@ export default function PlatformConnectionBrowser({
                             onClick={() => goToPage(1)}
                             className="mt-3 px-2.5 py-1 rounded bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 cursor-pointer transition-colors"
                         >
-                            返回第 1 页
+                            {t('platformBrowser.backToFirstPage')}
                         </button>
                     )}
 
@@ -165,15 +165,15 @@ export default function PlatformConnectionBrowser({
                                 onClick={() => setShowDiag(v => !v)}
                                 className="mt-3 text-[12px] text-[var(--color-accent)] hover:underline cursor-pointer"
                             >
-                                {showDiag ? '收起调用链路' : `查看调用链路（${diag.attempts.length} 个端点，耗时 ${diag.totalDurationMs}ms）`}
+                                {showDiag ? t('platformBrowser.collapseChain') : t('platformBrowser.expandChain', {count: diag.attempts.length, ms: diag.totalDurationMs})}
                             </button>
 
                             {showDiag && (
                                 <div
                                     className="mt-3 text-left rounded-md bg-[var(--color-bg)] border border-[var(--color-border)] overflow-hidden">
                                     <div className="px-3 py-2 border-b border-[var(--color-border)] text-[12px] text-[var(--color-muted)]">
-                                        平台 {diag.platform} · Base {diag.baseUrl} ·
-                                        令牌 {diag.authorized ? '已附带' : '未附带'}
+                                        {t('platformBrowser.platform')} {diag.platform} · Base {diag.baseUrl} ·
+                                        {t('platformBrowser.token')} {diag.authorized ? t('platformBrowser.attached') : t('platformBrowser.notAttached')}
                                     </div>
                                     {diag.attempts.map((a, i) => (
                                         <div key={i} className="px-3 py-2 border-b border-[var(--color-border)] last:border-0">
@@ -221,7 +221,7 @@ export default function PlatformConnectionBrowser({
                                         onClick={() => handleAdd(it)}
                                         className="px-2.5 py-1 rounded bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 transition-colors disabled:opacity-50"
                                     >
-                                        {installing === it.id ? '安装中…' : '添加'}
+                                        {installing === it.id ? t('platformBrowser.installing') : t('platformBrowser.add')}
                                     </button>
                                 </div>
                             </div>
@@ -234,7 +234,7 @@ export default function PlatformConnectionBrowser({
             <span className="text-[12px] text-[var(--color-muted)]">
               {pageInfo.total !== null
                   ? `${(page - 1) * pageInfo.pageSize + 1}-${(page - 1) * pageInfo.pageSize + items.length} / ${pageInfo.total}`
-                  : `第 ${page} 页 · ${items.length} 条`}
+                  : t('platformBrowser.pageInfo', {page, count: items.length})}
             </span>
 
                             <div className="flex items-center gap-1">
@@ -242,7 +242,7 @@ export default function PlatformConnectionBrowser({
                                     onClick={() => goToPage(page - 1)}
                                     disabled={page === 1 || loading}
                                     className="p-1 rounded text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--color-muted2)] disabled:cursor-not-allowed cursor-pointer transition-colors"
-                                    aria-label="上一页"
+                                    aria-label={t('pagination.previous')}
                                 >
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                          strokeWidth={2}>
@@ -259,7 +259,7 @@ export default function PlatformConnectionBrowser({
                                     onClick={() => goToPage(page + 1)}
                                     disabled={!pageInfo.hasMore || loading}
                                     className="p-1 rounded text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--color-muted2)] disabled:cursor-not-allowed cursor-pointer transition-colors"
-                                    aria-label="下一页"
+                                    aria-label={t('pagination.next')}
                                 >
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                          strokeWidth={2}>

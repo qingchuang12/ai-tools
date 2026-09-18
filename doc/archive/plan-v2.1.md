@@ -14,13 +14,13 @@
 
 离线授权体系主体已落地：`src/main/license/`（facade + 机器码 + vault + verifier + trial + feature-gate + redeem + config + keys + constants + types + errors + assets）、`src/shared/activation-types.ts`、`src/shared/license-constants.ts`、`src/main/activation-store.ts` 瘦身、`src/main/index.ts` 新 IPC 与 gate、`src/main/cloud-sync-service.ts` service 层兜底 gate、`src/renderer/.../{activationStore,ActivationModal,ActivationBadge,CloudSyncManager}`、`src/renderer/src/locales/*.json` 的 `license.*` 段。
 
-## TODOS（结转自 plan-2.0 T05，来源版本标注）
+## TODOS
 
-> 规则：完成即从本列表删除，不留 `[x]`；本目录同时只保留一个活动 plan。
+> **本 plan 的 3 项未完成任务已于 2026-09-18 全量结转至 `doc/plan-2.3.md`「结转自 plan-2.1」段，本文件归档，不再持有待办。**
 
-- [ ] **端到端冒烟**（来源 plan-2.0 T05）：用测试 Ed25519 私钥签 token → 兑换/导入 → 云同步解锁；换机器码 → 拒绝；改签名 → 统一文案 `license.errors.generic`；`killSwitch:true` → 全放行。依赖后端/测试私钥，占位值在 `src/main/license/assets/license.config.json`（redeem 域名、exp 单位、`.lic` 格式、是否回传 serverTime 待后端确认）。
-- [ ] **简化 `scripts/obfuscate-main.mjs`**（来源 plan-1.0 / plan-2.0 T05）：去掉 `.pnpm` 通配兜底分支 + 更新注释。纯清理、零行为变化，待主进程混淆链路空闲时处理。
-- [ ] **实跑 `pnpm run package:win`**（来源 plan-1.0 / plan-2.0 T05）：验证 NSIS 安装包 + portable 产物 + 混淆后主进程正常启动 + `resources/license/` 资产正确落盘（公钥/配置双源）。需在本机（GUI 环境）执行，CI/沙箱无 GUI 无法验证启动。
+- 端到端冒烟 → 见 plan-2.3
+- 简化 `scripts/obfuscate-main.mjs` → 见 plan-2.3
+- 实跑 `pnpm run package:win` → 见 plan-2.3
 
 ## 任务依赖
 

@@ -274,11 +274,11 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                 setFileReadError('');
             } else {
                 setFileReadonly(null);
-                setFileReadError(res.error || '读取失败');
+                setFileReadError(res.error || t('library.fileReadFailed'));
             }
         } catch (e: any) {
             setFileReadonly(null);
-            setFileReadError(e?.message || '读取失败');
+            setFileReadError(e?.message || t('library.fileReadFailed'));
         }
     };
 

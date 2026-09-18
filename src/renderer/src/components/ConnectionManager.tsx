@@ -4,6 +4,7 @@
  */
 import {BUILTIN_SKILL_SOURCE_IDS, PLATFORM_META, SKILL_PLATFORM_TYPES} from '../../../shared/platform-constants';
 import SourceManager from './SourceManager';
+import {useTranslation} from 'react-i18next';
 
 interface Props {
     /** 源列表变化后通知外部（Store 下拉需要重新拉取） */
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function ConnectionManager({onChanged}: Props) {
+    const {t} = useTranslation();
     return (
         <SourceManager
             namespace="skillSource"
@@ -26,7 +28,7 @@ export default function ConnectionManager({onChanged}: Props) {
                 // 虾评列表匿名可读，但下载安装需鉴权；正式版技能下载会扣 2 虾米（重试不重复扣）。
                 coze: (
                     <>
-                        下载安装需要虾评 API Key（在上方绑定）。获取与安装方式参见{' '}
+                        {t('skillSource.cozeHintPrefix')}{' '}
                         <a
                             href="https://xiaping.coze.com/skill.md"
                             target="_blank"
@@ -35,7 +37,7 @@ export default function ConnectionManager({onChanged}: Props) {
                         >
                             xiaping.coze.com/skill.md
                         </a>
-                        ；正式版技能下载会消耗虾米，试用版免费。
+                        {t('skillSource.cozeHintSuffix')}
                     </>
                 ),
             }}

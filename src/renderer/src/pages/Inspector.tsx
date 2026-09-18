@@ -1036,7 +1036,7 @@ export default function Inspector() {
                             : 'border border-[var(--color-border)] text-[var(--color-muted2)] hover:bg-[var(--color-surface-hover)]/40'
                         }`}
                       >
-                        树视图
+                        {t('inspector.treeView')}
                       </button>
                       <button
                         onClick={() => setViewMode('text')}
@@ -1046,7 +1046,7 @@ export default function Inspector() {
                             : 'border border-[var(--color-border)] text-[var(--color-muted2)] hover:bg-[var(--color-surface-hover)]/40'
                         }`}
                       >
-                        文本查看
+                        {t('inspector.textView')}
                       </button>
                     </div>
                     {viewMode === 'tree' && typeof result === 'object' ? (

@@ -56,10 +56,10 @@ export function useCloudUpload(params: {
         if (!api.syncTasks) {
             // 兜底：极少数情况下接口不可用，退回直接推送
             void api.cloudSync.push().then((res) => {
-                if (res.ok) toast.success(res.message || '已上传到云端');
-                else toast.error(res.message || '上传云端失败');
+                if (res.ok) toast.success(res.message || t('library.uploadedToCloud'));
+                else toast.error(res.message || t('library.uploadCloudFailed'));
             }).catch((err) => {
-                toast.error(err?.message || '上传云端失败');
+                toast.error(err?.message || t('library.uploadCloudFailed'));
             });
             return;
         }
@@ -69,7 +69,7 @@ export function useCloudUpload(params: {
         void api.syncTasks.enqueue('cloud-push', title, scope).then(() => {
             toast.info(t('library.cloudEnqueued') || '已加入后台同步队列，可在左侧「同步任务」查看');
         }).catch((err) => {
-            toast.error(err?.message || '加入同步队列失败');
+            toast.error(err?.message || t('library.syncEnqueueFailed'));
         });
     };
 
@@ -134,7 +134,7 @@ export function useCloudUpload(params: {
             }
         } catch (error: any) {
             console.error('Cloud upload failed:', error);
-            toast.error(error?.message || '上传失败');
+            toast.error(error?.message || t('library.cloudUploadFailed'));
         } finally {
             setCloudBusy(null);
         }
@@ -160,7 +160,7 @@ export function useCloudUpload(params: {
         setCloudBusy('push');
         doMcpUpload().catch((error: any) => {
             console.error('Cloud upload failed:', error);
-            toast.error(error?.message || '上传失败');
+            toast.error(error?.message || t('library.cloudUploadFailed'));
         }).finally(() => setCloudBusy(null));
     };
 
@@ -183,7 +183,7 @@ export function useCloudUpload(params: {
             pushCloudAsync('skills');
         } catch (error: any) {
             console.error('Cloud upload failed:', error);
-            toast.error(error?.message || '上传失败');
+            toast.error(error?.message || t('library.cloudUploadFailed'));
         } finally {
             setCloudBusy(null);
         }

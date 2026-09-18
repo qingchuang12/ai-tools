@@ -11,6 +11,7 @@
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import type {TFunction} from 'i18next';
 import {useElectronAPI} from '../lib/electron';
 import type {SyncTask, SyncTaskStatus} from '../../../shared/sync-task-types';
 import type {CloudSyncConfig} from '../../../shared/cloud-sync-constants';
@@ -18,15 +19,15 @@ import {CheckIcon, CloseIcon, ErrorIcon, RefreshIcon} from './Icons';
 import Modal from './Modal';
 
 /** 把时间戳格式化为「刚刚 / N 分钟前 / N 小时前 / HH:mm」的相对/绝对时间 */
-function formatTime(ts?: number): string {
+function formatTime(ts: number | undefined, t: TFunction): string {
     if (!ts) return '';
     const diff = Date.now() - ts;
     const min = Math.floor(diff / 60000);
     if (diff < 0) return '';
-    if (diff < 60_000) return '刚刚';
-    if (min < 60) return `${min} 分钟前`;
+    if (diff < 60_000) return t('time.justNow');
+    if (min < 60) return t('time.minutesAgo', {count: min});
     const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr} 小时前`;
+    if (hr < 24) return t('time.hoursAgo', {count: hr});
     const d = new Date(ts);
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -174,7 +175,7 @@ export default function SyncTasksPanel() {
                                         {isFailed && task.error ? ` · ${task.error}` : ''}
                                         {!isFailed && task.detail ? ` · ${task.detail}` : ''}
                                         <span className="ml-1 opacity-70">
-                                            {formatTime(task.finishedAt ?? task.startedAt ?? task.createdAt)}
+                                            {formatTime(task.finishedAt ?? task.startedAt ?? task.createdAt, t)}
                                         </span>
                                     </div>
                                 </div>

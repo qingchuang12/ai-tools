@@ -10,7 +10,8 @@ import {useTranslation} from 'react-i18next';
 import type {DataSource, ServerListItem} from '../api/registry';
 import {isSmitheryListItem} from '../api/registry';
 import {DownloadIcon, EyeIcon, VerifiedIcon} from './Icons';
-import {formatCompactNumber, localizeKey} from '../lib/format';
+import {formatCompactNumber} from '../lib/format';
+import {localizeCategoryList} from '../lib/categoryAlias';
 import EntityAvatar from './store/EntityAvatar';
 
 interface ServerCardProps {
@@ -47,11 +48,11 @@ function ServerCard({ server, dataSource, isInstalled, platformConnId }: ServerC
     }
   };
 
-  // 分类徽章（平台源提供的 categories/tags）
-  // 平台源优先用中文展示名（categoryNames，与 categories 一一对应），避免直接显示英文 slug；
-  // categories 仍保留原始 slug，供分类过滤精确匹配。
+  // 分类徽章：直接取当前语言的译文。
+  // categories（slug）优先以便命中翻译，未命中时按同索引回退到中文展示名（二者一一对应）；
+  // server.categories 的原始 slug 未被改写，分类过滤仍用它精确匹配。
   const catList: string[] = isPlatformSource
-    ? (server.categoryNames?.length ? server.categoryNames : server.categories ?? server.tags ?? [])
+    ? localizeCategoryList({ categories: server.categories, categoryNames: server.categoryNames, tags: server.tags }, t, i18n)
     : server.tags ?? [];
 
   return (
@@ -77,7 +78,7 @@ function ServerCard({ server, dataSource, isInstalled, platformConnId }: ServerC
             </h3>
             {catList.slice(0, 3).map(cat => (
               <span key={cat} className="px-1.5 py-0 rounded-full text-[9px] bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20 flex-shrink-0 whitespace-nowrap">
-                {localizeKey(t, i18n, `mcpCategory.${cat}`, cat)}
+                {cat}
               </span>
             ))}
             {catList.length > 3 && (

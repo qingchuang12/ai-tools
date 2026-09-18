@@ -10,7 +10,8 @@ import {useTranslation} from 'react-i18next';
 import type {SkillListItem} from '../api/registry';
 import {pickSkillDescription} from '../lib/localizedText';
 import {ClockIcon, DownloadIcon, EyeIcon, StarIcon} from './Icons';
-import {formatCompactNumber, formatRelativeTime, localizeKey} from '../lib/format';
+import {formatCompactNumber, formatRelativeTime} from '../lib/format';
+import {localizeCategoryList} from '../lib/categoryAlias';
 import EntityAvatar from './store/EntityAvatar';
 
 interface SkillCardProps {
@@ -104,7 +105,12 @@ function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps
     const rawCategories = (Array.isArray(rawCats) ? rawCats : []).filter(
         (c): c is string => typeof c === 'string' && c.trim().length > 0
     );
-    const catList = rawCategories.length ? [...new Set(rawCategories)] : (skill.category ? [skill.category] : []);
+    // 分类原始值（slug 或中文名），保留用于取配色——getCategoryColor 按 id 精确匹配
+    const rawCatList = rawCategories.length ? [...new Set(rawCategories)] : (skill.category ? [skill.category] : []);
+    // 展示文案走 i18n：技能分类 id 各平台不统一（clawhub / modelscope 为 slug，coze / skillhub 为中文名），
+    // 统一在 `category.*` 命名空间查译文，未命中才回退原文。
+    // 返回数组与 rawCatList 一一对应，取色时用同索引的原始值。
+    const catList = localizeCategoryList({categories: rawCatList}, t, i18n);
 
     // 平台直连源（如 ModelScope）的技能带真实封面图（extra.coverUrl），优先展示；
     // 加载失败由 EntityAvatar 兜底到首字母色块。
@@ -140,7 +146,7 @@ function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps
                         )}
                         {requiresApiKey && (
                             <span className="rounded bg-amber-500/15 text-amber-400 text-[9px] px-1 py-0 flex-shrink-0">
-                {t('store.requiresApiKey', '需 API Key')}
+                {t('store.requiresApiKey')}
               </span>
                         )}
                     </div>
@@ -154,12 +160,12 @@ function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps
             <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--color-border)]/50">
                 <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-[var(--color-muted)] flex-1 min-w-0 mr-2">
                     {/* 分类 tags - 完整展示多分类（flex-wrap 溢出换行，title 悬停看全名） */}
-                    {catList.map((c) => {
-                        const cc = getCategoryColor(c);
+                    {catList.map((label, i) => {
+                        const cc = getCategoryColor(rawCatList[i] ?? label);
                         return (
-                            <span key={c} title={c}
+                            <span key={label} title={label}
                                   className={`px-1.5 py-0.5 rounded text-[9px] font-medium whitespace-nowrap ${cc.bg} ${cc.text}`}>
-                                {localizeKey(t, i18n, `skillCategory.${c}`, c)}
+                                {label}
                             </span>
                         );
                     })}

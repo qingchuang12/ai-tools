@@ -737,8 +737,8 @@ export const npmAdapter: PlatformAdapter = {
      * 刻意返回扁平列表、不使用 children：StoreToolbar 只渲染顶层节点（见 StoreToolbar.tsx），
      * 嵌套子类在该下拉里不会显示。
      *
-     * 注意：分类 id 会经渲染层 i18n（`platformCategory.*` / `mcpCategory.*`）覆盖名称，
-     * 且 ServerCard 对**所有平台**共用 `mcpCategory.${cat}` 解析，因此这里的 id 必须避开
+     * 注意：分类 id 会经渲染层 i18n（统一的 `category.*` 命名空间，见 renderer/src/lib/categoryAlias.ts）
+     * 覆盖名称，且 ServerCard / SkillCard 对**所有平台**共用同一套解析，因此这里的 id 必须避开
      * 其他平台已在用的 id（如 modelscope / skillhub 的 'search'），否则会串台误标。
      */
     getFacets(_resourceType?: 'mcp' | 'skills'): PlatformFacets {

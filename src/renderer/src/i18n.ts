@@ -25,16 +25,19 @@ export const SUPPORTED_LANGUAGES: { code: string; label: string; english: string
 
 const SUPPORTED_CODES = SUPPORTED_LANGUAGES.map((l) => l.code);
 
-/** 阿拉伯语等 RTL 语言需要翻转文档方向 */
-function isRtl(lng: string): boolean {
-    return lng === 'ar';
-}
-
-/** 同步 <html> 的 lang / dir，保证字体排版与屏幕阅读器行为正确 */
+/**
+ * 同步 <html> 的 lang，保证字体排版与屏幕阅读器行为正确。
+ *
+ * 注意：**不要**按语言翻转 document.dir。本项目未做 RTL 布局适配——无 Tailwind `rtl:` 变体、
+ * 无 CSS 逻辑属性，方向性样式一律写死 left/right、rounded-l/r、text-left/right。一旦设
+ * dir="rtl"，容器会镜像翻转而内部间距、圆角、图标方向不跟随，两套规则打架导致整体布局错乱。
+ * 若将来要支持 RTL，须先完成全站适配再在此处开启翻转。
+ */
 export function applyDocumentLanguage(lng: string): void {
     try {
         document.documentElement.lang = lng;
-        document.documentElement.dir = isRtl(lng) ? 'rtl' : 'ltr';
+        // 恒为 LTR；显式重置以清除历史遗留的 dir="rtl" 残留（热切换语言时不会自动还原）
+        document.documentElement.dir = 'ltr';
     } catch {
         // 非浏览器环境（测试）忽略
     }
@@ -53,7 +56,16 @@ function detectSystemLanguage(): string {
     return SUPPORTED_CODES.includes(base) ? base : 'en';
 }
 
-const initialLng =
+/**
+ * 首屏初始化语言：用户曾手动选择则沿用（localStorage），否则跟随系统语言。
+ *
+ * **调用方（`main.tsx`）必须在首次渲染前 await `ensureLanguageLoaded(INITIAL_LANGUAGE)`。**
+ * 原因：此文件只静态打包 en/zh 两个语言包（覆盖绝大多数首装场景、零延迟），其余 7 种语言
+ * 由 `ensureLanguageLoaded` 惰性加载。若渲染前不预加载，i18next 会因目标语言包缺失而走
+ * `fallbackLng: 'en'`——非 en/zh 系统（ja/ru/de/it/es/fr/ar）首装会渲染成英文，且
+ * `i18n.language` 与实际渲染语言不一致。
+ */
+export const INITIAL_LANGUAGE =
     savedLanguage && SUPPORTED_CODES.includes(savedLanguage) ? savedLanguage : detectSystemLanguage();
 
 const resources: Resource = {
@@ -65,14 +77,14 @@ i18n
     .use(initReactI18next)
     .init({
         resources,
-        lng: initialLng,
+        lng: INITIAL_LANGUAGE,
         fallbackLng: 'en',
         interpolation: {
             escapeValue: false,
         },
     });
 
-applyDocumentLanguage(initialLng);
+applyDocumentLanguage(INITIAL_LANGUAGE);
 
 /** 各语言包的动态加载器（按需加载，避免首屏打包全部 locale） */
 const LOCALE_LOADERS: Record<string, () => Promise<{ default: unknown }>> = {

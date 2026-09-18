@@ -273,7 +273,7 @@ describe('npmAdapter', () => {
 
     it('getFacets 的分类 id 不与其他平台冲突（search 为 modelscope/skillhub 共用）', () => {
         const ids = npmAdapter.getFacets!('mcp').categories.map(c => c.id);
-        // ServerCard 对所有平台都用 mcpCategory.${cat} 解析，npm 不得复用 'search'
+        // ServerCard/SkillCard 对所有平台都用统一的 category.${cat} 解析，npm 不得复用 'search'
         expect(ids).not.toContain('search');
         expect(ids).toContain('web-search');
     });

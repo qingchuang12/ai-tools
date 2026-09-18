@@ -24,7 +24,7 @@ import {toast} from '../components/Toast';
 import {PLATFORM_SKILL_DOWNLOAD, type PlatformType} from '../../../shared/platform-constants';
 import {ClockIcon, DownloadIcon, EyeIcon, ForkIcon, StarIcon} from '../components/Icons';
 import WindowControls from '../components/WindowControls';
-import {localizeKey} from '../lib/format';
+import {localizeCategoryList, translateCategoryName} from '../lib/categoryAlias';
 import {useStore} from '../store/useStore';
 import {buildInstalledSkillKeys, isSkillInstalled, skillItemKeys} from '../../../shared/skill-identity';
 import {deriveSkillMdRawUrl} from '../lib/skillMdUrl';
@@ -519,20 +519,20 @@ export default function SkillDetail() {
                     void api.syncTasks.enqueue('cloud-push', title, 'skills').then(() => {
                         toast.info(t('library.cloudEnqueued') || '已加入后台同步队列，可在左侧「同步任务」查看');
                     }).catch((err) => {
-                        toast.error(err?.message || '加入同步队列失败');
+                        toast.error(err?.message || t('library.syncEnqueueFailed'));
                     });
                 } else {
                     void api.cloudSync.push().then((res) => {
-                        if (res.ok) toast.success(res.message || '已上传到云端');
-                        else toast.error(res.message || '上传云端失败');
+                        if (res.ok) toast.success(res.message || t('library.uploadedToCloud'));
+                        else toast.error(res.message || t('library.uploadCloudFailed'));
                     }).catch((err) => {
-                        toast.error(err?.message || '上传云端失败');
+                        toast.error(err?.message || t('library.uploadCloudFailed'));
                     });
                 }
             }
         } catch (error) {
             console.error('Failed to uninstall skill:', error);
-            toast.error('卸载技能失败，请重试');
+            toast.error(t('library.uninstallSkillFailed'));
         }
     };
 
@@ -589,10 +589,19 @@ export default function SkillDetail() {
     const isInstalled = installedInClients.length > 0;
     const hasCategory = !!skillView.categoryId;
     // 分类展示名：优先用 locale 中 slug 的翻译（registry 源），否则回退到列表/详情提供的友好名（如 ModelScope 的中文名），最后回退原 slug。
-    // 注意：不能用 `t('skillCategory.' + id) || fallback`，因为 i18next 在 key 缺失时返回 key 本身（truthy），兜底永远不生效。
-    const catLabel = hasCategory
-        ? localizeKey(t, i18n, `skillCategory.${skillView.categoryId}`, skillView.category ?? skillView.categoryId!)
-        : '';
+    // 注意：不能用 `t('category.' + id) || fallback`，因为 i18next 在 key 缺失时返回 key 本身（truthy），兜底永远不生效。
+    // 分类展示名：在统一的 `category.*` 命名空间查译文；
+    // 未命中时回退详情/列表提供的友好名（如 ModelScope 的中文名），最后才是原 id。
+    const catId = skillView.categoryId ?? '';
+    const catTranslated = hasCategory ? translateCategoryName(catId, t, i18n) : '';
+    const catLabel = hasCategory ? (catTranslated === catId ? (skillView.category ?? catId) : catTranslated) : '';
+    // 分类 tag 列表：rawCats 为原始 id（getCategoryColor 按 id 精确匹配取色），catLabels 为对应译文
+    const fromList = !!skillView.categories?.length;
+    const rawCats = fromList ? skillView.categories! : (skillView.categoryId ? [skillView.categoryId] : []);
+    const catLabels = localizeCategoryList(
+        {categories: rawCats, categoryNames: !fromList && skillView.category ? [skillView.category] : []},
+        t, i18n,
+    );
     const skillDirUrl = skillView.repositoryUrl && skillView.branch && skillView.skillPath
         ? `${skillView.repositoryUrl}/tree/${skillView.branch}/${skillView.skillPath}`
         : skillView.repositoryUrl || '';
@@ -662,12 +671,12 @@ export default function SkillDetail() {
 
                             {hasCategory && (
                                 <div className="flex flex-wrap gap-2">
-                                    {(skillView.categories?.length ? skillView.categories : [catLabel]).map((c) => {
-                                        const cc = getCategoryColor(c);
+                                    {catLabels.map((label, i) => {
+                                        const cc = getCategoryColor(rawCats[i] ?? label);
                                         return (
-                                            <span key={c}
+                                            <span key={label} title={label}
                                                   className={`inline-block px-2 py-1 rounded-md text-[12px] font-medium border ${cc.bg} ${cc.text} ${cc.border}`}>
-                                                {localizeKey(t, i18n, `skillCategory.${c}`, c)}
+                                                {label}
                                             </span>
                                         );
                                     })}

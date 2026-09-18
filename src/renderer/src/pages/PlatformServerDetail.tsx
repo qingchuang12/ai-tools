@@ -18,6 +18,7 @@ import {
 } from '../lib/electron';
 import type {ServerListItem} from '../api/registry';
 import {useIsMac} from '../lib/useIsMac';
+import {localizeCategoryList} from '../lib/categoryAlias';
 import {useStore} from '../store/useStore';
 import Modal from '../components/Modal';
 import ClientIcon from '../components/ClientIcon';
@@ -82,7 +83,7 @@ interface Props {
 }
 
 export default function PlatformServerDetail({connId, serverId, seedItem}: Props) {
-    const {t} = useTranslation();
+    const {t, i18n} = useTranslation();
     const navigate = useNavigate();
     const api = useElectronAPI();
     const isMac = useIsMac();
@@ -255,7 +256,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                 toast.success(t('detail.installSuccess') || 'Installed successfully');
             }
             if (result.failed.length > 0) {
-                setInstallError(`安装失败：${result.failed.join(', ')}`);
+                setInstallError(t('detail.installFailed', {list: result.failed.join(', ')}));
             }
         } catch (e) {
             console.error('Install failed:', e);
@@ -342,12 +343,14 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
     const runtimeAvailable = isRemoteInstall || (runtimeInfo?.available ?? false);
     const canInstall = !!detail.install;
 
-    // 分类：优先详情接口的分类友好名，否则用列表项透传的中文名，最后回退原始 slug（slug 仅供过滤）
-    const catNames: string[] = (detail.categoryNames && detail.categoryNames.length > 0)
-        ? detail.categoryNames
-        : (seedItem?.categoryNames && seedItem.categoryNames.length > 0
-            ? seedItem.categoryNames
-            : (detail.categories ?? seedItem?.categories ?? []));
+    // 分类标签：取当前语言的译文。
+    // categories(slug) 与 categoryNames 必须同源传入——二者按索引一一对应，混用会错位；
+    // 原始 slug 未被改写，分类过滤仍用它精确匹配。
+    const catFields =
+        detail.categories?.length || detail.categoryNames?.length
+            ? { categories: detail.categories, categoryNames: detail.categoryNames }
+            : { categories: seedItem?.categories, categoryNames: seedItem?.categoryNames };
+    const catNames: string[] = localizeCategoryList(catFields, t, i18n);
     // 浏览量（ModelScope 详情接口不返回，需由列表项透传）
     const viewCount = seedItem?.viewCount ?? detail.stars ?? null;
 

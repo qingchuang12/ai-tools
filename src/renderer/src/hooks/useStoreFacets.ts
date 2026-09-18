@@ -1,11 +1,12 @@
 import {useQuery} from '@tanstack/react-query';
 import {useTranslation} from 'react-i18next';
-import type {ApiConnection, CategoryNode, PlatformFacets, SortOption} from '../lib/electron';
+import type {ApiConnection, CategoryNode, PlatformFacets, SortOption, SourceFilter} from '../lib/electron';
 import {useElectronAPI} from '../lib/electron';
 import type {DataSource} from '../api/registry';
 import {SMITHERY_CATEGORY_IDS} from '../api/registry';
 import type {StoreResourceType} from './storeTypes';
 import {STORE_QUERY_STALE_MS} from './storeTypes';
+import {toCategorySlug} from '../lib/categoryAlias';
 
 /** 8 类统一分类 ID 列表（名称通过 i18n 翻译） */
 const BUILTIN_CATEGORY_IDS = [
@@ -21,25 +22,17 @@ const BUILTIN_CATEGORY_IDS = [
 
 const BUILTIN_SORT_IDS = ['relevance', 'stars', 'updated'] as const;
 
-/** smithery 官方分类中文名（All 由前端默认空 category 表示，故不在列；名称固定、不依赖 i18n） */
-const SMITHERY_CATEGORY_LABELS: Record<string, string> = {
-    'web-search': '网络搜索',
-    'browser-automation': '浏览器自动化',
-    'academic-research': '学术研究',
-    finance: '金融',
-    reasoning: '推理',
-    'dev-tools': '开发工具',
-};
-
-/** 通过 i18n 翻译平台分类树（递归处理子节点） */
+/** 通过 i18n 翻译平台分类树（递归处理子节点）；id 与查询传值一律保持原样 */
 function translateCategoryTree(categories: CategoryNode[], t: (key: string) => string, i18n: {exists: (key: string) => boolean}): CategoryNode[] {
-    return categories.map(c => ({
-        ...c,
-        name: i18n.exists(`platformCategory.${c.id}`)
-            ? t(`platformCategory.${c.id}`)
-            : (i18n.exists(`mcpCategory.${c.id}`) ? t(`mcpCategory.${c.id}`) : c.name),
-        children: c.children ? translateCategoryTree(c.children, t, i18n) : undefined,
-    }));
+    return categories.map(c => {
+        // coze 等平台的分类 id 本身就是中文，需先归一到 slug 再查翻译（c.id 本身不改动，仍作查询传值）
+        const key = `category.${toCategorySlug(c.id)}`;
+        return {
+            ...c,
+            name: i18n.exists(key) ? t(key) : c.name,
+            children: c.children ? translateCategoryTree(c.children, t, i18n) : undefined,
+        };
+    });
 }
 
 /** 通过 i18n 翻译平台排序选项 */
@@ -47,6 +40,14 @@ function translateSortOptions(sorts: SortOption[], t: (key: string) => string, i
     return sorts.map(s => ({
         ...s,
         name: i18n.exists(`storeSort.${s.id}`) ? t(`storeSort.${s.id}`) : s.name,
+    }));
+}
+
+/** 通过 i18n 翻译平台来源筛选（保持原始 id 作为查询传值，只翻译显示名） */
+function translateSourceFilter(sources: SourceFilter[], t: (key: string) => string, i18n: {exists: (key: string) => boolean}): SourceFilter[] {
+    return sources.map(s => ({
+        ...s,
+        name: i18n.exists(`storeSource.${s.id}`) ? t(`storeSource.${s.id}`) : s.name,
     }));
 }
 
@@ -89,19 +90,20 @@ export function useStoreFacets(params: UseStoreFacetsParams): PlatformFacets | n
                     ...facets,
                     categories: facets.categories ? translateCategoryTree(facets.categories, t, i18n) : [],
                     sortOptions: facets.sortOptions ? translateSortOptions(facets.sortOptions, t, i18n) : [],
+                    sourceFilter: facets.sourceFilter ? translateSourceFilter(facets.sourceFilter, t, i18n) : undefined,
                 };
             }
             // 内置源：smithery 用官方 7 分类（All 由默认空 category 表示全量）；内置源用本地 9 类 + 通用排序
             // S0-3: smithery 服务端不支持排序参数，排序仍抑制（避免无效排序控件），分类走语义搜索词（见 SMITHERY_CATEGORY_QUERIES）
             if (dataSource === 'smithery') {
                 return {
-                    categories: SMITHERY_CATEGORY_IDS.map(id => ({id, name: SMITHERY_CATEGORY_LABELS[id] ?? id})),
+                    categories: SMITHERY_CATEGORY_IDS.map(id => ({id, name: t(`smitheryCategory.${id}`) ?? id})),
                     sortOptions: [],
                     supportsSubcategories: false,
                 };
             }
             return {
-                categories: BUILTIN_CATEGORY_IDS.map(id => ({id, name: t(`mcpCategory.${id}`)})),
+                categories: BUILTIN_CATEGORY_IDS.map(id => ({id, name: t(`category.${id}`)})),
                 sortOptions: BUILTIN_SORT_IDS.map(id => ({id, name: t(`storeSort.${id}`), field: id === 'updated' ? 'updatedAt' : id, order: 'desc' as const})),
                 supportsSubcategories: false,
             };

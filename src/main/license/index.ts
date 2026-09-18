@@ -22,6 +22,7 @@ import type {VaultData} from './vault';
 import {readVault, writeVault} from './vault';
 import {expToMs, verifyToken} from './verifier';
 import type {LicenseConfig, LicenseVault, TokenPayload} from './types';
+import {FEATURE_PRO} from '../../shared/license-constants';
 
 /** 当前会话已验签通过的载荷（供 `assertFeature` / UI 复用，避免重复验签） */
 let payloadCache: TokenPayload | null = null;
@@ -113,6 +114,8 @@ function trialState(ev: TrialEvaluation, machineCode: string): ActivationState {
         trialExpiresAt: ev.trialExpiresAt,
         trialRunsLeft: ev.trialRunsLeft,
         machineCode,
+        // 试用期视作全量权益（pro）：云同步等付费功能均开放；仅试用到期且未注册才关闭
+        features: [FEATURE_PRO],
         source: 'trial',
         degraded: ev.degraded,
     };

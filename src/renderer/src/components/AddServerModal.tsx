@@ -298,7 +298,7 @@ export default function AddServerModal({
         {/* Working Directory (CWD) */}
         <div>
           <label className="block text-[12px] text-[var(--color-muted2)] mb-1.5">
-            {t('addServer.cwd') || 'Working Directory (CWD)'}
+            {t('addServer.cwd')}
             <span className="text-[var(--color-muted)] ml-1">({t('common.optional') || 'optional'})</span>
           </label>
           <input
