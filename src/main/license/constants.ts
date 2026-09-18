@@ -1,0 +1,91 @@
+/**
+ * 授权模块常量（main 进程专用）
+ *
+ * 路径 / 文件名 / 默认值 / 超时全部集中在此，避免散落在各模块后出现
+ * 「改了一处忘了另一处」导致的资产加载失败。
+ */
+
+import {DEFAULT_KID, FEATURE_CLOUD_SYNC, FEATURE_PRO, PRODUCT_SKU,} from '../../shared/license-constants';
+import type {LicenseConfig} from './types';
+
+/** 机器码派生固定盐：只上传哈希不上传原始硬件信息，盐保证不同产品的机器码不通用 */
+export const MACHINE_CODE_SALT = 'ai-tools::machine-code::v1';
+
+/** 用户数据目录（~/.ai-tools） */
+export const AI_TOOLS_DIR_NAME = '.ai-tools';
+
+/** 源码期资产目录名；打包后 asar 内为 dist/main/license/assets */
+export const ASSETS_DIR_NAME = 'assets';
+
+/** 包外可替换目录名（打包后 <install>/resources/license） */
+export const EXTERNAL_LICENSE_DIR_NAME = 'license';
+
+/** 配置文件名 */
+export const CONFIG_FILE_NAME = 'license.config.json';
+
+/** 单公钥文件名（客户心智中的「那一个特殊文件」，上线前替换它即可） */
+export const PUBLIC_KEY_FILE_NAME = 'public.key';
+
+/** 多 kid 公钥目录名（保留轮换扩展位） */
+export const KEYS_DIR_NAME = 'keys';
+
+/** 机器码落盘缓存文件名 */
+export const MACHINE_CODE_CACHE_FILE = 'machine-code.cache';
+
+/** 加密账本文件名 */
+export const VAULT_FILE_NAME = 'license-vault.json';
+
+/**
+ * AES-256-GCM 回退方案的应用盐（用于 `scryptSync` 派生密钥）。
+ * **它不是安全边界**：本地无论如何加密都能被逆向，真正的安全边界是服务端 Ed25519 签名。
+ * 它的作用只是让「直接读文件 + 复制文件」这两件事的成本不为零。
+ */
+export const VAULT_APP_SECRET = 'ai-tools::license-vault::v1';
+
+/** 硬件因子分隔符：用多字符分隔符避免因子自身含单字符分隔符时串位 */
+export const FACTOR_SEPARATOR = '~|~';
+
+/** Windows 主路径：一次 PowerShell 拿全 4 因子，实测约 3.1s */
+export const PS_COLLECT_TIMEOUT_MS = 8000;
+
+/** macOS / Linux 采集超时 */
+export const POSIX_COLLECT_TIMEOUT_MS = 5000;
+
+/** 单条回退命令（wmic / reg / sysctl 等）超时 */
+export const FALLBACK_CMD_TIMEOUT_MS = 3000;
+
+/** 窗口 ready 后多久触发后台惰性复核 */
+export const BACKGROUND_RECHECK_DELAY_MS = 2000;
+
+/** 2 小时时钟容差：DST 最多 ±1h、NTP 校正秒级，2h 足够宽容 */
+export const DEFAULT_CLOCK_SKEW_MS = 2 * 60 * 60 * 1000;
+
+/** 默认配置：包外配置缺失或字段非法时的兜底值（**占位**，上线前通过包外配置覆盖） */
+export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
+    version: 1,
+    enabled: true,
+    killSwitch: false,
+    sku: PRODUCT_SKU,
+    defaultKid: DEFAULT_KID,
+    checkoutUrlTemplate: 'https://www.ywhome.top/getlicense?machine_id={machineId}&sku={sku}',
+    redeemApiUrl: 'https://api.ywhome.top/api/redeem/redeem',
+    redeemTimeoutMs: 15000,
+    trial: {
+        days: 60,
+        // 2026-09-17 客户拍板：启动次数不限，只记录不拦截，避免误伤重度用户
+        maxRuns: null,
+    },
+    clock: {
+        skewToleranceMs: DEFAULT_CLOCK_SKEW_MS,
+        useServerTimeFloor: true,
+    },
+    grace: {
+        hardwareChangeDays: 7,
+        maxAutoGrace: 1,
+    },
+    features: {
+        proFeature: FEATURE_PRO,
+        // 本期只 gate 云同步：远程 SSH/SFTP 是云同步的一个 provider，与其合并计费（见 FEATURE_REMOTE_CONNECT 注释）
+        gated: [FEATURE_CLOUD_SYNC],
+    },
+};

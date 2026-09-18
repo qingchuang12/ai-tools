@@ -17,6 +17,8 @@ interface ActivationStore {
     refresh: () => Promise<void>;
     openModal: () => void;
     closeModal: () => void;
+    /** 权益判定（渲染层 UI 态，安全边界在主进程 gate）。规则：含 `pro` 视为全量权益 */
+    hasFeature: (feature: string) => boolean;
 }
 
 let started = false;
@@ -57,4 +59,11 @@ export const useActivationStore = create<ActivationStore>((set, get) => ({
 
     openModal: () => set({ modalOpen: true }),
     closeModal: () => set({ modalOpen: false }),
+
+    hasFeature: (feature: string) => {
+        const features = get().state?.features;
+        if (!features || features.length === 0) return false;
+        // `pro` 视为全量权益；其余按名称匹配
+        return features.includes('pro') || features.includes(feature);
+    },
 }));

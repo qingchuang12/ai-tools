@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "enabled": true,
+  "killSwitch": false,
+  "sku": "AI-TOOLS-PRO",
+  "defaultKid": "default",
+  "checkoutUrlTemplate": "https://www.ywhome.top/getlicense?machine_id={machineId}&sku={sku}",
+  "redeemApiUrl": "https://api.ywhome.top/api/redeem/redeem",
+  "redeemTimeoutMs": 15000,
+  "trial": {
+    "days": 60,
+    "maxRuns": null
+  },
+  "clock": {
+    "skewToleranceMs": 7200000,
+    "useServerTimeFloor": true
+  },
+  "grace": {
+    "hardwareChangeDays": 7,
+    "maxAutoGrace": 1
+  },
+  "features": {
+    "proFeature": "pro",
+    "gated": ["cloud_sync"]
+  }
+}

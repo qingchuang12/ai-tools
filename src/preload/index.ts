@@ -21,7 +21,7 @@ import type {SkillsExportResult} from '../main/skills-export';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
 import type {UpdateEventPayload} from '../main/updater';
 import type {McpServerConfig} from '../main/config/types';
-import type {ActivationApi, ActivationState} from '../shared/activation-types';
+import type {ActivationApi, ActivationState, RedeemResult} from '../shared/activation-types';
 
 // 类型定义
 // McpServerConfig 统一 re-export 主进程单一事实源（config/types.ts），不再本地重复定义——
@@ -627,14 +627,17 @@ const api = {
     },
 
     // 激活（授权）
+    // 通道按新契约：`offlineActivate` / `onlineActivate` 已由 redeem 体系取代（旧 HMAC 激活码存在后门，一并作废）
     activation: {
         getState: (): Promise<ActivationState> => ipcRenderer.invoke('activation:get-state'),
         getMachineCode: (): Promise<string> => ipcRenderer.invoke('activation:get-machine-code'),
-        offlineActivate: (machineCode: string, code: string): Promise<{ success: boolean; error?: string; state?: ActivationState }> =>
-            ipcRenderer.invoke('activation:offline-activate', machineCode, code),
-        onlineActivate: (payload: unknown): Promise<{ success: boolean; error?: string; state?: ActivationState }> =>
-            ipcRenderer.invoke('activation:online-activate', payload),
+        getPurchaseUrl: (): Promise<string> => ipcRenderer.invoke('activation:get-purchase-url'),
+        redeem: (code: string): Promise<RedeemResult> => ipcRenderer.invoke('activation:redeem', code),
+        importLicenseFile: (): Promise<RedeemResult> => ipcRenderer.invoke('activation:import-license-file'),
+        importLicenseText: (text: string): Promise<RedeemResult> =>
+            ipcRenderer.invoke('activation:import-license-text', text),
         deactivate: (): Promise<ActivationState> => ipcRenderer.invoke('activation:deactivate'),
+        hasFeature: (feature: string): Promise<boolean> => ipcRenderer.invoke('license:has-feature', feature),
     } as ActivationApi,
 };
 

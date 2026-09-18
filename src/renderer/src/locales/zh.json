@@ -1,4 +1,44 @@
 {
+  "license": {
+    "status": {
+      "inactive": "未激活",
+      "trial": "试用中",
+      "activated": "已激活"
+    },
+    "badge": {
+      "tooltip": "点击管理激活"
+    },
+    "modal": {
+      "chooseHint": "请选择激活方式",
+      "purchase": "购买激活",
+      "redeem": "兑换激活码",
+      "machineCode": "机器码",
+      "copy": "复制",
+      "copied": "机器码已复制",
+      "codePlaceholder": "请输入激活码",
+      "redeemHint": "请粘贴购买后获得的激活码",
+      "importFile": "导入许可证文件",
+      "importText": "粘贴许可证文本",
+      "activate": "激活",
+      "back": "返回",
+      "getCode": "获取激活码",
+      "trialRemaining": "当前为试用版 · 剩余时间：",
+      "activatedRemaining": "已激活 · 剩余时间：",
+      "deactivate": "去激活",
+      "permanent": "永久",
+      "expired": "已过期",
+      "remaining": "{{d}}天{{h}}小时{{m}}分",
+      "licenseKey": "许可证密钥",
+      "hardwareChanged": "检测到硬件变更，请在 {{days}} 天内重新激活",
+      "upgrade": "升级",
+      "needActivation": "需要激活后才能使用云同步"
+    },
+    "errors": {
+      "generic": "激活失败，请检查激活码或联系支持",
+      "network": "网络连接失败，请检查网络后重试",
+      "locked": "该功能需要有效的授权"
+    }
+  },
   "nav": {
     "marketplace": "应用市场",
     "store": "商店",

@@ -305,7 +305,7 @@ export function mapMCPServer(raw: RawMCP): PlatformServerListItem {
     };
 }
 
-/** 核心搜索（skill 与 server 复用同一列表端点，服务端过滤缺失，靠客户端切片分页）。 */
+/** 核心搜索（skill 与 server 复用同一列表端点）。服务端真分页：响应返回 data.total / page_number / page_size，按需取指定页；仅 sort 在客户端做（API 不支持服务端排序），category 已通过 filter.category 走服务端过滤。 */
 async function msSearchImpl(params: PlatformSearchParams): Promise<PlatformSearchPage> {
     const {query, page, pageSize, baseUrl, category, sort} = params;
     const safePage = Math.max(1, page);
@@ -392,8 +392,7 @@ async function msSearchImpl(params: PlatformSearchParams): Promise<PlatformSearc
     return {
         items,
         pageInfo,
-        pagingMode: 'client',
-        complete: false,
+        pagingMode: 'server',
         // 请求成功但没有数据：仅非首页提示「页码超出可查询范围」，首页无结果属正常空态
         message: safePage > 1 && items.length === 0 ? PAGE_OUT_OF_RANGE : undefined,
     };

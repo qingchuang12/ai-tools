@@ -21,6 +21,8 @@ import type {SyncTaskScope} from '../shared/sync-task-types';
 import {resolveScopeDirs} from '../shared/sync-scope';
 import {getCloudSyncStore} from './cloud-sync-store';
 import {EnvManager} from './env-manager';
+import {assertFeature, GATE_LOCKED_MESSAGE} from './license/feature-gate';
+import {FEATURE_CLOUD_SYNC} from '../shared/license-constants';
 
 const execFileAsync = promisify(execFile);
 
@@ -55,6 +57,8 @@ export class CloudSyncService {
      *              git 通道只提交对应子目录变更（push 仍整仓库）。
      */
     async push(scope?: SyncTaskScope): Promise<CloudSyncResult> {
+        const gate = await assertFeature(FEATURE_CLOUD_SYNC);
+        if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
         return this.withLock(async () => {
         const store = getCloudSyncStore();
         if (!store.isActive()) return {ok: false, message: '云同步未配置或未启用'};

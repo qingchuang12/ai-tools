@@ -1,30 +1,30 @@
 /**
- * 激活状态持久化与管理（主进程）
+ * 激活状态持久化（主进程）
  *
- * 状态存于 ~/.ai-tools/activation.json，复用 settings-store 的原子写/加载辅助。
+ * **职责分工（重要）**：
+ * - `~/.ai-tools/activation.json`     = **状态**（明文，UI 直接读，不含任何秘密）
+ * - `~/.ai-tools/license-vault.json`  = **秘密**（加密：signed token + 试用账本，见 `license/vault.ts`）
+ * 两者不一致时**以 vault 为准**并回写 activation.json。
  *
- * 首次安装判定：基于「两处分开的安装标记文件」（位于不同系统目录），
- *   - 两处标记均缺失 → 视为「首次安装」：自动激活 60 天试用，并落盘两处标记；
- *   - 任一标记存在（即使 activation.json 被删）→ 视为「非首次」：不自动发放试用，
- *     回到未激活，从而防止「只删 activation.json 一个文件」就重置试用。
- * 读取时自动做到期降级（试用 / 激活过期 → 未激活）并落盘，保证持久状态一致。
+ * 本文件只保留两件事：**状态落盘** 与 **双安装标记判定**；
+ * 状态判定（验签 / 试用双限 / 硬件宽限）全部委托 `src/main/license/index.ts` 门面。
  *
- * 离线激活码采用本地签名校验：机器码经内置密钥派生「应得激活码」并比对；
- * 算法集中在此文件，后续可平滑替换为服务端签发。
+ * 首次安装判定：基于「两处分开的安装标记文件」（位于不同系统目录）
+ *   - 两处标记均缺失 → 视为「首次安装」：发试用（天数由配置决定，默认 60 天），并落盘两处标记；
+ *   - 任一标记存在（即使 activation.json 被删）→ 视为「非首次」：不发试用，
+ *     从而防止「只删 activation.json 一个文件」就重置试用。
  */
 
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
-import {createHmac} from 'crypto';
 import {loadUserSettingsFile, writeFileAtomic} from './config/settings-store';
-import type {ActivationResult, ActivationState} from '../shared/activation-types';
+import type {ActivationState, ActivationStatus} from '../shared/activation-types';
+import * as license from './license';
 
-const TRIAL_DAYS = 60;
 const FILE = path.join(os.homedir(), '.ai-tools', 'activation.json');
 
-/** 本地派生激活码的密钥（占位；上线后改为服务端签发并移除此密钥） */
-const ACTIVATION_SECRET = 'AI-TOOLS-LOCAL-SECRET-v1';
+const VALID_STATUS: ActivationStatus[] = ['inactive', 'trial', 'activated'];
 
 /**
  * 两处安装标记文件路径（根目录不同，提高「删单文件重置试用」的成本）。
@@ -73,7 +73,7 @@ function ensureMarkers(): void {
     const stamp = new Date().toISOString();
     for (const p of markerPaths()) {
         try {
-            fs.mkdirSync(path.dirname(p), { recursive: true });
+            fs.mkdirSync(path.dirname(p), {recursive: true});
             fs.writeFileSync(p, stamp);
         } catch {
             // 单处写入失败不阻塞主流程
@@ -81,97 +81,49 @@ function ensureMarkers(): void {
     }
 }
 
-function inactiveState(): ActivationState {
-    return {
-        status: 'inactive',
-        trialExpiresAt: null,
-        activatedExpiresAt: null,
-        activatedAt: null,
-        machineCode: null,
-    };
-}
-
-function defaultState(): ActivationState {
-    const now = Date.now();
-    return {
-        status: 'trial',
-        trialExpiresAt: now + TRIAL_DAYS * 86400000,
-        activatedExpiresAt: null,
-        activatedAt: null,
-        machineCode: null,
-    };
-}
-
-/** 到期降级：试用 / 激活过期则回退未激活 */
-function normalize(s: ActivationState): ActivationState {
-    const now = Date.now();
-    if (s.status === 'trial' || s.status === 'activated') {
-        const exp = s.status === 'trial' ? s.trialExpiresAt : s.activatedExpiresAt;
-        if (exp && now > exp) return inactiveState();
-    }
-    return s;
-}
-
-async function load(): Promise<ActivationState> {
+/** 读明文状态；缺失或结构非法返回 null（非法状态不应参与 legacy 判定） */
+async function load(): Promise<ActivationState | null> {
     const raw = (await loadUserSettingsFile(FILE)) as unknown as Partial<ActivationState> | undefined;
-    if (raw && Object.keys(raw).length > 0) {
-        return normalize({ ...defaultState(), ...raw });
-    }
-    // activation.json 不存在：依据两处安装标记判定是否首次安装
-    if (isFirstInstall()) {
-        const s = defaultState(); // 首次安装：自动激活 60 天试用
-        await save(s);
-        ensureMarkers();
-        return s;
-    }
-    // 非首次（标记存在但 activation.json 丢失）：不自动发放试用，回到未激活
-    const s = inactiveState();
-    await save(s);
-    return s;
-}
-
-async function save(s: ActivationState): Promise<void> {
-    await writeFileAtomic(FILE, JSON.stringify(s, null, 2));
-}
-
-/** 读取当前状态（顺带做到期降级并持久化） */
-export async function getActivationState(): Promise<ActivationState> {
-    const s = await load();
-    const n = normalize(s);
-    if (n !== s) await save(n);
-    return n;
-}
-
-/** 由机器码派生「应得激活码」（本地校验用，占位） */
-export function deriveActivationCode(machineCode: string): string {
-    const h = createHmac('sha256', ACTIVATION_SECRET).update(machineCode).digest('hex').toUpperCase();
-    const code = h.slice(0, 16);
-    return code.replace(/(.{4})/g, '$1-').replace(/-$/, '');
-}
-
-/** 离线激活：校验激活码是否与机器码匹配 */
-export async function offlineActivate(
-    machineCode: string,
-    code: string
-): Promise<ActivationResult & { state?: ActivationState }> {
-    const given = (code || '').replace(/-/g, '').toUpperCase();
-    if (!given) return { success: false, error: '激活码不能为空' };
-    const expected = deriveActivationCode(machineCode).replace(/-/g, '');
-    if (given !== expected) return { success: false, error: '激活码与机器码不匹配' };
-    const state: ActivationState = {
-        status: 'activated',
-        trialExpiresAt: null,
-        activatedExpiresAt: null, // 永久激活
-        activatedAt: Date.now(),
-        machineCode,
+    if (!raw || typeof raw !== 'object') return null;
+    if (!VALID_STATUS.includes(raw.status as ActivationStatus)) return null;
+    return {
+        status: raw.status as ActivationStatus,
+        trialStartsAt: typeof raw.trialStartsAt === 'number' ? raw.trialStartsAt : null,
+        trialExpiresAt: typeof raw.trialExpiresAt === 'number' ? raw.trialExpiresAt : null,
+        trialRunsLeft: typeof raw.trialRunsLeft === 'number' ? raw.trialRunsLeft : null,
+        activatedExpiresAt: typeof raw.activatedExpiresAt === 'number' ? raw.activatedExpiresAt : null,
+        activatedAt: typeof raw.activatedAt === 'number' ? raw.activatedAt : null,
+        machineCode: typeof raw.machineCode === 'string' ? raw.machineCode : null,
+        licenseKey: typeof raw.licenseKey === 'string' ? raw.licenseKey : null,
+        sku: typeof raw.sku === 'string' ? raw.sku : null,
+        features: Array.isArray(raw.features) ? raw.features.filter((f): f is string => typeof f === 'string') : [],
+        source: raw.source === 'trial' || raw.source === 'license' ? raw.source : 'none',
+        degraded: raw.degraded ?? null,
     };
-    await save(state);
-    return { success: true, state };
 }
 
-/** 去激活：回到未激活 */
+async function save(state: ActivationState): Promise<void> {
+    await writeFileAtomic(FILE, JSON.stringify(state, null, 2));
+}
+
+/**
+ * 读取当前激活状态（顺带持久化门面算出的最新状态）。
+ * 首次安装在此判定并发试用，随后状态判定与落盘全部交给门面。
+ */
+export async function getActivationState(): Promise<ActivationState> {
+    const persisted = await load();
+    if (!persisted && isFirstInstall()) {
+        ensureMarkers();
+        await license.grantTrialOnFirstInstall();
+    }
+    const state = await license.getState(persisted);
+    await save(state);
+    return state;
+}
+
+/** 去激活：只清授权 token，不重置试用 */
 export async function deactivate(): Promise<ActivationState> {
-    const s = inactiveState();
-    await save(s);
-    return s;
+    const state = await license.deactivate();
+    await save(state);
+    return state;
 }

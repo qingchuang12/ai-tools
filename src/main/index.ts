@@ -39,13 +39,16 @@ import {getCacheManager} from './cache-manager';
 import {getSecretStore, TokenMeta, TokenScope} from './secret-store';
 import {ApiConnection, getConnectionsStore} from './connections-store';
 import {createMcpClient, disconnectAllClients, getMcpClient, removeMcpClient} from './mcp-client';
-import {deactivate, getActivationState, offlineActivate} from './activation-store';
-import {getMachineCode} from './machine-code';
+import {deactivate, getActivationState} from './activation-store';
+import {getMachineCode} from './license/machine-code';
+import * as license from './license';
+import {GATE_LOCKED_MESSAGE} from './license/feature-gate';
 import {getCloudSyncStore} from './cloud-sync-store';
 import {getCloudSyncService} from './cloud-sync-service';
 import {checkCloudConsistency, type ConsistencyReport, readCompareEnds} from './cloud-consistency';
 import {getSyncTaskManager, initSyncTaskManager} from './sync-task-manager';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
+import {FEATURE_CLOUD_SYNC} from '../shared/license-constants';
 import type {CloudSyncConfig, CloudSyncConfigInput, CloudSyncResult} from '../shared/cloud-sync-constants';
 import {
     checkForUpdatesAndNotify,
@@ -193,7 +196,7 @@ app.on('second-instance', () => {
 });
 
 // 应用准备就绪
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
     // ============================================================================
     // DNS 配置：使用安全的 DNS 服务器避免 DNS 污染
     // ============================================================================
@@ -227,6 +230,12 @@ app.whenReady().then(() => {
         BrowserWindow.getAllWindows().forEach(w => w.webContents.send('sync-tasks:updated', list));
     });
 
+    // 授权模块初始化（必须在 whenReady 之后：safeStorage 在 ready 之前调用会抛异常）。
+    // 内部触发机器码预热（后台采集 + 2s 后惰性复核），不阻塞窗口显示。
+    void license.init().catch((e: unknown) => {
+        console.error('[License] init failed:', (e as Error)?.message || e);
+    });
+
     // 初始化在线更新（订阅 autoUpdater 事件，广播给渲染层）；不触发检测，检测由 IPC/渲染层发起。
     initUpdater();
 
@@ -234,6 +243,11 @@ app.whenReady().then(() => {
     // 仅在支持该形态（打包 + NSIS/AppImage）时真正发起；dev / portable / mac 会广播 unsupported。
     setTimeout(() => checkForUpdatesAndNotify(), 3000);
 
+    // gate：授权未通过时直接跳过（未授权不该产生云端流量，也不该泄露远端是否可连）
+    if (!(await license.assertFeature(FEATURE_CLOUD_SYNC)).allowed) {
+        console.warn('[CloudSync] startup pull skipped: license gate denied');
+        return;
+    }
     // 启动后后台异步以云端为准拉取一次（覆盖本地暂存区），不阻塞启动。
     // 经由同步队列执行（P1-1），与手动 push 串行；拉取完成（无论成败）通知渲染层刷新；
     // 仅在已配置云同步时执行。
@@ -582,26 +596,36 @@ ipcMain.handle('mcp:list-prompts', async (_, sessionId: string) => {
     }
 });
 
+// 说明：原 `verifyAsarIntegrity()` 自检依赖 electron-builder 的 `asar.integrity` 生成
+// `app.asar.integrity.json`；但本仓库 electron-builder 为 24.x，该选项不被支持（配置校验会直接失败）。
+// 故移除该自检，asar 完整性待升级 electron-builder（≥ 支持该选项的版本）并配置代码签名后再启用。
+
 // ============ 激活（授权）IPC 处理器 ============
 // 读取当前激活状态（主进程顺带做到期降级并持久化）
 ipcMain.handle('activation:get-state', async () => getActivationState());
 
-// 生成本机机器码（CPU 序列号 + 主板 UUID + 网卡 MAC 派生）
+// 生成本机机器码（硬件因子哈希派生，形如 XXXX-XXXX-XXXX-XXXX）
 ipcMain.handle('activation:get-machine-code', async () => getMachineCode());
 
-// 离线激活：校验激活码（本地签名校验，占位）
-ipcMain.handle('activation:offline-activate', async (_, machineCode: string, code: string) =>
-    offlineActivate(machineCode, code)
-);
+// 按配置模板拼出带 machineId 的收银台 URL（URL 来自包外配置，不在渲染层硬编码）
+ipcMain.handle('activation:get-purchase-url', async (): Promise<string> => license.getPurchaseUrl());
 
-// 在线激活：当前为占位，未接入后端（后续对接 billing-license-service）
-ipcMain.handle('activation:online-activate', async () => ({
-    success: false,
-    error: '在线激活尚未接入后端（占位实现）',
-}));
+// 兑换码 → 后端 redeem → 本地验签 → 落盘
+ipcMain.handle('activation:redeem', async (_e, code: string) => license.redeem(code));
+
+// 导入 license.lic（主进程弹文件选择器）
+ipcMain.handle('activation:import-license-file', async () => license.importLicenseFile());
+
+// 导入授权文本（裸 token 或 JSON 包装），供拖拽/粘贴场景
+ipcMain.handle('activation:import-license-text', async (_e, text: string) => license.importLicenseText(text));
 
 // 去激活：回到未激活
 ipcMain.handle('activation:deactivate', async () => deactivate());
+
+// 权益 gate 查询（渲染层仅用于 UI 态；安全边界在 IPC handler 首行与 service 层）
+ipcMain.handle('license:has-feature', async (_e, feature: string): Promise<boolean> =>
+    (await license.assertFeature(feature)).allowed
+);
 
 // ============ Skills IPC 处理器 ============
 // 获取指定客户端的已安装 Skills
@@ -1166,6 +1190,11 @@ ipcMain.handle('cloud-sync:get-config', async (): Promise<CloudSyncConfig> => {
 });
 
 ipcMain.handle('cloud-sync:set-config', async (_, patch: CloudSyncConfigInput): Promise<CloudSyncConfig> => {
+    // gate 首行：只在「开启」方向拦截，关闭/修改配置不应被授权状态挡住
+    if (patch.enabled) {
+        const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
+        if (!gate.allowed) throw new Error(GATE_LOCKED_MESSAGE);
+    }
     const cfg = cloudSyncStore.setConfig(patch);
     // 云端存储是否作为「客户端」出现，取决于此配置；必须让客户端列表缓存失效，
     // 否则本会话内仍返回旧的 installed 状态，要重启才生效。
@@ -1174,15 +1203,21 @@ ipcMain.handle('cloud-sync:set-config', async (_, patch: CloudSyncConfigInput): 
 });
 
 ipcMain.handle('cloud-sync:test', async (): Promise<CloudSyncResult> => {
+    const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
+    if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
     return cloudSyncService.testConnection();
 });
 
 ipcMain.handle('cloud-sync:push', async (): Promise<CloudSyncResult> => {
+    const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
+    if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
     // 经由同步队列执行（P1-1），与启动 pull / 其他 push 串行，状态可见且避免并发冲突
     return enqueueCloudAndWait('cloud-push', '上传到云端');
 });
 
 ipcMain.handle('cloud-sync:pull', async (): Promise<CloudSyncResult> => {
+    const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
+    if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
     return enqueueCloudAndWait('cloud-pull', '从云端下载');
 });
 
@@ -1193,6 +1228,8 @@ ipcMain.handle('cloud-sync:pull', async (): Promise<CloudSyncResult> => {
  * 云同步未激活时返回空报告（cloud 未激活时暂存区内容无意义，不产生噪音）。
  */
 ipcMain.handle('cloud-sync:check-consistency', async (): Promise<ConsistencyReport> => {
+    const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
+    if (!gate.allowed) return {items: [], checkedAt: new Date().toISOString()};
     if (!getCloudSyncStore().isActive()) {
         return {items: [], checkedAt: new Date().toISOString()};
     }

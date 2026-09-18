@@ -19,7 +19,7 @@
     "build": "pnpm run build:icons && pnpm run link:deps && pnpm run build:main && pnpm run build:renderer",
     "build:icons": "node scripts/build-icons.cjs",
     "link:deps": "node scripts/link-pnpm-deps.cjs",
-    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-platform-data.mjs && node scripts/obfuscate-main.mjs",
+    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-platform-data.mjs && node scripts/obfuscate-main.mjs && node scripts/copy-license-assets.mjs",
     "build:renderer": "cross-env CONTINUOUS_INTEGRATION=1 vite build",
     "typecheck": "npx tsc -p tsconfig.main.json --noEmit && npx tsc -p tsconfig.json --noEmit",
     "aggregate:registry": "node scripts/aggregate-mcp-registry.mjs",
@@ -64,6 +64,7 @@
     "cross-env": "^10.1.0",
     "electron": "43.0.0",
     "electron-builder": "^24.9.0",
+    "javascript-obfuscator": "4.2.2",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "terser": "^5.46.0",
@@ -76,6 +77,7 @@
   "build": {
     "appId": "com.ai-tools.app",
     "npmRebuild": false,
+    "asar": true,
     "productName": "AI-Tools",
     "publish": [
       {
@@ -96,7 +98,16 @@
     ],
     "extraResources": [
       "LICENSE",
-      "THIRD_PARTY_LICENSES.md"
+      "THIRD_PARTY_LICENSES.md",
+      {
+        "from": "src/public.key",
+        "to": "license/public.key"
+      },
+      {
+        "from": "src/main/license/assets/",
+        "to": "license/",
+        "filter": ["**/*"]
+      }
     ],
     "mac": {
       "icon": "assets/icon.png",

@@ -13,6 +13,7 @@ import {
     useElectronAPI,
 } from '../lib/electron';
 import {CLOUD_ROOT_DIR} from '../../../shared/cloud-sync-constants';
+import {useActivationStore} from '../store/activationStore';
 import {toast} from './Toast';
 
 interface Props {
@@ -25,6 +26,9 @@ interface Props {
 export default function CloudSyncManager({runtimes, onChanged}: Props) {
     const {t} = useTranslation();
     const api = useElectronAPI();
+    // 云同步为付费权益：未授权时锁态提示（体验层，真实边界在主进程 gate）
+    const licensed = useActivationStore((s) => s.hasFeature('cloud_sync'));
+    const openModal = useActivationStore((s) => s.openModal);
     const [cfg, setCfg] = useState<CloudSyncConfig>(defaultCloudSyncConfig());
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -171,6 +175,21 @@ export default function CloudSyncManager({runtimes, onChanged}: Props) {
                 {t('cloudSync.desc', {dir: CLOUD_ROOT_DIR})}
             </p>
 
+            {!licensed && (
+                <div className="mb-3 px-3 py-3 rounded-md bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/30">
+                    <p className="text-[12px] text-[var(--color-text)] mb-2">
+                        {t('license.modal.needActivation')}
+                    </p>
+                    <button
+                        onClick={openModal}
+                        className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:opacity-90 transition-colors"
+                    >
+                        {t('license.modal.upgrade')}
+                    </button>
+                </div>
+            )}
+
+            <div className={!licensed ? 'opacity-50 pointer-events-none' : ''}>
             {loading ? (
                 <div className="h-24 rounded-md bg-[var(--color-surface-hover)]/40 animate-pulse"/>
             ) : !expanded ? (
@@ -434,6 +453,7 @@ export default function CloudSyncManager({runtimes, onChanged}: Props) {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 }

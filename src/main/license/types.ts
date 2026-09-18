@@ -1,0 +1,117 @@
+/**
+ * 授权模块内部类型（main 进程专用，不外泄到 preload / renderer）
+ *
+ * 时间单位约定：
+ * - `TokenPayload` 的 `iat` / `exp` / `nbf` 用**秒**（Unix epoch，与 JWT 惯例一致）；
+ * - `TrialVault` / `LicenseVault` / `ActivationState` 一律用**毫秒**；
+ * - 秒↔毫秒的转换**只允许**发生在 `verifier.ts` 一处。
+ */
+
+import type {LicenseErrorCode} from './errors';
+
+/** 授权配置（源码期落 `assets/license.config.json`，打包后包外 `resources/license/` 可覆盖） */
+export interface LicenseConfig {
+    version: 1;
+    /** 总开关：false 时 license 模块整体不介入（状态维持、gate 全放行）——应急热回滚用 */
+    enabled: boolean;
+    /** 熔断：true 时跳过所有验签与 gate（含已激活状态），仅应急，事后必须复位 */
+    killSwitch: boolean;
+    sku: string;
+    /** 兜底 kid（token 未声明 kid 时使用） */
+    defaultKid: string;
+    /** 收银台 URL 模板，占位符 {machineId} {sku} */
+    checkoutUrlTemplate: string;
+    /** 兑换接口地址 */
+    redeemApiUrl: string;
+    redeemTimeoutMs: number;
+    trial: {
+        /** 试用天数上限（硬约束） */
+        days: number;
+        /** 试用启动次数上限；null = 不限（只记录 trial_count，不拦截） */
+        maxRuns: number | null;
+    };
+    clock: {
+        /** 时钟容差（ms）：到期/回拨判定放宽此值，默认 2h */
+        skewToleranceMs: number;
+        /** 是否消费 redeem 响应里的 serverTime 作为时间下界 */
+        useServerTimeFloor: boolean;
+    };
+    grace: {
+        /** 硬件变更宽限天数 */
+        hardwareChangeDays: number;
+        /** 终身可自动宽限次数 */
+        maxAutoGrace: number;
+    };
+    features: {
+        /** 全量权益 key（拥有即拥有全部付费功能） */
+        proFeature: string;
+        /** 需要 gate 的权益名单 */
+        gated: string[];
+    };
+}
+
+/** 签名令牌头部 */
+export interface TokenHeader {
+    alg: 'EdDSA';
+    typ: 'JWT';
+    kid: string;
+}
+
+/** 签名令牌载荷 */
+export interface TokenPayload {
+    /** 令牌唯一 id（日志/吊销用） */
+    jti: string;
+    sku: string;
+    /** 强绑定机器码（含磁盘因子） */
+    mid: string;
+    /** 签发时间（秒，Unix epoch） */
+    iat: number;
+    /** 到期时间（秒）；null = 永久 */
+    exp: number | null;
+    /** 生效时间（秒）；可选 */
+    nbf?: number;
+    /** 授予的权益列表 */
+    feat: string[];
+    /** licenseKey，用于 UI 脱敏展示 */
+    lic?: string;
+    /** 套餐名（展示用） */
+    plan?: string;
+}
+
+/** 本地加密存储中的试用账本（vault 内明文结构） */
+export interface TrialVault {
+    /** 首次运行时间（ms） */
+    first_run_at: number;
+    /** 累计启动次数（单调，只增） */
+    trial_count: number;
+    /** 上次运行时间（ms） */
+    last_run_at: number;
+    /** 自检串，用于发现明文篡改 */
+    trial_token: string;
+    /** 单调时间水印（ms），只增不减 */
+    watermark: number;
+    /** 发试用/激活时的弱绑定机器码快照（剔除磁盘） */
+    mid_soft_at_activation: string | null;
+    /** 已用硬件变更宽限次数 */
+    hardware_grace_used: number;
+    /** 宽限截止（ms） */
+    hardware_grace_until: number | null;
+    /** 后端给的权威时间下界（ms） */
+    server_time_floor: number | null;
+}
+
+/** 本地加密存储中的授权账本 */
+export interface LicenseVault {
+    signed_token: string | null;
+    activated_at: number | null;
+    mid_at_activation: string | null;
+    mid_soft_at_activation: string | null;
+}
+
+/** 验签结果：`code` 是内部码，只进日志 */
+export interface VerifyOutcome {
+    ok: boolean;
+    code: LicenseErrorCode;
+    payload: TokenPayload | null;
+    kid: string | null;
+}

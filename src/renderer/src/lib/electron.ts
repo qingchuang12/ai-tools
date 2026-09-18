@@ -21,7 +21,7 @@ import {defaultCloudSyncConfig} from '../../../shared/cloud-sync-constants';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../../../shared/sync-task-types';
 import type {UpdateEventPayload} from '../../../main/updater';
 import type {McpServerConfig} from '../../../main/config/types';
-import type {ActivationApi, ActivationState} from '../../../shared/activation-types';
+import type {ActivationApi, ActivationState, RedeemResult} from '../../../shared/activation-types';
 // Skill 导出结果：与本文件共用（data 声明为 Uint8Array 而非 main 侧的 Node Buffer，
 // 避免 renderer 类型图引入 node Buffer 导致 Blob 构造参数类型冲突）
 export interface SkillsExportResult {
@@ -952,33 +952,38 @@ const mockAPI: ElectronAPI = {
     activation: {
         getState: async (): Promise<ActivationState> => ({
             status: 'trial',
+            trialStartsAt: Date.now(),
             trialExpiresAt: Date.now() + 30 * 86400000,
+            trialRunsLeft: null,
             activatedExpiresAt: null,
             activatedAt: null,
             machineCode: null,
+            licenseKey: null,
+            sku: null,
+            features: [],
+            source: 'trial',
+            degraded: null,
         }),
         getMachineCode: async (): Promise<string> => 'AI-MOCK-MACHINE-CODE-0001',
-        offlineActivate: async (_mc: string, code: string) => {
-            if (!code) return { success: false, error: '请输入激活码' };
-            return {
-                success: true,
-                state: {
-                    status: 'activated',
-                    trialExpiresAt: null,
-                    activatedExpiresAt: null,
-                    activatedAt: Date.now(),
-                    machineCode: _mc,
-                },
-            };
-        },
-        onlineActivate: async () => ({ success: false, error: '在线激活占位（浏览器预览）' }),
+        getPurchaseUrl: async (): Promise<string> => '',
+        redeem: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),
+        importLicenseFile: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),
+        importLicenseText: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),
         deactivate: async (): Promise<ActivationState> => ({
             status: 'inactive',
+            trialStartsAt: null,
             trialExpiresAt: null,
+            trialRunsLeft: null,
             activatedExpiresAt: null,
             activatedAt: null,
             machineCode: null,
+            licenseKey: null,
+            sku: null,
+            features: [],
+            source: 'none',
+            degraded: null,
         }),
+        hasFeature: async (): Promise<boolean> => false,
     },
     cache: {
         get: async () => null,

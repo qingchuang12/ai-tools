@@ -1,4 +1,44 @@
 {
+  "license": {
+    "status": {
+      "inactive": "Not activated",
+      "trial": "Trial",
+      "activated": "Activated"
+    },
+    "badge": {
+      "tooltip": "Click to manage activation"
+    },
+    "modal": {
+      "chooseHint": "Choose how to activate",
+      "purchase": "Buy activation",
+      "redeem": "Redeem code",
+      "machineCode": "Machine code",
+      "copy": "Copy",
+      "copied": "Machine code copied",
+      "codePlaceholder": "Enter your activation code",
+      "redeemHint": "Paste the code you received after purchase",
+      "importFile": "Import license file",
+      "importText": "Paste license text",
+      "activate": "Activate",
+      "back": "Back",
+      "getCode": "Get activation code",
+      "trialRemaining": "Trial version · time remaining:",
+      "activatedRemaining": "Activated · time remaining:",
+      "deactivate": "Deactivate",
+      "permanent": "Permanent",
+      "expired": "Expired",
+      "remaining": "{{d}}d {{h}}h {{m}}m",
+      "licenseKey": "License key",
+      "hardwareChanged": "Hardware change detected. Please reactivate within {{days}} days.",
+      "upgrade": "Upgrade",
+      "needActivation": "Activation required to use cloud sync"
+    },
+    "errors": {
+      "generic": "Activation failed. Check your code or contact support.",
+      "network": "Network connection failed. Check your connection and try again.",
+      "locked": "This feature requires an active license"
+    }
+  },
   "nav": {
     "marketplace": "Marketplace",
     "store": "Tienda",
