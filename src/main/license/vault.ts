@@ -165,6 +165,10 @@ function sanitizeLicense(raw: unknown): LicenseVault | null {
         activated_at: typeof raw.activated_at === 'number' ? raw.activated_at : null,
         mid_at_activation: strOrNull(raw.mid_at_activation),
         mid_soft_at_activation: strOrNull(raw.mid_soft_at_activation),
+        // 付费态单调时钟的两个键：旧版 vault 没有它，缺失按 null（`licenseFloor()` 会忽略）
+        watermark: typeof raw.watermark === 'number' && Number.isFinite(raw.watermark) ? raw.watermark : null,
+        server_time_floor:
+            typeof raw.server_time_floor === 'number' && Number.isFinite(raw.server_time_floor) ? raw.server_time_floor : null,
     };
 }
 

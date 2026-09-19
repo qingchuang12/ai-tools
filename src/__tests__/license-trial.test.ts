@@ -24,9 +24,15 @@ const mocks = vi.hoisted(() => ({
         enabled: true,
         killSwitch: false,
         sku: 'AI-TOOLS-PRO',
+        acceptedSkus: ['pro-buyout', 'pro-plus-buyout', 'pro-subscription', 'pro-plus-subscription'],
+        skuFeatures: {
+            'pro-buyout': ['cloud_sync'],
+            'pro-plus-buyout': ['cloud_sync'],
+            'pro-subscription': ['cloud_sync'],
+            'pro-plus-subscription': ['cloud_sync'],
+        },
         defaultKid: 'default',
-        checkoutUrlTemplate: 'https://example.test/getlicense?machine_id={machineId}&sku={sku}',
-        redeemApiUrl: 'https://api.example.test/api/redeem/redeem',
+        serviceBaseUrl: 'https://billing.example.test',
         redeemTimeoutMs: 15000,
         trial: {days: 60, maxRuns: null as number | null},
         clock: {skewToleranceMs: 2 * 60 * 60 * 1000, useServerTimeFloor: true},
@@ -81,7 +87,11 @@ vi.mock('../main/license/keys', async () => {
 
 const {readVault, writeVault} = await import('../main/license/vault');
 const {effectiveNow, evaluateTrial, grantTrial} = await import('../main/license/trial');
+const {readFirstRunAt, writeFirstRun} = await import('../main/license/first-run');
 const license = await import('../main/license');
+
+/** Windows 首跑账本第二处落在 APPDATA 下：测试必须一起隔离，否则会写到真实用户目录 */
+const ORIGINAL_APPDATA = process.env.APPDATA;
 
 let tmpHome = '';
 
@@ -89,6 +99,7 @@ let tmpHome = '';
 beforeEach(() => {
     tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-tools-lic-test-'));
     mocks.home = tmpHome;
+    process.env.APPDATA = path.join(tmpHome, 'AppData', 'Roaming');
     mocks.encryption = true;
     mocks.strong = 'AAAA-BBBB-CCCC-DDDD';
     mocks.soft = 'AAAA-BBBB-CCCC-EEEE';
@@ -104,6 +115,11 @@ const homedirSpy = vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
 
 afterAll(() => {
     homedirSpy.mockRestore();
+    if (ORIGINAL_APPDATA === undefined) {
+        delete process.env.APPDATA;
+    } else {
+        process.env.APPDATA = ORIGINAL_APPDATA;
+    }
 });
 
 function b64(obj: unknown): string {
@@ -121,7 +137,7 @@ function validToken(overrides: Record<string, unknown> = {}): string {
     const nowSec = Math.floor(Date.now() / 1000);
     return makeToken({
         jti: 'jti-1',
-        sku: 'AI-TOOLS-PRO',
+        sku: 'pro-buyout',
         mid: mocks.strong,
         iat: nowSec,
         exp: nowSec + 30 * 86400,
@@ -145,6 +161,73 @@ async function seedTrial(partial: Partial<{first_run_at: number; trial_count: nu
         license: null,
     });
 }
+
+describe('首次使用进入试用（vault 缺失自愈）', () => {
+    it('全新环境（无 vault / 无首跑账本）→ 直接判 trial 并落账本', async () => {
+        expect(readFirstRunAt()).toBeNull();
+        const state = await license.getState(null);
+        expect(state.status).toBe('trial');
+        expect(state.source).toBe('trial');
+        expect(state.features).toContain('pro');
+        // 账本已落盘：后续读取不会再发一轮新的
+        expect(readFirstRunAt()).not.toBeNull();
+    });
+
+    it('升级遗留 activation.json（status=inactive）且 vault 为空 → 仍进入试用', async () => {
+        const persisted = {
+            status: 'inactive' as const,
+            trialStartsAt: null,
+            trialExpiresAt: null,
+            trialRunsLeft: null,
+            activatedExpiresAt: null,
+            activatedAt: null,
+            machineCode: 'OLD-CODE',
+            licenseKey: null,
+            sku: null,
+            features: [],
+            source: 'none' as const,
+            degraded: null,
+        };
+        const state = await license.getState(persisted);
+        expect(state.status).toBe('trial');
+    });
+
+    it('删 vault（账本仍在）→ 按原起点重建，剩余天数不增加', async () => {
+        const start = Date.now() - 30 * DAY_MS;
+        writeFirstRun(start);
+        await writeVault({trial: null, license: null});
+        const state = await license.getState(null);
+        expect(state.status).toBe('trial');
+        expect(state.trialStartsAt).toBe(start);
+        expect((state.trialExpiresAt ?? 0) - (state.trialStartsAt ?? 0)).toBe(60 * DAY_MS);
+    });
+
+    it('账本起点已超 60 天 → 不发新试用，判 trial_expired（不再是永久 inactive）', async () => {
+        writeFirstRun(Date.now() - 61 * DAY_MS);
+        await writeVault({trial: null, license: null});
+        const state = await license.getState(null);
+        expect(state.status).toBe('inactive');
+        expect(state.degraded).toBe('trial_expired');
+    });
+
+    it('账本起点在未来（手改 / 时钟回拨）→ 不发试用，判 vault_tampered', async () => {
+        writeFirstRun(Date.now() + 30 * DAY_MS);
+        await writeVault({trial: null, license: null});
+        const state = await license.getState(null);
+        expect(state.status).toBe('inactive');
+        expect(state.degraded).toBe('vault_tampered');
+    });
+
+    it('反复读取 / activation.json 丢失都不会重置试用起点', async () => {
+        await license.getState(null);
+        const first = await readVault();
+        await license.getState(null);
+        await license.getState(null);
+        const after = await readVault();
+        expect(after.trial?.first_run_at).toBe(first.trial?.first_run_at);
+        expect(after.trial?.trial_count).toBeGreaterThan(first.trial?.trial_count ?? 0);
+    });
+});
 
 describe('试用双限（天数硬约束 / 次数默认不限）', () => {
     it('首次安装发试用：60 天，剩余次数为 null（不限）', async () => {

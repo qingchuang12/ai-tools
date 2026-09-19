@@ -1,11 +1,12 @@
 /**
  * 激活管理弹窗（三态）
  *
- * - 未激活：购买（打开收银台，自动带入 machineId）→ 兑换码输入 / 导入 license.lic / 粘贴文本；
- * - 试用中：剩余时间 + 去激活；
- * - 已激活：剩余时间 + 脱敏 licenseKey + 去激活（硬件变更宽限期内额外提示）。
+ * - 未激活：在线激活（打开授权页，自动带入 machineId）→ 离线激活（导入 license.lic / 粘贴令牌）→ 兑换码输入；
+ * - 试用中：剩余时间 + 立即激活（进入激活方式选择页）；
+ * - 已激活：剩余时间 + 脱敏 licenseKey + 去激活（**二次确认**：确认才执行，取消保持已激活不变；硬件变更宽限期内额外提示）。
  *
- * 全部文案走 i18n（license.*）；不再硬编码购买链接，收银台 URL 由主进程按配置拼装。
+ * 全部文案走 i18n（license.*）；授权页 URL 与兑换 API 由主进程按配置拼装
+ * （默认指向本地 billing-license-service，可经包外 license.config.json 覆盖）。
  */
 
 import {useEffect, useState} from 'react';
@@ -15,7 +16,7 @@ import {useActivationStore} from '../store/activationStore';
 import {useElectronAPI} from '../lib/electron';
 import {FEATURE_CLOUD_SYNC} from '../../../shared/license-constants';
 
-type Mode = 'choose' | 'redeem';
+type Mode = 'choose' | 'redeem' | 'offline';
 
 function formatRemaining(ms: number | null, t: (k: string, opts?: Record<string, unknown>) => string): string {
     if (ms === null) return t('license.modal.permanent');
@@ -111,30 +112,38 @@ export default function ActivationModal() {
     const api = useElectronAPI();
     const [mode, setMode] = useState<Mode>('choose');
     const [code, setCode] = useState('');
+    const [email, setEmail] = useState('');
     const [showText, setShowText] = useState(false);
     const [text, setText] = useState('');
     const [msg, setMsg] = useState<{ type: 'err' | 'ok'; text: string } | null>(null);
     const [busy, setBusy] = useState(false);
+    // 试用用户点「立即激活」后进入激活流程（复用未激活的选择页/子页；返回时退回试用视图）
+    const [activating, setActivating] = useState(false);
+    // 去激活需二次确认：确认前不调任何接口，取消/关闭弹窗都保持已激活状态不变
+    const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
 
     useEffect(() => {
         if (modalOpen) {
             setMode('choose');
             setCode('');
+            setEmail('');
             setText('');
             setShowText(false);
             setMsg(null);
+            setActivating(false);
+            setConfirmingDeactivate(false);
         }
     }, [modalOpen]);
 
-    const doPurchase = async () => {
+    const doOnlineActivation = async () => {
         setBusy(true);
         setMsg(null);
         try {
             const url = await api.activation.getPurchaseUrl();
             if (url) {
                 await api.system.openExternal(url);
-                // 收银台会在支付成功后给兑换码，引导用户回到此处输入
-                setMode('redeem');
+                // 授权页（带 machineId）支付完成后直接发放令牌：引导用户回到此处粘贴令牌或输入兑换码
+                setMsg({ type: 'ok', text: t('license.modal.openedOnlineHint') });
             } else {
                 setMsg({ type: 'err', text: t('license.errors.locked') });
             }
@@ -145,11 +154,27 @@ export default function ActivationModal() {
         }
     };
 
+    const goOffline = () => {
+        setMode('offline');
+        setMsg(null);
+    };
+
+    const goRedeem = () => {
+        setMode('redeem');
+        setMsg(null);
+    };
+
     const doRedeem = async () => {
+        // 邮箱是服务端的客户标识（必填）。此处先做本地必填校验，让用户知道缺什么；
+        // 邮箱格式与归属判定仍由服务端负责（INVALID_EMAIL），失败一律回落统一文案。
+        if (!email.trim()) {
+            setMsg({ type: 'err', text: t('license.modal.emailRequired') });
+            return;
+        }
         setBusy(true);
         setMsg(null);
         try {
-            const r = await api.activation.redeem(code.trim());
+            const r = await api.activation.redeem(code.trim(), email.trim());
             if (r.success && r.state) {
                 setMsg({ type: 'ok', text: t('license.status.activated') });
                 await refresh();
@@ -208,6 +233,7 @@ export default function ActivationModal() {
             await refresh();
             setMode('choose');
             setMsg(null);
+            setConfirmingDeactivate(false);
         } finally {
             setBusy(false);
         }
@@ -220,29 +246,68 @@ export default function ActivationModal() {
             : state.status === 'trial' ? t('license.status.trial')
                 : t('license.status.activated');
 
+    // 激活流程页面对「未激活」与「试用中且点了立即激活」共用；已激活态不显示
+    const showActivationFlow = state.status === 'inactive' || (state.status === 'trial' && activating);
+
     return (
         <Modal isOpen={modalOpen} onClose={closeModal} title={title}>
-            {state.status === 'inactive' && mode === 'choose' && (
+            {showActivationFlow && mode === 'choose' && (
                 <div className="space-y-3">
                     <p className="text-[13px] text-[var(--color-muted)]">{t('license.modal.chooseHint')}</p>
                     <button
-                        onClick={doPurchase}
+                        onClick={doOnlineActivation}
                         disabled={busy}
                         className="w-full px-4 py-2.5 rounded-lg bg-[var(--color-accent)] text-white text-[13px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
                     >
-                        {t('license.modal.purchase')}
+                        {t('license.modal.onlineActivation')}
                     </button>
                     <button
-                        onClick={() => { setMode('redeem'); setMsg(null); }}
+                        onClick={goOffline}
+                        disabled={busy}
+                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] text-[13px] font-medium hover:bg-[var(--color-surface-hover)]/40 transition-colors"
+                    >
+                        {t('license.modal.offlineActivation')}
+                    </button>
+                    <button
+                        onClick={goRedeem}
+                        disabled={busy}
                         className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] text-[13px] font-medium hover:bg-[var(--color-surface-hover)]/40 transition-colors"
                     >
                         {t('license.modal.redeem')}
                     </button>
+
+                    {msg && (
+                        <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[#34c759]' : 'text-[#ff3b30]'}`}>
+                            {msg.text}
+                        </p>
+                    )}
+
+                    {state.status === 'trial' && (
+                        <button
+                            onClick={() => { setActivating(false); setMsg(null); }}
+                            className="w-full px-4 py-2 rounded-lg text-[12px] text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:underline transition-colors"
+                        >
+                            {t('license.modal.back')}
+                        </button>
+                    )}
                 </div>
             )}
 
-            {state.status === 'inactive' && mode === 'redeem' && (
+            {showActivationFlow && mode === 'redeem' && (
                 <div className="space-y-3">
+                    <div>
+                        <label className="block text-[12px] text-[var(--color-muted)] mb-1">
+                            {t('license.modal.emailLabel')}
+                        </label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder={t('license.modal.emailLabel')}
+                            autoComplete="email"
+                            className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[13px] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-accent)]"
+                        />
+                    </div>
                     <div>
                         <label className="block text-[12px] text-[var(--color-muted)] mb-1">
                             {t('license.modal.codePlaceholder')}
@@ -270,22 +335,31 @@ export default function ActivationModal() {
                         {t('license.modal.activate')}
                     </button>
 
-                    <div className="flex gap-2">
-                        <button
-                            onClick={doImportFile}
-                            disabled={busy}
-                            className="flex-1 px-3 py-2 rounded-lg border border-[var(--color-border)] text-[12px] text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)]/40 transition-colors disabled:opacity-50"
-                        >
-                            {t('license.modal.importFile')}
-                        </button>
-                        <button
-                            onClick={() => setShowText((v) => !v)}
-                            disabled={busy}
-                            className="flex-1 px-3 py-2 rounded-lg border border-[var(--color-border)] text-[12px] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]/40 transition-colors"
-                        >
-                            {t('license.modal.importText')}
-                        </button>
-                    </div>
+                    <button
+                        onClick={() => { setMode('choose'); setMsg(null); }}
+                        className="w-full px-4 py-2 rounded-lg text-[12px] text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:underline transition-colors"
+                    >
+                        {t('license.modal.back')}
+                    </button>
+                </div>
+            )}
+
+            {showActivationFlow && mode === 'offline' && (
+                <div className="space-y-3">
+                    <button
+                        onClick={doImportFile}
+                        disabled={busy}
+                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] text-[13px] font-medium hover:bg-[var(--color-surface-hover)]/40 transition-colors disabled:opacity-50"
+                    >
+                        {t('license.modal.importFile')}
+                    </button>
+                    <button
+                        onClick={() => setShowText((v) => !v)}
+                        disabled={busy}
+                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] text-[13px] font-medium hover:bg-[var(--color-surface-hover)]/40 transition-colors disabled:opacity-50"
+                    >
+                        {t('license.modal.importText')}
+                    </button>
 
                     {showText && (
                         <div className="space-y-2">
@@ -299,11 +373,17 @@ export default function ActivationModal() {
                             <button
                                 onClick={doImportText}
                                 disabled={busy || !text.trim()}
-                                className="w-full px-3 py-2 rounded-lg bg-[var(--color-accent)] text-white text-[12px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
+                                className="w-full px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white text-[12px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
                             >
                                 {t('license.modal.activate')}
                             </button>
                         </div>
+                    )}
+
+                    {msg && (
+                        <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[#34c759]' : 'text-[#ff3b30]'}`}>
+                            {msg.text}
+                        </p>
                     )}
 
                     <button
@@ -315,7 +395,7 @@ export default function ActivationModal() {
                 </div>
             )}
 
-            {state.status === 'trial' && (
+            {state.status === 'trial' && !activating && (
                 <div className="space-y-4">
                     <p className="text-[13px] text-[var(--color-text)]">
                         {t('license.modal.trialRemaining')}
@@ -324,11 +404,11 @@ export default function ActivationModal() {
                         </span>
                     </p>
                     <button
-                        onClick={doDeactivate}
+                        onClick={() => { setActivating(true); setMode('choose'); setMsg(null); }}
                         disabled={busy}
-                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[#ff3b30] text-[13px] font-medium hover:bg-[#ff3b30]/10 transition-colors disabled:opacity-50"
+                        className="w-full px-4 py-2.5 rounded-lg bg-[var(--color-accent)] text-white text-[13px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
                     >
-                        {t('license.modal.deactivate')}
+                        {t('license.modal.activateNow')}
                     </button>
                 </div>
             )}
@@ -356,13 +436,37 @@ export default function ActivationModal() {
                             </span>
                         </div>
                     )}
-                    <button
-                        onClick={doDeactivate}
-                        disabled={busy}
-                        className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[#ff3b30] text-[13px] font-medium hover:bg-[#ff3b30]/10 transition-colors disabled:opacity-50"
-                    >
-                        {t('license.modal.deactivate')}
-                    </button>
+                    {!confirmingDeactivate ? (
+                        <button
+                            onClick={() => { setConfirmingDeactivate(true); setMsg(null); }}
+                            disabled={busy}
+                            className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[#ff3b30] text-[13px] font-medium hover:bg-[#ff3b30]/10 transition-colors disabled:opacity-50"
+                        >
+                            {t('license.modal.deactivate')}
+                        </button>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="px-3 py-2 rounded-md bg-[#ff3b30]/10 border border-[#ff3b30]/30 text-[12px] text-[#ff3b30]">
+                                {t('license.modal.deactivateConfirm')}
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={doDeactivate}
+                                    disabled={busy}
+                                    className="flex-1 px-4 py-2.5 rounded-lg bg-[#ff3b30] text-white text-[13px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
+                                >
+                                    {t('license.modal.confirmDeactivate')}
+                                </button>
+                                <button
+                                    onClick={() => setConfirmingDeactivate(false)}
+                                    disabled={busy}
+                                    className="flex-1 px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] text-[13px] font-medium hover:bg-[var(--color-surface-hover)]/40 transition-colors"
+                                >
+                                    {t('license.modal.cancel')}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
             <FeatureList t={t} hasFeature={hasFeature} />

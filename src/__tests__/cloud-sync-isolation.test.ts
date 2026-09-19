@@ -1,4 +1,4 @@
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -15,6 +15,13 @@ vi.mock('electron', () => ({
         getPath: (n: string) =>
             n === 'home' ? FAKE_HOME : path.join(FAKE_HOME, '.ai-tools'),
     },
+}));
+
+// 本用例只验证「上传路径隔离」，不验证授权：云同步已被 license gate 拦截（无 token 时 push 直接返回
+// {ok:false}），故在此把 gate 置为放行，让流程走到 uploadDir。gate 自身的行为由 license-*.test.ts 覆盖。
+vi.mock('../main/license/feature-gate', () => ({
+    assertFeature: async () => ({allowed: true, code: 'LIC_OK', payload: null}),
+    GATE_LOCKED_MESSAGE: 'license.errors.locked',
 }));
 
 const stagingDataDir = path.join(FAKE_HOME, '.ai-tools', 'cloud', 'ai-tools');

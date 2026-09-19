@@ -5,7 +5,14 @@
  * 「改了一处忘了另一处」导致的资产加载失败。
  */
 
-import {DEFAULT_KID, FEATURE_CLOUD_SYNC, FEATURE_PRO, PRODUCT_SKU,} from '../../shared/license-constants';
+import {
+    ACCEPTED_SKUS,
+    DEFAULT_KID,
+    FEATURE_CLOUD_SYNC,
+    FEATURE_PRO,
+    PRODUCT_SKU,
+    SKU_FEATURES,
+} from '../../shared/license-constants';
 import type {LicenseConfig} from './types';
 
 /** 机器码派生固定盐：只上传哈希不上传原始硬件信息，盐保证不同产品的机器码不通用 */
@@ -22,6 +29,12 @@ export const EXTERNAL_LICENSE_DIR_NAME = 'license';
 
 /** 配置文件名 */
 export const CONFIG_FILE_NAME = 'license.config.json';
+
+/** 收银台页路径：billing-license-service 同源托管（static/checkout），与 machineId 查询参数一起构成页面契约 */
+export const CHECKOUT_PAGE_PATH = '/checkout/index.html';
+
+/** 兑换端点路径：服务端 RedeemCodeController 的对外契约 */
+export const REDEEM_API_PATH = '/api/redeem/redeem';
 
 /** 单公钥文件名（客户心智中的「那一个特殊文件」，上线前替换它即可） */
 export const PUBLIC_KEY_FILE_NAME = 'public.key';
@@ -66,9 +79,14 @@ export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
     enabled: true,
     killSwitch: false,
     sku: PRODUCT_SKU,
+    // 接受的 SKU 与「SKU → gate 权益键」映射：可由包外配置覆盖（服务端新增档位无需重新发版）
+    acceptedSkus: [...ACCEPTED_SKUS],
+    skuFeatures: SKU_FEATURES,
     defaultKid: DEFAULT_KID,
-    checkoutUrlTemplate: 'https://www.ywhome.top/getlicense?machine_id={machineId}&sku={sku}',
-    redeemApiUrl: 'https://api.ywhome.top/api/redeem/redeem',
+    // billing-license-service 服务地址：收银台页（在线激活跳转）与兑换 API（兑换码激活）都由它
+    // 派生（CHECKOUT_PAGE_PATH / REDEEM_API_PATH），一处配置即与后台服务对应。
+    // 默认指向本地服务（默认端口 8000）；生产域名由包外 license.config.json 覆盖，无需发版
+    serviceBaseUrl: 'http://localhost:8000',
     redeemTimeoutMs: 15000,
     trial: {
         days: 60,

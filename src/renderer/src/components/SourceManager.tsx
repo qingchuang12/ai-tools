@@ -3,7 +3,7 @@
  *
  * McpSourceManager 与 ConnectionManager 归一化前缀后约 184 行完全相同，
  * 仅「命名空间(t 键前缀) / kind / 平台列表 / 内置 id / 创建默认值 / 导出文件名 /
- * 是否展示 platformHint / 未知平台降级 / noToken 颜色 / 徽章顺序」这 10 项不同。
+ * 是否展示 platformHint / 未知平台降级」这 8 项不同。
  * 现抽成通用 SourceManager，由两份薄 wrapper 传入参数，行为保持完全一致。
  */
 import {type ReactNode, useEffect, useMemo, useState} from 'react';
@@ -51,10 +51,6 @@ export interface SourceManagerProps {
     platformKeyHints?: Partial<Record<PlatformType, ReactNode>>;
     /** 未知平台时降级为只读 div（skill 用于 github/clawhub 等内置平台） */
     unknownPlatformFallback?: boolean;
-    /** noToken 文案配色 */
-    noTokenColor?: string;
-    /** 徽章顺序：builtin-default(mcp) 或 default-builtin(skill) */
-    badgeOrder?: 'builtin-default' | 'default-builtin';
     /** 源列表变化后通知外部（Store 下拉需要重新拉取） */
     onChanged?: () => void;
 }
@@ -69,8 +65,6 @@ export default function SourceManager({
     showPlatformHint = false,
     platformKeyHints,
     unknownPlatformFallback = false,
-    noTokenColor = 'text-[var(--color-muted2)]',
-    badgeOrder = 'builtin-default',
     onChanged,
 }: SourceManagerProps) {
     const {t} = useTranslation();
@@ -266,20 +260,11 @@ export default function SourceManager({
                         const statusLabel = tk(STATUS_LABEL_KEY[c.status]);
                         const tkMeta = c.tokenId ? tokenById.get(c.tokenId) : undefined;
                         const enabled = c.enabled ?? true;
-                        const isBuiltin = builtinIds.includes(c.id);
                         const badges = (
                             <>
-                                {badgeOrder === 'builtin-default' && isBuiltin && (
-                                    <span
-                                        className="text-[12px] px-1.5 py-0.5 rounded bg-[#98989d]/15 text-[var(--color-muted2)] flex-shrink-0">{tk('builtin')}</span>
-                                )}
                                 {c.isDefault && (
                                     <span
                                         className="text-[12px] px-1.5 py-0.5 rounded bg-[#ff9f0a]/15 text-[#ff9f0a] flex-shrink-0">{tk('default')}</span>
-                                )}
-                                {badgeOrder === 'default-builtin' && isBuiltin && (
-                                    <span
-                                        className="text-[12px] px-1.5 py-0.5 rounded bg-[#98989d]/15 text-[var(--color-muted2)] flex-shrink-0">{tk('builtin')}</span>
                                 )}
                                 {!enabled && (
                                     <span
@@ -370,7 +355,7 @@ export default function SourceManager({
                                         {tkMeta
                                             ? <span
                                                 className="text-[var(--color-muted2)]"> {tkMeta.name}（{tk('scope')} {tkMeta.scopes.join(', ')} · {tk('expiry')} {tkMeta.expiresAt ? new Date(tkMeta.expiresAt).toLocaleDateString() : tk('noExpiry')} · {tkMeta.revoked ? tk('revoked') : tk('normal')}）</span>
-                                            : <span className={noTokenColor}> {tk('noToken')}</span>}
+                                            : <span className="text-[var(--color-muted2)]"> {tk('noToken')}</span>}
                                     </p>
                                 </div>
                                 {c.detail &&

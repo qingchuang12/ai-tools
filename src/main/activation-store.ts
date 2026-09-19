@@ -6,17 +6,15 @@
  * - `~/.ai-tools/license-vault.json`  = **秘密**（加密：signed token + 试用账本，见 `license/vault.ts`）
  * 两者不一致时**以 vault 为准**并回写 activation.json。
  *
- * 本文件只保留两件事：**状态落盘** 与 **双安装标记判定**；
- * 状态判定（验签 / 试用双限 / 硬件宽限）全部委托 `src/main/license/index.ts` 门面。
+ * 本文件只保留两件事：**状态读** 与 **状态落盘**；
+ * 状态判定（验签 / 试用双限 / 硬件宽限 / 发试用）全部委托 `src/main/license/index.ts` 门面。
  *
- * 首次安装判定：基于「两处分开的安装标记文件」（位于不同系统目录）
- *   - 两处标记均缺失 → 视为「首次安装」：发试用（天数由配置决定，默认 60 天），并落盘两处标记；
- *   - 任一标记存在（即使 activation.json 被删）→ 视为「非首次」：不发试用，
- *     从而防止「只删 activation.json 一个文件」就重置试用。
+ * 试用发放的防重置信号（首跑账本：两处分开、位于不同系统目录）也一并下沉到
+ * `src/main/license/first-run.ts`：发试用是授权域的职责，且必须与门面的状态判定同源，
+ * 否则就会出现「标记在、账本没了」这类判定割裂（历史上表现为永久 inactive 且不自愈）。
  */
 
 import os from 'os';
-import fs from 'fs';
 import path from 'path';
 import {loadUserSettingsFile, writeFileAtomic} from './config/settings-store';
 import type {ActivationState, ActivationStatus} from '../shared/activation-types';
@@ -25,61 +23,6 @@ import * as license from './license';
 const FILE = path.join(os.homedir(), '.ai-tools', 'activation.json');
 
 const VALID_STATUS: ActivationStatus[] = ['inactive', 'trial', 'activated'];
-
-/**
- * 两处安装标记文件路径（根目录不同，提高「删单文件重置试用」的成本）。
- * - win32：用户目录（%USERPROFILE%）+ AppData\Roaming 下各一处
- * - darwin：~/Library/Application Support + ~/Library/Caches（常用软件目录）
- * - linux/其他：~/.config + ~/.local/share
- */
-function markerPaths(): [string, string] {
-    const home = os.homedir();
-    const platform = process.platform;
-    if (platform === 'win32') {
-        const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-        return [
-            path.join(home, '.ai-tools-install'),
-            path.join(appData, 'ai-tools', '.install-marker'),
-        ];
-    }
-    if (platform === 'darwin') {
-        return [
-            path.join(home, 'Library', 'Application Support', 'ai-tools', '.install-marker'),
-            path.join(home, 'Library', 'Caches', 'ai-tools', '.install-marker'),
-        ];
-    }
-    return [
-        path.join(home, '.config', 'ai-tools', '.install-marker'),
-        path.join(home, '.local', 'share', 'ai-tools', '.install-marker'),
-    ];
-}
-
-function markerExists(p: string): boolean {
-    try {
-        return fs.existsSync(p);
-    } catch {
-        return false;
-    }
-}
-
-/** 两处标记均缺失 → 首次安装 */
-function isFirstInstall(): boolean {
-    const [a, b] = markerPaths();
-    return !markerExists(a) && !markerExists(b);
-}
-
-/** 创建两处安装标记（幂等；忽略单处失败） */
-function ensureMarkers(): void {
-    const stamp = new Date().toISOString();
-    for (const p of markerPaths()) {
-        try {
-            fs.mkdirSync(path.dirname(p), {recursive: true});
-            fs.writeFileSync(p, stamp);
-        } catch {
-            // 单处写入失败不阻塞主流程
-        }
-    }
-}
 
 /** 读明文状态；缺失或结构非法返回 null（非法状态不应参与 legacy 判定） */
 async function load(): Promise<ActivationState | null> {
@@ -108,14 +51,12 @@ async function save(state: ActivationState): Promise<void> {
 
 /**
  * 读取当前激活状态（顺带持久化门面算出的最新状态）。
- * 首次安装在此判定并发试用，随后状态判定与落盘全部交给门面。
+ *
+ * 发试用也在门面内完成：语义是「从未激活过 → 进入试用」，不看 activation.json 是否存在，
+ * 因此「升级遗留的 activation.json / 安装标记与 vault 不一致」不会再导致永久 inactive。
  */
 export async function getActivationState(): Promise<ActivationState> {
     const persisted = await load();
-    if (!persisted && isFirstInstall()) {
-        ensureMarkers();
-        await license.grantTrialOnFirstInstall();
-    }
     const state = await license.getState(persisted);
     await save(state);
     return state;

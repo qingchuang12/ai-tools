@@ -2,7 +2,7 @@
  * 试用账本判定（main 进程）
  *
  * 时间口径（**全项目唯一**）：
- *   `effectiveNow() = max(Date.now(), vault.watermark, vault.server_time_floor)`
+ *   `effectiveNow() = max(Date.now(), vault.watermark, vault.server_time_floor, 付费态下界)`
  * 任何到期判定**必须**用它，**不得**直接 `Date.now()`——否则把系统时间改回过去就能让
  * 已过期的试用/授权复活（单调水印只增，回拨被抹平）。
  *
@@ -15,7 +15,7 @@
 import type {ActivationDegradedReason} from '../../shared/activation-types';
 import type {LicenseErrorCode} from './errors';
 import {logLicenseEvent} from './errors';
-import type {LicenseConfig, TrialVault} from './types';
+import type {LicenseConfig, LicenseVault, TrialVault} from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -30,10 +30,17 @@ export interface TrialEvaluation {
 }
 
 /**
- * 授权时间的唯一出口：`max(now, 单调水印, 后端时间下界)`。
+ * 授权时间的唯一出口：`max(now, 单调水印, 后端时间下界, 付费态下界)`。
+ *
  * 水印只增不减，server_time_floor 由 redeem 响应给出（可选），两者共同封死「时间回拨」。
+ * `extraFloorMs` 传付费账本的下界（见 `licenseFloor`）：**付费激活时不推进 trial 水印**，
+ * 少了这一路，订阅过期后把系统时间改回过去就能复活（plan-2.4 的 C7，已修复）。
  */
-export function effectiveNow(trial: TrialVault | null, nowMs: number = Date.now()): number {
+export function effectiveNow(
+    trial: TrialVault | null,
+    nowMs: number = Date.now(),
+    extraFloorMs: number | null = null
+): number {
     let t = nowMs;
     if (trial) {
         if (typeof trial.watermark === 'number' && Number.isFinite(trial.watermark)) {
@@ -43,7 +50,45 @@ export function effectiveNow(trial: TrialVault | null, nowMs: number = Date.now(
             t = Math.max(t, trial.server_time_floor);
         }
     }
+    if (typeof extraFloorMs === 'number' && Number.isFinite(extraFloorMs)) {
+        t = Math.max(t, extraFloorMs);
+    }
     return t;
+}
+
+/** 付费账本的时间下界 = `max(watermark, server_time_floor)`；无则为 null */
+export function licenseFloor(license: LicenseVault | null): number | null {
+    if (!license) return null;
+    const floors = [license.watermark, license.server_time_floor].filter(
+        (v): v is number => typeof v === 'number' && Number.isFinite(v)
+    );
+    return floors.length > 0 ? Math.max(...floors) : null;
+}
+
+/** 付费水印的落盘步进（ms）：避免每次 IPC 复算都重写 vault；回拨保护的精度到分钟级足够 */
+export const LICENSE_WATERMARK_STEP_MS = 60_000;
+
+/**
+ * 推进付费态单调水印（只增不减）。
+ *
+ * @returns 更新后的账本；无需推进（已回拨、或距上次落盘不足一个步进）时返回 null，调用方应跳过落盘。
+ */
+export function raiseLicenseWatermark(license: LicenseVault | null, nowMs: number): LicenseVault | null {
+    if (!license) return null;
+    const current = typeof license.watermark === 'number' && Number.isFinite(license.watermark) ? license.watermark : 0;
+    if (nowMs <= current + LICENSE_WATERMARK_STEP_MS) return null;
+    return {...license, watermark: nowMs};
+}
+
+/** 抬高付费态后端时间下界（只增不减）；无需推进时返回 null */
+export function raiseLicenseServerFloor(license: LicenseVault | null, serverTimeMs: number): LicenseVault | null {
+    if (!license) return null;
+    const current =
+        typeof license.server_time_floor === 'number' && Number.isFinite(license.server_time_floor)
+            ? license.server_time_floor
+            : 0;
+    if (serverTimeMs <= current) return null;
+    return {...license, server_time_floor: serverTimeMs};
 }
 
 /** 发试用：首次安装时调用（install 标记由 activation-store 维护，此处只管账本） */

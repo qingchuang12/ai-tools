@@ -22,8 +22,6 @@ export default function ConnectionManager({onChanged}: Props) {
             createDefaults={{platformType: 'modelscope', baseUrl: PLATFORM_META.modelscope.defaultBaseUrl}}
             exportNames={{single: 'connection.json', multi: 'connections.json'}}
             unknownPlatformFallback
-            noTokenColor="text-[#ff9f0a]"
-            badgeOrder="default-builtin"
             platformKeyHints={{
                 // 虾评列表匿名可读，但下载安装需鉴权；正式版技能下载会扣 2 虾米（重试不重复扣）。
                 coze: (

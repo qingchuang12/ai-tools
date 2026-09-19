@@ -15,7 +15,7 @@
 import {getConfig} from './config';
 import type {LicenseErrorCode} from './errors';
 import {logLicenseEvent, PUBLIC_LOCKED_KEY} from './errors';
-import {effectiveNow, evaluateTrial} from './trial';
+import {effectiveNow, evaluateTrial, licenseFloor} from './trial';
 import {readVault} from './vault';
 import {verifyToken} from './verifier';
 import type {TokenPayload} from './types';
@@ -54,8 +54,9 @@ export async function assertFeature(feature: string): Promise<GateResult> {
         return {allowed: false, code: 'LIC_FEATURE_MISSING', payload: null};
     }
 
+    // 付费态单调下界（watermark / server_time_floor）与试用共用一个时间出口：两路取 max
     const outcome = await verifyToken(token, {
-        nowMs: effectiveNow(vault.trial, Date.now()),
+        nowMs: effectiveNow(vault.trial, Date.now(), licenseFloor(vault.license)),
         requiredFeature: feature,
     });
     if (!outcome.ok) {

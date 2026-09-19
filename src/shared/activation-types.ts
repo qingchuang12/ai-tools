@@ -80,8 +80,11 @@ export interface ActivationApi {
     getMachineCode: () => Promise<string>;
     /** 按配置模板拼出带 machineId 的收银台 URL */
     getPurchaseUrl: () => Promise<string>;
-    /** 兑换码 → 后端 redeem → 本地验签 → 落盘 */
-    redeem: (code: string) => Promise<RedeemResult>;
+    /**
+     * 兑换码 + 购买邮箱 → 后端 redeem → 本地验签 → 落盘。
+     * 邮箱是服务端的客户标识（必填）：未注册邮箱会在服务端自动建访客账户。
+     */
+    redeem: (code: string, email: string) => Promise<RedeemResult>;
     /** 主进程弹文件选择器导入 license.lic */
     importLicenseFile: () => Promise<RedeemResult>;
     /** 直接喂文本（裸 token 或 JSON），供拖拽/粘贴场景 */

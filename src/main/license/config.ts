@@ -73,6 +73,13 @@ function strArray(v: unknown, fallback: string[]): string[] {
     return out.length > 0 ? out : [...fallback];
 }
 
+/** 深拷贝 SKU→权益 映射（避免调用方改到共享常量里的数组） */
+function cloneSkuFeatures(src: Record<string, string[]>): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    for (const [sku, features] of Object.entries(src)) out[sku] = [...features];
+    return out;
+}
+
 /** 深拷贝默认配置，避免调用方改到 DEFAULT_LICENSE_CONFIG 本身 */
 function cloneDefault(): LicenseConfig {
     const d = DEFAULT_LICENSE_CONFIG;
@@ -81,9 +88,10 @@ function cloneDefault(): LicenseConfig {
         enabled: d.enabled,
         killSwitch: d.killSwitch,
         sku: d.sku,
+        acceptedSkus: [...d.acceptedSkus],
+        skuFeatures: cloneSkuFeatures(d.skuFeatures),
         defaultKid: d.defaultKid,
-        checkoutUrlTemplate: d.checkoutUrlTemplate,
-        redeemApiUrl: d.redeemApiUrl,
+        serviceBaseUrl: d.serviceBaseUrl,
         redeemTimeoutMs: d.redeemTimeoutMs,
         trial: {...d.trial},
         clock: {...d.clock},
@@ -104,9 +112,21 @@ export function mergeConfig(raw: unknown): LicenseConfig {
     base.enabled = bool(src.enabled, base.enabled);
     base.killSwitch = bool(src.killSwitch, base.killSwitch);
     base.sku = str(src.sku, base.sku);
+    base.acceptedSkus = strArray(src.acceptedSkus, base.acceptedSkus);
+    // skuFeatures 是「整表覆盖」语义：包外只写关心的 SKU 即可，写错的条目直接丢弃；
+    // 全表解析失败则沿用默认（避免手改配置把功能解锁整片清空）。
+    const skuFeatures = asRecord(src.skuFeatures);
+    if (skuFeatures) {
+        const parsed: Record<string, string[]> = {};
+        for (const [sku, value] of Object.entries(skuFeatures)) {
+            const features = strArray(value, []);
+            if (sku.trim() && features.length > 0) parsed[sku.trim()] = features;
+        }
+        if (Object.keys(parsed).length > 0) base.skuFeatures = parsed;
+    }
     base.defaultKid = str(src.defaultKid, base.defaultKid);
-    base.checkoutUrlTemplate = str(src.checkoutUrlTemplate, base.checkoutUrlTemplate);
-    base.redeemApiUrl = str(src.redeemApiUrl, base.redeemApiUrl);
+    // 服务地址归一：去掉结尾 `/`，避免与契约路径拼接出 `//api/...` 双斜杠
+    base.serviceBaseUrl = str(src.serviceBaseUrl, base.serviceBaseUrl).replace(/\/+$/, '');
     base.redeemTimeoutMs = Math.max(1000, num(src.redeemTimeoutMs, base.redeemTimeoutMs));
 
     const trial = asRecord(src.trial);

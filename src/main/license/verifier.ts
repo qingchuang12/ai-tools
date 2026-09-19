@@ -3,7 +3,8 @@
  *
  * 目标形态（客户 16.3）：
  *   `parts.length === 3` → `Ed25519Verify(公钥[按 header.kid 选], header + "." + payload, sig)`
- *   → 依次校验 `sku` / `mid` / `exp` / `nbf` / `feat`。**必须真验签，不能只查格式。**
+ *   → 依次校验 `sku`（命中 `config.acceptedSkus`）/ `mid` / `exp` / `nbf` / `feat`
+ *     （生效权益 = SKU 映射 ∪ 原始 feat，见 `resolveFeatures`）。**必须真验签，不能只查格式。**
  *
  * **秒 ↔ 毫秒的转换只允许在本文件发生**：token 的 `iat`/`exp`/`nbf` 是秒（JWT 惯例），
  * 而 `ActivationState` 与 vault 一律用毫秒。其它模块禁止自行 `*1000`，一律走 `expToMs()`。
@@ -15,7 +16,7 @@ import type {LicenseErrorCode} from './errors';
 import {logLicenseEvent, redactMid} from './errors';
 import {getPublicKey} from './keys';
 import {getMachineCodePair} from './machine-code';
-import type {TokenHeader, TokenPayload, VerifyOutcome} from './types';
+import type {LicenseConfig, TokenHeader, TokenPayload, VerifyOutcome} from './types';
 import {DEFAULT_KID} from '../../shared/license-constants';
 
 const BASE64URL_RE = /^[A-Za-z0-9_-]+$/;
@@ -50,10 +51,22 @@ export function expToMs(exp: number | null | undefined): number | null {
     return typeof exp === 'number' && Number.isFinite(exp) ? exp * 1000 : null;
 }
 
-/** 权益判定：`pro` 视为全量权益，否则需显式包含所需权益 */
-export function payloadHasFeature(payload: TokenPayload, feature: string, proFeature: string): boolean {
-    const feat = isStringArray(payload.feat) ? payload.feat : [];
-    return feat.includes(proFeature) || feat.includes(feature);
+/**
+ * 生效权益 = 「SKU 授予的 gate 键」∪「token 原始 feat」。
+ *
+ * 前者由包外配置按 SKU 映射（功能开关，见 `SKU_FEATURES` 注释）；后者是服务端的营销权益文案。
+ * 取并集：服务端将来若直接下发 gate 键（如 `cloud_sync`）也能立即生效，无需升级客户端。
+ */
+export function resolveFeatures(payload: Partial<TokenPayload>, cfg: LicenseConfig): string[] {
+    const bySku = (typeof payload.sku === 'string' ? cfg.skuFeatures?.[payload.sku] : undefined) ?? [];
+    const raw = isStringArray(payload.feat) ? payload.feat : [];
+    return [...new Set([...bySku, ...raw])];
+}
+
+/** 权益判定：命中 `proFeature` 视为全量权益，否则需显式包含所需权益 */
+export function payloadHasFeature(payload: TokenPayload, feature: string, cfg: LicenseConfig): boolean {
+    const features = resolveFeatures(payload, cfg);
+    return features.includes(cfg.features.proFeature) || features.includes(feature);
 }
 
 /**
@@ -111,7 +124,9 @@ export async function verifyToken(token: string, options: VerifyOptions = {}): P
     }
     if (!signatureOk) return fail('LIC_BAD_SIGNATURE', {event: 'verify_signature', kid});
 
-    if (typeof payload.sku !== 'string' || payload.sku !== cfg.sku) {
+    // 接受的 SKU 列表（配置驱动：服务端按档位使用不同 SKU）；列表异常时回退单值 sku，绝不因此放行
+    const acceptedSkus = Array.isArray(cfg.acceptedSkus) && cfg.acceptedSkus.length > 0 ? cfg.acceptedSkus : [cfg.sku];
+    if (typeof payload.sku !== 'string' || !payload.sku || !acceptedSkus.includes(payload.sku)) {
         return fail('LIC_SKU_MISMATCH', {event: 'verify_sku', kid});
     }
     if (typeof payload.mid !== 'string' || !payload.mid) {
@@ -135,8 +150,15 @@ export async function verifyToken(token: string, options: VerifyOptions = {}): P
     }
 
     const required = options.requiredFeature;
-    if (required && !payloadHasFeature(payload as TokenPayload, required, cfg.features.proFeature)) {
-        return fail('LIC_FEATURE_MISSING', {event: 'verify_feat', kid, required});
+    if (required && !payloadHasFeature(payload as TokenPayload, required, cfg)) {
+        // 带上 sku 与它的授予集：SKU 未配 skuFeatures 时 `grant` 为 'unmapped'，可直接定位漏配
+        return fail('LIC_FEATURE_MISSING', {
+            event: 'verify_feat',
+            kid,
+            required,
+            sku: typeof payload.sku === 'string' ? payload.sku : '(none)',
+            grant: cfg.skuFeatures?.[payload.sku as string] ?? 'unmapped',
+        });
     }
 
     return {ok: true, code: 'LIC_OK', payload: payload as TokenPayload, kid};

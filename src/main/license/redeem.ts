@@ -5,24 +5,38 @@
  * **验签 + 落盘 + 状态刷新一律由门面 `index.ts` 的 `applySignedToken()` 完成**——
  * 落盘前必须本地验签，否则等于无条件信任后端返回。
  *
+ * 请求体与服务端 `RedeemCodeRequest` 对齐：`{code, customerEmail, machineId}`
+ * （服务端 E1 起 `customerEmail` 为**必填**语义，缺失/非法分别返回 `EMAIL_REQUIRED` / `INVALID_EMAIL`）。
+ * 响应解析见 `RedeemEnvelope`：服务端所有端点经 `ApiResponseAdvice` 统一包壳，token 在 **`$.data`** 段。
+ *
  * 对外错误一律是 **i18n key**（`license.errors.generic` / `license.errors.network`），
  * 不回传任何失败原因；渲染层用 `t(error)` 翻译后展示（T04）。
  */
 
 import {dialog} from 'electron';
 import type {RedeemResult} from '../../shared/activation-types';
+import {CHECKOUT_PAGE_PATH, REDEEM_API_PATH} from './constants';
 import {getConfig} from './config';
 import {logLicenseEvent, PUBLIC_ERROR_KEY, PUBLIC_NETWORK_ERROR_KEY} from './errors';
 import {getMachineCode} from './machine-code';
 
-/** redeem 响应（字段全部可选：后端可能省略，客户端一律按可选消费） */
-interface RedeemResponse {
+/** 兑换响应数据体（字段全部可选：后端可能省略，客户端一律按可选消费） */
+interface RedeemData {
     success?: boolean;
     licenseKey?: string;
     signedToken?: string;
-    expiresAt?: number | null;
+    /** ISO-8601 字符串（服务端 `LocalDateTime`）；客户端当前不消费，仅类型对齐 */
+    expiresAt?: string | null;
     /** 毫秒；存在时用作 server_time_floor 抬高水印下界 */
     serverTime?: number;
+}
+
+/**
+ * 响应壳：服务端**所有**端点由 `ApiResponseAdvice` 统一包成 `{success, code, data, traceId, timestamp}`，
+ * 故业务字段在 `data` 段；同时兼容**扁平结构**（`data` 缺失时按顶层取），避免旧服务端/自签 token 场景失效。
+ */
+interface RedeemEnvelope extends RedeemData {
+    data?: RedeemData;
 }
 
 export interface RedeemFetchResult {
@@ -33,13 +47,11 @@ export interface RedeemFetchResult {
     serverTimeMs?: number | null;
 }
 
-/** 按配置模板拼出带 machineId 的收银台 URL */
+/** 按服务地址拼出带 machineId 的收银台 URL（页面与 API 同源，均由 billing-license-service 托管） */
 export async function buildCheckoutUrl(): Promise<string> {
-    const cfg = getConfig();
+    const base = getConfig().serviceBaseUrl;
     const machineId = await getMachineCode();
-    return cfg.checkoutUrlTemplate
-        .replace('{machineId}', encodeURIComponent(machineId))
-        .replace('{sku}', encodeURIComponent(cfg.sku));
+    return `${base}${CHECKOUT_PAGE_PATH}?machineId=${encodeURIComponent(machineId)}`;
 }
 
 /**
@@ -62,14 +74,15 @@ export function parseLicenseText(text: string): string | null {
 }
 
 /**
- * 兑换码 → 后端 redeem。
+ * 兑换码 + 邮箱 → 后端 redeem。
  * 网络失败/超时 → `category:'network'`（唯一对外可区分的一类，否则用户会把断网误判为激活码错误）；
  * 其它一律 `category:'license'` + 统一文案，不暴露原因。
  */
-export async function fetchRedeem(code: string): Promise<RedeemFetchResult> {
+export async function fetchRedeem(code: string, email: string): Promise<RedeemFetchResult> {
     const cfg = getConfig();
     const trimmed = (code || '').trim();
-    if (!trimmed) {
+    const customerEmail = (email || '').trim();
+    if (!trimmed || !customerEmail) {
         return {ok: false, category: 'license', error: PUBLIC_ERROR_KEY};
     }
 
@@ -82,10 +95,10 @@ export async function fetchRedeem(code: string): Promise<RedeemFetchResult> {
 
     let response: Response;
     try {
-        response = await fetch(cfg.redeemApiUrl, {
+        response = await fetch(`${cfg.serviceBaseUrl}${REDEEM_API_PATH}`, {
             method: 'POST',
             headers: {'content-type': 'application/json'},
-            body: JSON.stringify({code: trimmed, customerId: '', machineId, sku: cfg.sku}),
+            body: JSON.stringify({code: trimmed, customerEmail, machineId}),
             signal: AbortSignal.timeout(Math.max(1000, cfg.redeemTimeoutMs)),
         });
     } catch (error) {
@@ -93,23 +106,33 @@ export async function fetchRedeem(code: string): Promise<RedeemFetchResult> {
         return {ok: false, category: 'network', error: PUBLIC_NETWORK_ERROR_KEY};
     }
 
-    let body: RedeemResponse | null = null;
+    let body: RedeemEnvelope | null = null;
     try {
-        body = (await response.json()) as RedeemResponse;
+        body = (await response.json()) as RedeemEnvelope;
     } catch {
         logLicenseEvent('LIC_REDEEM_BAD_RESPONSE', {event: 'redeem_json_invalid'});
         return {ok: false, category: 'license', error: PUBLIC_ERROR_KEY};
     }
 
-    if (!response.ok || !body || body.success !== true || typeof body.signedToken !== 'string' || !body.signedToken.trim()) {
+    // 统一壳优先（业务字段在 data 段），无 data 段时按扁平结构取
+    const data: RedeemData | null = body ? body.data ?? body : null;
+    const succeeded = body?.success === true || body?.data?.success === true;
+    if (
+        !response.ok ||
+        !body ||
+        !succeeded ||
+        !data ||
+        typeof data.signedToken !== 'string' ||
+        !data.signedToken.trim()
+    ) {
         logLicenseEvent('LIC_REDEEM_REJECTED', {event: 'redeem_rejected', status: response.status});
         return {ok: false, category: 'license', error: PUBLIC_ERROR_KEY};
     }
 
     return {
         ok: true,
-        token: body.signedToken.trim(),
-        serverTimeMs: typeof body.serverTime === 'number' && Number.isFinite(body.serverTime) ? body.serverTime : null,
+        token: data.signedToken.trim(),
+        serverTimeMs: typeof data.serverTime === 'number' && Number.isFinite(data.serverTime) ? data.serverTime : null,
     };
 }
 

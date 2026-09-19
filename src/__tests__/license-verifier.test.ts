@@ -18,9 +18,17 @@ const hoisted = vi.hoisted(() => {
         enabled: true,
         killSwitch: false,
         sku: 'AI-TOOLS-PRO',
+        // 接受的 SKU = 服务端四个可售档位（见 V4 迁移）；`sku` 仅作产品标识/收银台用
+        acceptedSkus: ['pro-buyout', 'pro-plus-buyout', 'pro-subscription', 'pro-plus-subscription'],
+        // SKU → 客户端 gate 键：服务端 feat 是营销文案（OFFLINE/MULTI_DEVICE/…），不直接当 gate 键
+        skuFeatures: {
+            'pro-buyout': ['cloud_sync'],
+            'pro-plus-buyout': ['cloud_sync'],
+            'pro-subscription': ['cloud_sync'],
+            'pro-plus-subscription': ['cloud_sync'],
+        } as Record<string, string[]>,
         defaultKid: 'default',
-        checkoutUrlTemplate: 'https://example.test/getlicense?machine_id={machineId}&sku={sku}',
-        redeemApiUrl: 'https://api.example.test/api/redeem/redeem',
+        serviceBaseUrl: 'https://billing.example.test',
         redeemTimeoutMs: 15000,
         trial: {days: 60, maxRuns: null as number | null},
         clock: {skewToleranceMs: 2 * 60 * 60 * 1000, useServerTimeFloor: true},
@@ -78,7 +86,7 @@ function makeToken({payload, kid = 'default', alg = 'EdDSA'}: TokenInput): strin
 function basePayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     return {
         jti: 'jti-test-0001',
-        sku: 'AI-TOOLS-PRO',
+        sku: 'pro-buyout',
         mid: hoisted.strongMid,
         iat: NOW_SEC,
         exp: NOW_SEC + 30 * 86400,
@@ -131,6 +139,43 @@ describe('verifyToken', () => {
         expect(outcome.code).toBe('LIC_SKU_MISMATCH');
     });
 
+    it('sku 命中 acceptedSkus 任一档位即通过（服务端按档位签发不同 SKU）', async () => {
+        for (const sku of hoisted.config.acceptedSkus) {
+            const outcome = await verifyToken(makeToken({payload: basePayload({sku})}));
+            expect(outcome.ok, `sku=${sku} 应通过`).toBe(true);
+        }
+    });
+
+    it('sku 为本产品标识而非可售 SKU（AI-TOOLS-PRO）→ LIC_SKU_MISMATCH', async () => {
+        const outcome = await verifyToken(makeToken({payload: basePayload({sku: 'AI-TOOLS-PRO'})}));
+        expect(outcome.ok).toBe(false);
+        expect(outcome.code).toBe('LIC_SKU_MISMATCH');
+    });
+
+    it('服务端营销 feat（OFFLINE/MULTI_DEVICE）也能解锁 cloud_sync（按 SKU 映射生效）', async () => {
+        const outcome = await verifyToken(
+            makeToken({payload: basePayload({feat: ['OFFLINE', 'MULTI_DEVICE', 'EMAIL_SUPPORT']})}),
+            {requiredFeature: 'cloud_sync'}
+        );
+        expect(outcome.ok).toBe(true);
+        expect(outcome.code).toBe('LIC_OK');
+    });
+
+    it('SKU 被接受但未配 skuFeatures → gate 拒绝（不静默放行）', async () => {
+        const saved = hoisted.config.skuFeatures['pro-buyout'];
+        delete hoisted.config.skuFeatures['pro-buyout'];
+        try {
+            const outcome = await verifyToken(
+                makeToken({payload: basePayload({feat: ['OFFLINE', 'MULTI_DEVICE']})}),
+                {requiredFeature: 'cloud_sync'}
+            );
+            expect(outcome.ok).toBe(false);
+            expect(outcome.code).toBe('LIC_FEATURE_MISSING');
+        } finally {
+            hoisted.config.skuFeatures['pro-buyout'] = saved;
+        }
+    });
+
     it('mid 与本机不符（LIC_MACHINE_MISMATCH）', async () => {
         const outcome = await verifyToken(makeToken({payload: basePayload({mid: '1111-2222-3333-4444'})}));
         expect(outcome.ok).toBe(false);
@@ -154,12 +199,12 @@ describe('verifyToken', () => {
         expect(outcome.ok).toBe(true);
     });
 
-    it('feat 缺失：需要 cloud_sync 但只给了别的权益（LIC_FEATURE_MISSING）', async () => {
+    it('feat 里没有该权益但 SKU 已映射 → 放行（gate 由 SKU 映射决定，feat 只是营销文案）', async () => {
         const outcome = await verifyToken(makeToken({payload: basePayload({feat: ['basic']})}), {
             requiredFeature: 'cloud_sync',
         });
-        expect(outcome.ok).toBe(false);
-        expect(outcome.code).toBe('LIC_FEATURE_MISSING');
+        expect(outcome.ok).toBe(true);
+        expect(outcome.code).toBe('LIC_OK');
     });
 
     it('pro 权益包含所需功能：gate 放行', async () => {

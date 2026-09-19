@@ -3,9 +3,20 @@
   "enabled": true,
   "killSwitch": false,
   "sku": "AI-TOOLS-PRO",
+  "acceptedSkus": [
+    "pro-buyout",
+    "pro-plus-buyout",
+    "pro-subscription",
+    "pro-plus-subscription"
+  ],
+  "skuFeatures": {
+    "pro-buyout": ["cloud_sync"],
+    "pro-plus-buyout": ["cloud_sync"],
+    "pro-subscription": ["cloud_sync"],
+    "pro-plus-subscription": ["cloud_sync"]
+  },
   "defaultKid": "default",
-  "checkoutUrlTemplate": "https://www.ywhome.top/getlicense?machine_id={machineId}&sku={sku}",
-  "redeemApiUrl": "https://api.ywhome.top/api/redeem/redeem",
+  "serviceBaseUrl": "http://localhost:8000",
   "redeemTimeoutMs": 15000,
   "trial": {
     "days": 60,

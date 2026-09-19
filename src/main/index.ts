@@ -611,7 +611,7 @@ ipcMain.handle('activation:get-machine-code', async () => getMachineCode());
 ipcMain.handle('activation:get-purchase-url', async (): Promise<string> => license.getPurchaseUrl());
 
 // 兑换码 → 后端 redeem → 本地验签 → 落盘
-ipcMain.handle('activation:redeem', async (_e, code: string) => license.redeem(code));
+ipcMain.handle('activation:redeem', async (_e, code: string, email: string) => license.redeem(code, email));
 
 // 导入 license.lic（主进程弹文件选择器）
 ipcMain.handle('activation:import-license-file', async () => license.importLicenseFile());

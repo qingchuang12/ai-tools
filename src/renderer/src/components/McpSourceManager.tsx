@@ -21,7 +21,6 @@ export default function McpSourceManager({onChanged}: Props) {
             createDefaults={{platformType: 'smithery', baseUrl: ''}}
             exportNames={{single: 'mcp-source.json', multi: 'mcp-sources.json'}}
             showPlatformHint
-            badgeOrder="builtin-default"
             onChanged={onChanged}
         />
     );

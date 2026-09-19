@@ -23,26 +23,18 @@ const require = createRequire(import.meta.url);
 const root = fileURLToPath(new URL('..', import.meta.url));
 const distMain = join(root, 'dist', 'main');
 
-// 解析 javascript-obfuscator：优先作为直接依赖 require；pnpm 严格 node_modules 下若仅存在
-// 传递依赖（经 vite-plugin-electron-obfuscator 引入），按版本通配定位 .pnpm 内的真实路径。
-// 版本通配 @* 可兼容后续版本漂移，无需硬编码具体版本号。
+// 解析 javascript-obfuscator：作为直接依赖 require（已写入 devDependencies，见 package.json:67）。
+// 不再保留 .pnpm 传递依赖通配兜底——那会掩盖「依赖未正确提升为直接依赖」的问题，
+// 且 javascript-obfuscator 已是显式直接依赖，无需通配定位。
 function resolveObfuscator() {
     try {
         return require('javascript-obfuscator');
-    } catch {
-        // 忽略，走下方回退
+    } catch (e) {
+        throw new Error(
+            'javascript-obfuscator 未找到：请执行 `pnpm add -D javascript-obfuscator` 将其提升为直接依赖。'
+            + (e && e.message ? `（原始错误：${e.message}）` : '')
+        );
     }
-    const pnpmBase = join(root, 'node_modules', '.pnpm');
-    if (existsSync(pnpmBase)) {
-        for (const entry of readdirSync(pnpmBase)) {
-            if (!/^javascript-obfuscator@/.test(entry)) continue;
-            const candidate = join(pnpmBase, entry, 'node_modules', 'javascript-obfuscator');
-            if (existsSync(candidate)) return require(candidate);
-        }
-    }
-    throw new Error(
-        'javascript-obfuscator 未找到：请执行 `pnpm add -D javascript-obfuscator` 将其提升为直接依赖。'
-    );
 }
 
 const obfuscator = resolveObfuscator();
