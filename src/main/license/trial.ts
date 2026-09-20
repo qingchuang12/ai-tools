@@ -19,6 +19,15 @@ import type {LicenseConfig, LicenseVault, TrialVault} from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * R4：服务端首见时间的合理回溯窗口（2 年）。
+ *
+ * 比 plan-2.6 建议的「试用窗（60 天）」宽得多：60 天窗会把「200 天前来过」的合法回溯一并拒收，
+ * 令 C8 的防重置失效；2 年窗只挡 epoch/0/负值这类只可能来自篡改响应的荒谬值，
+ * 又能覆盖真实的长跨度部署。合法值被误拒的代价也有限：按「探测无效」处理，下次启动重试。
+ */
+export const MACHINE_FIRST_SEEN_MAX_AGE_MS = 2 * 365 * DAY_MS;
+
 export interface TrialEvaluation {
     status: 'trial' | 'inactive';
     degraded: ActivationDegradedReason | null;
@@ -63,6 +72,12 @@ export function licenseFloor(license: LicenseVault | null): number | null {
         (v): v is number => typeof v === 'number' && Number.isFinite(v)
     );
     return floors.length > 0 ? Math.max(...floors) : null;
+}
+
+/** 取多路时间下界的最大值；全部缺失/非法时为 null（R2：vault 内下界与 vault 外锚并链用） */
+export function maxFloor(...floors: (number | null | undefined)[]): number | null {
+    const valid = floors.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    return valid.length > 0 ? Math.max(...valid) : null;
 }
 
 /** 付费水印的落盘步进（ms）：避免每次 IPC 复算都重写 vault；回拨保护的精度到分钟级足够 */
@@ -114,12 +129,16 @@ export function grantTrial(nowMs: number, midSoft: string): TrialVault {
  * 服务端说这台机器 200 天前就来过，那今天的「首跑」其实是第 N 次安装，
  * 试用早就过期了；反过来若服务端时间晚于本地起点（不该发生），一律以本地为准，避免误伤。
  *
+ * R4（plan-2.7）：`first_seen_at` 早于合理窗口（`MACHINE_FIRST_SEEN_MAX_AGE_MS`）视为**异常值**
+ * （epoch/0/负值只可能来自被篡改的响应）——按「探测无效」处理：不改账本、保持「从未问过」，
+ * 下次启动会重试自愈。绝不把起点回拨到窗口之外，否则一次恶意响应就能把全新试用瞬间判死。
+ *
  * 三态语义见 `TrialVault.machine_first_seen_at`：`undefined` 表示从未联网问过。
  *
- * @returns 更新后的账本；无需变更（服务端没见过 / 时间不更早 / 已问过且一致）时返回 null，
+ * @returns 更新后的账本；无需变更（服务端没见过 / 时间不更早 / 已问过且一致 / 值异常）时返回 null，
  *          调用方应跳过落盘——本函数在启动路径上被调用，不能每次都写 vault。
  */
-export function applyMachineFirstSeen(trial: TrialVault, firstSeenAt: number | null): TrialVault | null {
+export function applyMachineFirstSeen(trial: TrialVault, firstSeenAt: number | null, nowMs: number = Date.now()): TrialVault | null {
     const alreadyProbed = trial.machine_first_seen_at !== undefined;
     const known = typeof trial.machine_first_seen_at === 'number' ? trial.machine_first_seen_at : null;
 
@@ -128,6 +147,10 @@ export function applyMachineFirstSeen(trial: TrialVault, firstSeenAt: number | n
         return alreadyProbed && known === null ? null : {...trial, machine_first_seen_at: null};
     }
     if (!Number.isFinite(firstSeenAt)) return null;
+    if (firstSeenAt < nowMs - MACHINE_FIRST_SEEN_MAX_AGE_MS) {
+        logLicenseEvent('LIC_MALFORMED', {event: 'machine_first_seen_implausible'});
+        return null;
+    }
 
     const backdated = Math.min(trial.first_run_at, firstSeenAt);
     if (alreadyProbed && known === firstSeenAt && backdated === trial.first_run_at) return null;

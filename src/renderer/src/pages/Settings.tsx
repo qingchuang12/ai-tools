@@ -774,7 +774,7 @@ export default function Settings() {
                                 </div>
                             )}
                             {update.state === 'not-available' && <span>{t('update.latest')}</span>}
-                            {(update.state === 'error' || update.state === 'unsupported') && (
+                            {(update.state === 'error' || update.state === 'unsupported' || update.state === 'locked') && (
                                 <div className="flex flex-col gap-1.5">
                                     <span>{update.message || t('update.failed')}</span>
                                     <button

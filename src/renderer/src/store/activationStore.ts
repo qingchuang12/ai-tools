@@ -9,6 +9,7 @@
 import {create} from 'zustand';
 import type {ActivationState} from '../lib/electron';
 import {useElectronAPI} from '../lib/electron';
+import {FEATURE_PRO, FEATURE_PROVIDERS} from '../../../shared/license-constants';
 
 interface ActivationStore {
     state: ActivationState | null;
@@ -17,7 +18,7 @@ interface ActivationStore {
     refresh: () => Promise<void>;
     openModal: () => void;
     closeModal: () => void;
-    /** 权益判定（渲染层 UI 态，安全边界在主进程 gate）。规则：含 `pro` 视为全量权益 */
+    /** 权益判定（渲染层 UI 态，安全边界在主进程 gate）。规则：含 `pro` 视为全量权益；provider 型权益随宿主 */
     hasFeature: (feature: string) => boolean;
 }
 
@@ -63,7 +64,10 @@ export const useActivationStore = create<ActivationStore>((set, get) => ({
     hasFeature: (feature: string) => {
         const features = get().state?.features;
         if (!features || features.length === 0) return false;
-        // `pro` 视为全量权益；其余按名称匹配
-        return features.includes('pro') || features.includes(feature);
+        // `pro` 视为全量权益；provider 型权益（如 remote_connect）随宿主（cloud_sync）判定，
+        // 与主进程 gate 的 FEATURE_PROVIDERS 归一同源，避免两端口径漂移（R5）
+        if (features.includes(FEATURE_PRO)) return true;
+        const host = FEATURE_PROVIDERS[feature];
+        return features.includes(host ?? feature);
     },
 }));

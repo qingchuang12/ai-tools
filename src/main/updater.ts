@@ -10,9 +10,13 @@
  * - `autoDownload=false`：检测到新版本后不自动下载，交用户点「下载并安装」。
  * - feed URL 来自打包时内嵌的 `app-update.yml`（由 electron-builder 在配置 build.publish 后生成）。
  * - 所有失败都归一为 `error` 状态广播，不抛异常、不阻断应用；渲染层仅提示可到官网手动下载。
+ * - R3（plan-2.7）：订阅令牌的 `update_until` / `max_major_version` 软门控——检测与下载前
+ *   都做权益校验，不在权益内的新版本广播 `locked`，不进入下载流程。
  */
 import {app, BrowserWindow} from 'electron';
 import {autoUpdater} from 'electron-updater';
+import {currentPayload} from './license';
+import {evaluateUpdateEntitlement} from './license/update-gate';
 
 /** 更新状态（渲染层据此渲染按钮/进度）。 */
 export type UpdateState =
@@ -23,6 +27,7 @@ export type UpdateState =
     | 'downloading'   // 正在下载（percent 0-100）
     | 'downloaded'    // 下载完成，可重启安装
     | 'error'         // 检测/下载失败
+    | 'locked'        // R3：订阅更新权益不含此版本（update_until 过期 / major 超限），软门控拦截
     | 'unsupported';  // 本平台/形态不支持自更（转官网手动下载）
 
 /** 推给渲染层的更新事件载荷。 */
@@ -32,7 +37,7 @@ export interface UpdateEventPayload {
     version?: string;
     /** 下载进度 0-100（downloading 时有值）。 */
     percent?: number;
-    /** 面向用户的提示（error / unsupported 时的说明）。 */
+    /** 面向用户的提示（error / unsupported / locked 时的说明）。 */
     message?: string;
     /** 当前应用版本。 */
     currentVersion?: string;
@@ -41,6 +46,8 @@ export interface UpdateEventPayload {
 }
 
 let lastPayload: UpdateEventPayload = {state: 'idle'};
+/** 最近一次「有新版」的版本号：download 前二次校验软门控用 */
+let lastAvailableVersion: string | null = null;
 
 function currentVersion(): string {
     return app.getVersion() || '0.0.0';
@@ -57,9 +64,25 @@ function messageOf(state: UpdateState, detail?: string): string {
             return detail || '当前版本形态暂不支持自动更新，请前往官网手动下载最新版。';
         case 'error':
             return detail || '检查更新失败，请稍后重试或到官网手动下载。';
+        case 'locked':
+            return detail || '当前订阅的更新权益不含此版本，请续费升级或到官网手动下载。';
         default:
             return '';
     }
+}
+
+/**
+ * R3 软门控：按当前会话载荷判定「更新到 version」是否在订阅更新权益内。
+ * 放行返回 null；拦截返回 locked 事件载荷（含给用户的说明）。
+ */
+function gateVersion(version: string): UpdateEventPayload | null {
+    const gate = evaluateUpdateEntitlement(currentPayload(), version, Date.now());
+    if (gate.allowed) return null;
+    const detail =
+        gate.reason === 'major_not_included'
+            ? '当前订阅档位不包含此大版本的更新，请升级套餐或到官网手动下载。'
+            : '当前订阅的更新权益已到期，请续费或到官网手动下载。';
+    return {state: 'locked', version, message: detail};
 }
 
 function broadcast(payload: UpdateEventPayload): void {
@@ -101,8 +124,20 @@ export function initUpdater(): void {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
-    autoUpdater.on('checking-for-update', () => broadcast({state: 'checking'}));
-    autoUpdater.on('update-available', info => broadcast({state: 'available', version: info.version}));
+    autoUpdater.on('checking-for-update', () => {
+        lastAvailableVersion = null;
+        broadcast({state: 'checking'});
+    });
+    autoUpdater.on('update-available', info => {
+        lastAvailableVersion = info.version;
+        // R3：检测到新版本先过订阅更新权益软门控，拦截则不进入 available
+        const locked = gateVersion(info.version);
+        if (locked) {
+            broadcast(locked);
+            return;
+        }
+        broadcast({state: 'available', version: info.version});
+    });
     autoUpdater.on('update-not-available', () => broadcast({state: 'not-available'}));
     autoUpdater.on('download-progress', p => broadcast({state: 'downloading', percent: p.percent}));
     autoUpdater.on('update-downloaded', info =>
@@ -140,6 +175,15 @@ export function checkForUpdatesAndNotify(): void {
 export function downloadUpdateAndInstall(): void {
     if (!canAutoUpdate().ok) return;
     initUpdater();
+    // R3：下载前二次校验（防检测后权益状态变化，如刚过期）
+    const version = lastAvailableVersion;
+    if (version) {
+        const locked = gateVersion(version);
+        if (locked) {
+            broadcast(locked);
+            return;
+        }
+    }
     try {
         void autoUpdater.downloadUpdate().catch((err: Error) => {
             broadcast({state: 'error', message: err?.message || '下载失败'});

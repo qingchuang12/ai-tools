@@ -26,11 +26,13 @@ import {
     evaluateTrial,
     grantTrial,
     licenseFloor,
+    maxFloor,
     raiseLicenseServerFloor,
     raiseLicenseWatermark,
     raiseServerTimeFloor,
     touchTrial,
 } from './trial';
+import {raiseAnchorFloor, readAnchorFloor} from './anchor';
 import type {VaultData} from './vault';
 import {readVault, writeVault} from './vault';
 import {expToMs, resolveFeatures, verifyToken} from './verifier';
@@ -90,8 +92,9 @@ function activatedState(
         machineCode,
         licenseKey: redactLicenseKey(payload.lic ?? null),
         sku: payload.sku || cfg.sku,
-        // 生效权益 = SKU 映射的 gate 键 ∪ token 原始 feat（见 resolveFeatures）
-        features: resolveFeatures(payload, cfg),
+        // 生效权益 = SKU 映射的 gate 键 ∪ token 原始 feat（见 resolveFeatures）；
+        // 前置 `pro` 全量权益键：任意被接受的 SKU 即全量权益，与试用态口径一致（R5 权益模型统一）
+        features: [FEATURE_PRO, ...resolveFeatures(payload, cfg)],
         source: 'license',
         degraded,
     };
@@ -224,7 +227,7 @@ async function ensureTrialLedger(
         watermark: Math.max(start, nowMs),
         last_run_at: nowMs,
     };
-    const merged = applyMachineFirstSeen(granted, serverFirstSeen) ?? granted;
+    const merged = applyMachineFirstSeen(granted, serverFirstSeen, nowMs) ?? granted;
     await writeVault({trial: merged, license: vault.license});
     return {trial: merged, created: true};
 }
@@ -271,13 +274,16 @@ export async function getState(persisted: ActivationState | null = null): Promis
     const token = vault.license?.signed_token;
     if (token) {
         // 到期判定必须用 effectiveNow：水印只增，改系统时间救不了已过期的授权。
-        // 付费态的单调下界自带一路（trial 在已激活分支不推进），两条一起取 max。
+        // 付费态的单调下界自带一路（trial 在已激活分支不推进），再加 vault 外锚（R2），一起取 max。
+        const floor = maxFloor(licenseFloor(vault.license), await readAnchorFloor());
         const outcome = await verifyToken(token, {
-            nowMs: effectiveNow(vault.trial, now, licenseFloor(vault.license)),
+            nowMs: effectiveNow(vault.trial, now, floor),
         });
         // 无论验签成败都要推进付费水印：见过的最新时间不能丢，否则回拨就能续命过期订阅
         const raised = raiseLicenseWatermark(vault.license, now);
         if (raised) await writeVault({trial: vault.trial, license: raised});
+        // R2：vault 外锚同步推进（只增不减、步进节流）——vault 可被整体还原，锚要独立于它存在
+        await raiseAnchorFloor(now);
         const license = raised ?? vault.license;
         if (outcome.ok && outcome.payload) {
             payloadCache = outcome.payload;
@@ -396,6 +402,8 @@ async function applySignedToken(token: string, serverTimeMs: number | null): Pro
     if (cfg.clock.useServerTimeFloor && typeof serverTimeMs === 'number' && Number.isFinite(serverTimeMs)) {
         license = raiseLicenseServerFloor(license, serverTimeMs) ?? license;
     }
+    // R2：激活/换发即推进 vault 外锚（服务端时间比本地更可信时用它抬下界）
+    await raiseAnchorFloor(maxFloor(now, serverTimeMs) ?? now);
     await writeVault({trial, license});
     payloadCache = outcome.payload;
     return {success: true, state: activatedState(outcome.payload, cfg, license, null, pair.strong)};

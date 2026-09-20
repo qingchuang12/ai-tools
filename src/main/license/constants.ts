@@ -59,6 +59,12 @@ export const MACHINE_CODE_CACHE_FILE = 'machine-code.cache';
 export const VAULT_FILE_NAME = 'license-vault.json';
 
 /**
+ * vault 外高水位锚文件名（plan-2.7 的 R2）：与 vault 同目录、不同文件，
+ * 付费态单调下界的第二份记忆——只还原 vault 不还原锚文件，回拨复活失败。
+ */
+export const ANCHOR_FILE_NAME = 'license-anchor.json';
+
+/**
  * AES-256-GCM 回退方案的应用盐（用于 `scryptSync` 派生密钥）。
  * **它不是安全边界**：本地无论如何加密都能被逆向，真正的安全边界是服务端 Ed25519 签名。
  * 它的作用只是让「直接读文件 + 复制文件」这两件事的成本不为零。
@@ -113,7 +119,9 @@ export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
     },
     features: {
         proFeature: FEATURE_PRO,
-        // 本期只 gate 云同步：远程 SSH/SFTP 是云同步的一个 provider，与其合并计费（见 FEATURE_REMOTE_CONNECT 注释）
+        // 本期只 gate 云同步（远程 SSH/SFTP 是云同步的一个 provider，与其合并计费，见 FEATURE_REMOTE_CONNECT 注释）。
+        // R1 fail-closed（plan-2.7）：不在此名单（且非 proFeature、非 provider 派生）的权益键一律拒绝，
+        // 新增付费功能漏配会「误锁」而不是「误放」——上线后调整售卖策略改包外配置即可。
         gated: [FEATURE_CLOUD_SYNC],
     },
 };

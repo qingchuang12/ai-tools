@@ -68,7 +68,7 @@ describe('C8 · applyMachineFirstSeen（服务端首次时间并进试用账本�
     it('服务端说 200 天前见过这台机器 → 试用起点回溯，今天首发也判过期', () => {
         const firstSeen = NOW - 200 * DAY_MS;
 
-        const merged = applyMachineFirstSeen(trialAt(NOW), firstSeen);
+        const merged = applyMachineFirstSeen(trialAt(NOW), firstSeen, NOW);
         expect(merged).not.toBeNull();
         expect(merged!.first_run_at).toBe(firstSeen);
         expect(merged!.machine_first_seen_at).toBe(firstSeen);
@@ -79,7 +79,7 @@ describe('C8 · applyMachineFirstSeen（服务端首次时间并进试用账本�
     });
 
     it('删档重装场景：本地起点是今天、服务端 200 天前 → 拿不到新的 60 天', () => {
-        const fresh = applyMachineFirstSeen(trialAt(NOW), NOW - 200 * DAY_MS)!;
+        const fresh = applyMachineFirstSeen(trialAt(NOW), NOW - 200 * DAY_MS, NOW)!;
         // 不回溯时是全新 60 天
         expect(evaluateTrial(trialAt(NOW), mocks.config, NOW).status).toBe('trial');
         // 回溯后立刻过期
@@ -87,25 +87,36 @@ describe('C8 · applyMachineFirstSeen（服务端首次时间并进试用账本�
     });
 
     it('服务端没见过（null）→ 只记「问过了」，起点不动', () => {
-        const merged = applyMachineFirstSeen(trialAt(NOW), null);
+        const merged = applyMachineFirstSeen(trialAt(NOW), null, NOW);
         expect(merged!.first_run_at).toBe(NOW);
         expect(merged!.machine_first_seen_at).toBeNull();
         expect(evaluateTrial(merged!, mocks.config, NOW).status).toBe('trial');
     });
 
     it('服务端时间晚于本地起点 → 一律不往前挪（避免误伤）', () => {
-        const merged = applyMachineFirstSeen(trialAt(NOW), NOW + 10 * DAY_MS);
+        const merged = applyMachineFirstSeen(trialAt(NOW), NOW + 10 * DAY_MS, NOW);
         expect(merged!.first_run_at).toBe(NOW);
         expect(merged!.machine_first_seen_at).toBe(NOW + 10 * DAY_MS);
     });
 
     it('已问过且结果一致 → 返回 null（启动路径上不重复落盘）', () => {
         const once: TrialVault = {...trialAt(NOW), machine_first_seen_at: null};
-        expect(applyMachineFirstSeen(once, null)).toBeNull();
+        expect(applyMachineFirstSeen(once, null, NOW)).toBeNull();
     });
 
     it('非法时间（NaN）→ 不动账本', () => {
-        expect(applyMachineFirstSeen(trialAt(NOW), Number.NaN)).toBeNull();
+        expect(applyMachineFirstSeen(trialAt(NOW), Number.NaN, NOW)).toBeNull();
+    });
+
+    it('R4：早于合理窗口（2 年）的值 → 视为异常，不动账本、保持「从未问过」待重试', async () => {
+        const {MACHINE_FIRST_SEEN_MAX_AGE_MS} = await import('../main/license/trial');
+        const absurd = NOW - MACHINE_FIRST_SEEN_MAX_AGE_MS - 1;
+        // 返回 null：不回溯、不写 machine_first_seen_at，下次启动重新探测自愈
+        expect(applyMachineFirstSeen(trialAt(NOW), absurd, NOW)).toBeNull();
+        // 窗口边界内（恰好 2 年）仍接受
+        const atEdge = NOW - MACHINE_FIRST_SEEN_MAX_AGE_MS;
+        const merged = applyMachineFirstSeen(trialAt(NOW), atEdge, NOW);
+        expect(merged!.machine_first_seen_at).toBe(atEdge);
     });
 });
 

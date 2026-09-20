@@ -43,6 +43,17 @@ export const FEATURE_CLOUD_SYNC = 'cloud_sync';
 export const FEATURE_REMOTE_CONNECT = 'remote_connect';
 
 /**
+ * 权益派生表：键为**派生权益**，值为**宿主权益**。
+ *
+ * 派生权益不单独计费：宿主可用即视为可用（如 SSH/SFTP 只是云同步的一个 provider，
+ * 见 `FEATURE_REMOTE_CONNECT` 注释）。主进程 gate 与渲染层 `hasFeature` 必须共用本表
+ * 做归一，避免两端权益口径漂移（plan-2.7 的 R5）。
+ */
+export const FEATURE_PROVIDERS: Record<string, string> = {
+    [FEATURE_REMOTE_CONNECT]: FEATURE_CLOUD_SYNC,
+};
+
+/**
  * 各 SKU 授予的**客户端 gate 权益键**（`config.features.gated` 中的键）。
  *
  * 为什么不直接用 token 的 `feat`：服务端 `feat` 取自 `products.features`，是「营销权益文案」
