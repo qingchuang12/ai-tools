@@ -25,19 +25,27 @@ export const SUPPORTED_LANGUAGES: { code: string; label: string; english: string
 
 const SUPPORTED_CODES = SUPPORTED_LANGUAGES.map((l) => l.code);
 
+/** 需要从右往左书写的语言（阿拉伯语） */
+const RTL_LANGUAGES = new Set(['ar']);
+
+/** 该语言是否从右往左书写（供布局/测试判定，避免各组件各写一份硬编码） */
+export function isRtlLanguage(lng: string): boolean {
+    return RTL_LANGUAGES.has(lng);
+}
+
 /**
- * 同步 <html> 的 lang，保证字体排版与屏幕阅读器行为正确。
+ * 同步 <html> 的 lang 与 dir，保证字体排版、屏幕阅读器与书写方向正确。
  *
- * 注意：**不要**按语言翻转 document.dir。本项目未做 RTL 布局适配——无 Tailwind `rtl:` 变体、
- * 无 CSS 逻辑属性，方向性样式一律写死 left/right、rounded-l/r、text-left/right。一旦设
- * dir="rtl"，容器会镜像翻转而内部间距、圆角、图标方向不跟随，两套规则打架导致整体布局错乱。
- * 若将来要支持 RTL，须先完成全站适配再在此处开启翻转。
+ * T-RTL（2026-09-20）：dir 的翻转**已可以开启**——全站方向性样式已换成 CSS 逻辑属性
+ * （Tailwind 的 ms-/me-/ps-/pe-/start-/end-/text-start/text-end/border-s/border-e，见 index.css 的
+ * `[dir="rtl"]` 段）。此前不翻转是因为间距/圆角/图标写死 left/right，容器翻转会和它们打架。
+ *
+ * 非 RTL 语言显式写回 'ltr'：语言热切换时不会自动还原，必须显式重置，否则阿语切回英语后残留 rtl。
  */
 export function applyDocumentLanguage(lng: string): void {
     try {
         document.documentElement.lang = lng;
-        // 恒为 LTR；显式重置以清除历史遗留的 dir="rtl" 残留（热切换语言时不会自动还原）
-        document.documentElement.dir = 'ltr';
+        document.documentElement.dir = isRtlLanguage(lng) ? 'rtl' : 'ltr';
     } catch {
         // 非浏览器环境（测试）忽略
     }

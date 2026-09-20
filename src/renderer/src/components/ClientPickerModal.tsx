@@ -93,7 +93,7 @@ export default function ClientPickerModal({
                         {onSelectAll && (
                             <button
                                 onClick={onSelectAll}
-                                className="text-[12px] text-[var(--color-accent)] hover:underline flex-shrink-0 ml-2"
+                                className="text-[12px] text-[var(--color-accent)] hover:underline flex-shrink-0 ms-2"
                             >
                                 {selectAllLabel ?? (t('installed.selectAll') || 'Select All')}
                             </button>
@@ -120,7 +120,7 @@ export default function ClientPickerModal({
                     iconSize={20}
                     iconWrapperClass="grid place-items-center w-9 h-9 rounded-lg bg-[var(--color-surface-hover)]/70 shrink-0"
                     className="flex flex-col gap-2 max-h-[320px] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-hover)]/30 p-2"
-                    baseClass="flex items-center gap-3 w-full p-3 rounded-lg border text-left transition-all duration-150"
+                    baseClass="flex items-center gap-3 w-full p-3 rounded-lg border text-start transition-all duration-150"
                     unselectedClass="border-transparent text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]/60 hover:border-[var(--color-border)]"
                     selectedClass={theme.ring}
                 />

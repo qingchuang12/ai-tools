@@ -573,9 +573,9 @@ export default function Inspector() {
           <div key={key}>
             <label className="block text-[12px] text-[var(--color-muted2)] mb-1">
               {key}
-              {required.includes(key) && <span className="text-[#ff3b30] ml-1">*</span>}
+              {required.includes(key) && <span className="text-[#ff3b30] ms-1">*</span>}
               {schema.description && (
-                <span className="text-[var(--color-muted)] ml-2">- {schema.description}</span>
+                <span className="text-[var(--color-muted)] ms-2">- {schema.description}</span>
               )}
             </label>
             {schema.enum ? (
@@ -617,7 +617,7 @@ export default function Inspector() {
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-[var(--color-bg)]" id="inspector-container">
       {/* 顶部控制栏（一体化标题栏：mac 上兼作拖拽区并为交通灯留白） */}
-      <div className={`flex items-center justify-between px-4 h-[38px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] flex-shrink-0 ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
+      <div className={`flex items-center justify-between px-4 h-[38px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] flex-shrink-0 ${isMac ? 'ps-20' : 'pe-[140px]'}`}>
         <div className="flex items-center gap-3 no-drag">
           <h1 className="text-[14px] font-semibold text-[var(--color-text)] tracking-tight">
             {t('inspector.title') || 'MCP Inspector'}
@@ -664,7 +664,7 @@ export default function Inspector() {
       {/* 主内容区 - 三栏布局 */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 左侧：配置 + 工具列表 */}
-        <div className="w-72 border-r border-[var(--color-border)] flex flex-col overflow-hidden flex-shrink-0">
+        <div className="w-72 border-e border-[var(--color-border)] flex flex-col overflow-hidden flex-shrink-0">
           {/* 配置区域 */}
           <div className="p-3 border-b border-[var(--color-border)] space-y-3 flex-shrink-0">
             {/* 传输类型选择 */}
@@ -885,7 +885,7 @@ export default function Inspector() {
                     <button
                       key={tool.name}
                       onClick={() => handleSelectTool(tool)}
-                      className={`w-full text-left px-2 py-2 rounded transition-colors ${
+                      className={`w-full text-start px-2 py-2 rounded transition-colors ${
                         selectedTool?.name === tool.name
                           ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]'
                           : 'text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]/50'
@@ -992,7 +992,7 @@ export default function Inspector() {
               {/* 工具详情头部（固定） */}
               <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-[var(--color-border)]">
                 <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1 mr-3">
+                  <div className="min-w-0 flex-1 me-3">
                     <h2 className="text-[15px] font-semibold text-[var(--color-text)] truncate">{selectedTool.name}</h2>
                     {selectedTool.description && (
                       <p className="text-[12px] text-[var(--color-muted2)] mt-1 line-clamp-2">{selectedTool.description}</p>

@@ -399,7 +399,7 @@ export default function ActivationModal() {
                 <div className="space-y-4">
                     <p className="text-[13px] text-[var(--color-text)]">
                         {t('license.modal.trialRemaining')}
-                        <span className="font-semibold text-[#ff9f0a] ml-1">
+                        <span className="font-semibold text-[#ff9f0a] ms-1">
                             {formatRemaining(state.trialExpiresAt, t)}
                         </span>
                     </p>
@@ -422,7 +422,7 @@ export default function ActivationModal() {
                     )}
                     <p className="text-[13px] text-[var(--color-text)]">
                         {t('license.modal.activatedRemaining')}
-                        <span className="font-semibold text-[#34c759] ml-1">
+                        <span className="font-semibold text-[#34c759] ms-1">
                             {formatRemaining(state.activatedExpiresAt, t)}
                         </span>
                     </p>

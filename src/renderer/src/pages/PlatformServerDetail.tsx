@@ -358,7 +358,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
         <div className="flex flex-col h-full bg-[var(--color-bg)]">
             {/* 头部导航（一体化标题栏：mac 上兼作拖拽区并为交通灯留白） */}
             <div
-                className={`flex items-center gap-2 px-4 h-[32px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] text-[12px] text-[var(--color-muted)] ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
+                className={`flex items-center gap-2 px-4 h-[32px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] text-[12px] text-[var(--color-muted)] ${isMac ? 'ps-20' : 'pe-[140px]'}`}>
                 <button onClick={() => navigate(-1)} className="no-drag hover:text-[var(--color-text)] transition-colors">
                     <BackIcon className="w-4 h-4"/>
                 </button>
@@ -474,7 +474,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                 </div>
 
                 {/* 右侧边栏 */}
-                <div className="w-[280px] flex-shrink-0 border-l border-[var(--color-border)] overflow-y-auto p-4">
+                <div className="w-[280px] flex-shrink-0 border-s border-[var(--color-border)] overflow-y-auto p-4">
                     {/* 安装按钮 */}
                     <div className="mb-4 space-y-2">
                         {canInstall && runtimeAvailable && (
@@ -601,7 +601,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                                 <div className="flex justify-between">
                                     <span className="text-[var(--color-muted)]">Tags</span>
                                     <span
-                                        className="text-[var(--color-text)] text-right max-w-[160px] truncate">{(detail.tags ?? []).join(', ')}</span>
+                                        className="text-[var(--color-text)] text-end max-w-[160px] truncate">{(detail.tags ?? []).join(', ')}</span>
                                 </div>
                             )}
                         </div>

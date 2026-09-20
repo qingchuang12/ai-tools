@@ -610,7 +610,7 @@ export default function SkillDetail() {
         <div className="flex flex-col h-full bg-[var(--color-bg)]">
             {/* 头部导航（一体化标题栏：mac 上兼作拖拽区并为交通灯留白） */}
             <div
-                className={`flex items-center gap-2 px-4 h-[32px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] text-[12px] text-[var(--color-muted)] ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
+                className={`flex items-center gap-2 px-4 h-[32px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] text-[12px] text-[var(--color-muted)] ${isMac ? 'ps-20' : 'pe-[140px]'}`}>
                 <button onClick={() => navigate(-1)} className="no-drag hover:text-[var(--color-text)] transition-colors">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
@@ -734,7 +734,7 @@ export default function SkillDetail() {
                 </div>
 
                 {/* 右侧边栏 */}
-                <div className="w-[280px] flex-shrink-0 border-l border-[var(--color-border)] overflow-y-auto p-4">
+                <div className="w-[280px] flex-shrink-0 border-s border-[var(--color-border)] overflow-y-auto p-4">
                     {/* 安装/卸载按钮 */}
                     <div className="mb-4">
                         {isInstalled ? (
@@ -882,11 +882,11 @@ export default function SkillDetail() {
                       {skillView.stars != null && <><StarIcon
                           className="w-3 h-3 text-yellow-400"/>{formatNumber(skillView.stars)}</>}
                                             {skillView.viewCount != null && skillView.viewCount > 0 && <><EyeIcon
-                          className="w-3 h-3 ml-1"/>{formatNumber(skillView.viewCount)}</>}
+                          className="w-3 h-3 ms-1"/>{formatNumber(skillView.viewCount)}</>}
                                             {skillView.downloads != null && skillView.downloads > 0 && <><DownloadIcon
-                          className="w-3 h-3 ml-1"/>{formatNumber(skillView.downloads)}</>}
+                          className="w-3 h-3 ms-1"/>{formatNumber(skillView.downloads)}</>}
                                             {skillView.forks != null && <><ForkIcon
-                                                className="w-3 h-3 text-[var(--color-muted)] ml-1"/>{formatNumber(skillView.forks)}</>}
+                                                className="w-3 h-3 text-[var(--color-muted)] ms-1"/>{formatNumber(skillView.forks)}</>}
                     </span>
                                     </div>
                                 )}
@@ -944,7 +944,7 @@ export default function SkillDetail() {
                                             <span className="text-[12px] text-[var(--color-text)] truncate">{file.name}</span>
                                         </div>
                                         {file.size && <span
-                                            className="text-[12px] text-[var(--color-muted)] flex-shrink-0 ml-2">{file.size}</span>}
+                                            className="text-[12px] text-[var(--color-muted)] flex-shrink-0 ms-2">{file.size}</span>}
                                     </div>
                                 ))}
                             </div>

@@ -81,7 +81,7 @@ export default function ConsistencyBanner({
                                     {'  ·  '}
                                     {t('consistency.cloudTime') || '云端'}：{formatTime(item.cloudUpdatedAt)}
                                     {item.localClients.length > 0 && (
-                                        <span className="ml-1">（{item.localClients.map(clientName).join('、')}）</span>
+                                        <span className="ms-1">（{item.localClients.map(clientName).join('、')}）</span>
                                     )}
                                 </>
                             )}
@@ -141,7 +141,7 @@ export default function ConsistencyBanner({
                 <span className="text-[12.5px] text-[var(--color-text)] flex-1 min-w-0 truncate">
             {t('consistency.bannerTitle', {count: report.items.length})
                 || `云端与本地有 ${report.items.length} 项不一致`}
-                    <span className="text-[var(--color-muted)] ml-1.5">
+                    <span className="text-[var(--color-muted)] ms-1.5">
                 （{([
                             skillCount > 0 ? (t('consistency.skillCount', {count: skillCount}) || `${skillCount} 个 Skill`) : null,
                             serverCount > 0 ? (t('consistency.serverCount', {count: serverCount}) || `${serverCount} 个 MCP Server`) : null,

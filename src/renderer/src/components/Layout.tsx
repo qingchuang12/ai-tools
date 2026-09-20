@@ -117,10 +117,10 @@ export default function Layout({children}: LayoutProps) {
             <aside
                 ref={sidebarRef}
                 style={{width: sidebarWidth}}
-                className="flex-shrink-0 bg-content-card flex flex-col border-r border-content-border relative"
+                className="flex-shrink-0 bg-content-card flex flex-col border-e border-content-border relative"
             >
                 {/* 顶部条：窗口拖拽区。mac 上为交通灯预留左侧空间，避免压住红绿灯；Windows 直接贴左。 */}
-                <div className={`h-[38px] drag-region flex-shrink-0 ${isMac ? 'pl-20' : 'pl-3'}`} />
+                <div className={`h-[38px] drag-region flex-shrink-0 ${isMac ? 'ps-20' : 'ps-3'}`} />
 
                 {/* 导航菜单：设为拖拽区，空白处可拖动窗口；导航项加 no-drag 保持可点击 */}
                 <nav className="flex-1 py-2 overflow-y-auto drag-region">
@@ -173,7 +173,7 @@ export default function Layout({children}: LayoutProps) {
                 <div
                     onMouseDown={handleMouseDown}
                     className={`
-            absolute top-0 right-0 w-1 h-full cursor-col-resize
+            absolute top-0 end-0 w-1 h-full cursor-col-resize
             hover:bg-[var(--color-accent)]/50 transition-colors
             ${isResizing ? 'bg-[var(--color-accent)]' : ''}
           `}

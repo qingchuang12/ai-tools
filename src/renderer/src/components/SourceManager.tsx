@@ -296,10 +296,10 @@ export default function SourceManager({
                                         <button
                                             title={enabled ? tk('disableTitle') : tk('enableTitle')}
                                             onClick={() => handleToggleEnabled(c)}
-                                            className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 mr-1 ${enabled ? 'bg-[#34c759]' : 'bg-[var(--color-surface-hover)]'}`}
+                                            className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 me-1 ${enabled ? 'bg-[#34c759]' : 'bg-[var(--color-surface-hover)]'}`}
                                         >
                       <span
-                          className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-[var(--color-surface)] transition-all ${enabled ? 'left-[16px]' : 'left-[2px]'}`}
+                          className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-[var(--color-surface)] transition-all ${enabled ? 'start-[16px]' : 'start-[2px]'}`}
                       />
                                         </button>
                                         <IconBtn title={tk('testConn')} onClick={() => handleVerify(c.id)}>
@@ -457,7 +457,7 @@ export default function SourceManager({
                                 className={`relative w-9 h-5 rounded-full transition-colors ${(editing.enabled ?? true) ? 'bg-[#34c759]' : 'bg-[var(--color-surface-hover)]'}`}
                             >
                 <span
-                    className={`absolute top-[2px] w-4 h-4 rounded-full bg-[var(--color-surface)] transition-all ${(editing.enabled ?? true) ? 'left-[18px]' : 'left-[2px]'}`}
+                    className={`absolute top-[2px] w-4 h-4 rounded-full bg-[var(--color-surface)] transition-all ${(editing.enabled ?? true) ? 'start-[18px]' : 'start-[2px]'}`}
                 />
                             </button>
                         </div>

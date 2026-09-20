@@ -107,6 +107,38 @@ export function grantTrial(nowMs: number, midSoft: string): TrialVault {
     };
 }
 
+/**
+ * C8：把服务端给出的「机器首次出现时间」并进试用账本。
+ *
+ * 只做一件事——**把试用起点往回拨**（`first_run_at` 取更早的那个），从不往前挪：
+ * 服务端说这台机器 200 天前就来过，那今天的「首跑」其实是第 N 次安装，
+ * 试用早就过期了；反过来若服务端时间晚于本地起点（不该发生），一律以本地为准，避免误伤。
+ *
+ * 三态语义见 `TrialVault.machine_first_seen_at`：`undefined` 表示从未联网问过。
+ *
+ * @returns 更新后的账本；无需变更（服务端没见过 / 时间不更早 / 已问过且一致）时返回 null，
+ *          调用方应跳过落盘——本函数在启动路径上被调用，不能每次都写 vault。
+ */
+export function applyMachineFirstSeen(trial: TrialVault, firstSeenAt: number | null): TrialVault | null {
+    const alreadyProbed = trial.machine_first_seen_at !== undefined;
+    const known = typeof trial.machine_first_seen_at === 'number' ? trial.machine_first_seen_at : null;
+
+    if (firstSeenAt === null) {
+        // 服务端没见过这台机器：记下"问过了"，起点不动
+        return alreadyProbed && known === null ? null : {...trial, machine_first_seen_at: null};
+    }
+    if (!Number.isFinite(firstSeenAt)) return null;
+
+    const backdated = Math.min(trial.first_run_at, firstSeenAt);
+    if (alreadyProbed && known === firstSeenAt && backdated === trial.first_run_at) return null;
+
+    return {
+        ...trial,
+        first_run_at: backdated,
+        machine_first_seen_at: firstSeenAt,
+    };
+}
+
 /** 推进一次运行：次数单调 +1，水印只增，last_run_at 更新 */
 export function touchTrial(trial: TrialVault, nowMs: number): TrialVault {
     return {

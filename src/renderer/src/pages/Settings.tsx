@@ -248,7 +248,7 @@ export default function Settings() {
         <div className="flex flex-col h-full bg-[var(--color-bg)]">
             {/* 头部（一体化标题栏：mac 上兼作拖拽区并为交通灯留白） */}
             <div
-                className={`flex items-center px-4 h-[38px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
+                className={`flex items-center px-4 h-[38px] drag-region relative border-b border-[var(--color-border)] bg-[var(--color-bg)] ${isMac ? 'ps-20' : 'pe-[140px]'}`}>
                 <h1 className="text-[14px] font-semibold text-[var(--color-text)] tracking-tight no-drag">
                     {t('settings.title')}
                 </h1>
@@ -372,12 +372,12 @@ export default function Settings() {
                                                         {client.configExists ? (
                                                             <span
                                                                 title={t('settings.configured') || '已配置 MCP'}
-                                                                className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#34c759] border-2 border-[var(--color-surface)]"
+                                                                className="absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full bg-[#34c759] border-2 border-[var(--color-surface)]"
                                                             />
                                                         ) : (
                                                             <span
                                                                 title={t('settings.notConfigured') || '已安装，尚未配置 MCP'}
-                                                                className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[var(--color-border)] border-2 border-[var(--color-surface)]"
+                                                                className="absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full bg-[var(--color-border)] border-2 border-[var(--color-surface)]"
                                                             />
                                                         )}
                                                     </div>
@@ -466,7 +466,7 @@ export default function Settings() {
                                                                 className="text-[12px] text-[var(--color-muted)] truncate">{client.name}</span>
                                                             <button
                                                                 onClick={() => openEditModal(client)}
-                                                                className="ml-auto p-1 rounded text-[var(--color-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
+                                                                className="ms-auto p-1 rounded text-[var(--color-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
                                                                 title={t('settings.editPath') || 'Edit config path'}
                                                             >
                                                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24"
@@ -557,7 +557,7 @@ export default function Settings() {
                                 <h3 className="text-[13px] font-semibold text-[var(--color-text)]">{t('settings.about')}</h3>
                                 <p className="text-[12px] text-[var(--color-muted)]">{version ? `v${version}` : 'Loading...'}</p>
                             </div>
-                            <svg className="ml-auto w-4 h-4 text-[var(--color-muted)]" fill="none" viewBox="0 0 24 24"
+                            <svg className="ms-auto w-4 h-4 text-[var(--color-muted)]" fill="none" viewBox="0 0 24 24"
                                  stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
                             </svg>
@@ -730,7 +730,7 @@ export default function Settings() {
                     <h3 className="text-[16px] font-semibold text-[var(--color-text)]">AI-Tools</h3>
                     <p className="text-[12px] text-[var(--color-muted2)] mt-0.5">{version ? `Version ${version}` : 'Loading...'}</p>
                     {/* 检查更新（plan-19.0）：状态由主进程推送 */}
-                    <div className="w-full mt-4 p-3 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-left">
+                    <div className="w-full mt-4 p-3 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-start">
                         <div className="flex items-center justify-between">
                             <p className="text-[12px] text-[var(--color-muted2)] font-medium">{t('update.title')}</p>
                             <p className="text-[12px] text-[var(--color-muted)]">{update.currentVersion ? `v${update.currentVersion}` : ''}</p>
@@ -780,7 +780,7 @@ export default function Settings() {
                                     <button
                                         type="button"
                                         onClick={openDownloadPage}
-                                        className="text-[var(--color-accent)] hover:underline text-left"
+                                        className="text-[var(--color-accent)] hover:underline text-start"
                                     >
                                         {t('update.manual')}
                                     </button>
@@ -791,7 +791,7 @@ export default function Settings() {
                     <p className="text-[12px] text-[var(--color-muted2)] mt-3 leading-relaxed">
                         {t('settings.aboutIntro')}
                     </p>
-                    <div className="w-full mt-4 p-3 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-left">
+                    <div className="w-full mt-4 p-3 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-start">
                         <p className="text-[12px] text-[var(--color-muted2)] font-medium">License</p>
                         <p className="text-[12px] text-[var(--color-muted)] mt-1.5 leading-relaxed break-all">
                             {t('settings.aboutLicense')}
@@ -799,7 +799,7 @@ export default function Settings() {
                         <button
                             type="button"
                             onClick={() => { void api.system.openThirdPartyLicense(); }}
-                            className="mt-2 block text-left text-[12px] text-[var(--color-accent)] hover:underline"
+                            className="mt-2 block text-start text-[12px] text-[var(--color-accent)] hover:underline"
                         >
                             {t('settings.aboutThirdPartyLicense')}
                         </button>

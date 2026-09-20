@@ -62,7 +62,7 @@ function JsonNode({ keyName, value, isDark, depth }: NodeProps) {
                 className="leading-relaxed cursor-pointer select-none hover:bg-[var(--color-surface-hover)]/40"
                 onClick={() => setOpen((o) => !o)}
             >
-                <span style={{ color: c.toggle }} className="mr-1 inline-block w-3 text-[10px]">
+                <span style={{ color: c.toggle }} className="me-1 inline-block w-3 text-[10px]">
                     {open ? '▼' : '▶'}
                 </span>
                 {keyName !== undefined && <span style={{ color: c.key }}>{keyName}: </span>}

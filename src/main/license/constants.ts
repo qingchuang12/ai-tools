@@ -36,6 +36,16 @@ export const CHECKOUT_PAGE_PATH = '/checkout/index.html';
 /** 兑换端点路径：服务端 RedeemCodeController 的对外契约 */
 export const REDEEM_API_PATH = '/api/redeem/redeem';
 
+/**
+ * C8：机器码首次出现时间端点（服务端 MachineController，公开只读）。
+ * 客户端首跑联网问一次，把试用起点回溯到服务端最早见到这台机器的时间。
+ */
+export const MACHINE_FIRST_SEEN_API_PATH = (machineCode: string): string =>
+    `/api/licenses/machine/${encodeURIComponent(machineCode)}/first-seen`;
+
+/** C8 探测超时：启动路径上的旁路请求，比兑换（15s）短得多，拿不到就当「没见过」 */
+export const MACHINE_PROBE_TIMEOUT_MS = 5000;
+
 /** 单公钥文件名（客户心智中的「那一个特殊文件」，上线前替换它即可） */
 export const PUBLIC_KEY_FILE_NAME = 'public.key';
 

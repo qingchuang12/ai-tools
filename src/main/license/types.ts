@@ -122,6 +122,17 @@ export interface TrialVault {
     hardware_grace_until: number | null;
     /** 后端给的权威时间下界（ms） */
     server_time_floor: number | null;
+    /**
+     * C8：服务端记录的「这台机器最早何时来过」（ms）。
+     *
+     * 用途：本地 vault + 首跑账本都能被删掉重装骗过（删档重来 = 全新 60 天），
+     * 服务端这份记忆删不掉，据此把 `first_run_at` 回溯到它，删档重来只能拿到**已过期**的试用。
+     *
+     * 三态语义：`undefined` = 从未联网问过（下次启动再问）；`number` = 服务端见过，值为首次时间；
+     * `null` = 问过、服务端没见过（全新机器，正常发试用）。
+     * 可选字段：旧 vault 没有它，按「从未问过」处理（向后兼容，无需迁移）。
+     */
+    machine_first_seen_at?: number | null;
 }
 
 /** 本地加密存储中的授权账本 */

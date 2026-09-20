@@ -329,7 +329,7 @@ export default function Detail() {
     return (
         <div className="flex flex-col h-full bg-[var(--color-bg)]">
             {/* 头部导航 - 参考 SkillDetail 风格 */}
-            <div className={`flex items-center gap-2 px-4 py-2 drag-region relative border-b border-[var(--color-border)] text-[12px] text-[var(--color-muted)] ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
+            <div className={`flex items-center gap-2 px-4 py-2 drag-region relative border-b border-[var(--color-border)] text-[12px] text-[var(--color-muted)] ${isMac ? 'ps-20' : 'pe-[140px]'}`}>
                 <button onClick={() => navigate(-1)} className="no-drag hover:text-[var(--color-text)] transition-colors">
                     <BackIcon className="w-4 h-4"/>
                 </button>
@@ -491,7 +491,7 @@ export default function Detail() {
                 </div>
 
                 {/* 右侧边栏 */}
-                <div className="w-[280px] flex-shrink-0 border-l border-[var(--color-border)] overflow-y-auto p-4">
+                <div className="w-[280px] flex-shrink-0 border-s border-[var(--color-border)] overflow-y-auto p-4">
                     {/* 安装按钮 */}
                     <div className="mb-4 space-y-2">
                         {runtimeAvailable && (

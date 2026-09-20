@@ -16,9 +16,11 @@ import {logLicenseEvent, PUBLIC_ERROR_KEY, redactLicenseKey} from './errors';
 import {assertFeature as gateAssertFeature} from './feature-gate';
 import {readFirstRunAt, writeFirstRun} from './first-run';
 import {getHardwareFactors, getMachineCodePair, warmupMachineCode} from './machine-code';
+import {probeMachineFirstSeen} from './machine-probe';
 import {buildCheckoutUrl, fetchRedeem, parseLicenseText, readLicenseFileViaDialog, redeemFailure,} from './redeem';
 import type {TrialEvaluation} from './trial';
 import {
+    applyMachineFirstSeen,
     effectiveNow,
     enterHardwareGrace,
     evaluateTrial,
@@ -212,6 +214,9 @@ async function ensureTrialLedger(
     const start = resolveTrialStart(cfg, nowMs);
     if (start === null) return null;
     const pair = await getMachineCodePair();
+    // C8：vault 与首跑账本都能被删掉重装骗过，唯独服务端的「机器首次出现时间」删不掉。
+    // 新建账本时联网问一次（离线拿不到就当没见过，绝不因此挡住用户）。
+    const serverFirstSeen = await safeProbeMachineFirstSeen();
     const granted: TrialVault = {
         // grantTrial 已记 1 次运行（trial_count=1），本次运行不再重复累加
         ...grantTrial(start, pair.soft),
@@ -219,8 +224,36 @@ async function ensureTrialLedger(
         watermark: Math.max(start, nowMs),
         last_run_at: nowMs,
     };
-    await writeVault({trial: granted, license: vault.license});
-    return {trial: granted, created: true};
+    const merged = applyMachineFirstSeen(granted, serverFirstSeen) ?? granted;
+    await writeVault({trial: merged, license: vault.license});
+    return {trial: merged, created: true};
+}
+
+/**
+ * C8 探测兜底：任何异常一律退化成「服务端没见过」。
+ * 这是启动路径上的旁路网络请求，绝不能把它变成新的故障点——离线用户必须照常拿到试用。
+ */
+async function safeProbeMachineFirstSeen(): Promise<number | null> {
+    try {
+        return await probeMachineFirstSeen();
+    } catch (error) {
+        logLicenseEvent('LIC_INTERNAL', {event: 'machine_probe_unexpected', reason: (error as Error).name});
+        return null;
+    }
+}
+
+/**
+ * C8：为**已存在但从未联网问过**的账本补一次探测（老 vault 升级上来的场景）。
+ * 问过就把结果写进账本，之后不再重复问——探测在启动路径上，不能每次启动都发一次请求。
+ */
+async function backfillMachineFirstSeen(vault: VaultData): Promise<TrialVault | null> {
+    const trial = vault.trial;
+    if (!trial || trial.machine_first_seen_at !== undefined) return null;
+    const firstSeenAt = await safeProbeMachineFirstSeen();
+    const merged = applyMachineFirstSeen(trial, firstSeenAt);
+    if (!merged) return null;
+    await writeVault({trial: merged, license: vault.license});
+    return merged;
 }
 
 /**
@@ -270,7 +303,11 @@ export async function getState(persisted: ActivationState | null = null): Promis
         return {...baseState(), machineCode: pair.strong, degraded: 'vault_tampered'};
     }
 
-    const ev = evaluateTrial(ensured.trial, cfg, now);
+    // C8：老账本（从未联网问过）补一次服务端探测，命中则把试用起点回溯到「这台机器最早来过」的时间
+    const backfilled = ensured.created ? null : await backfillMachineFirstSeen(vault);
+    const trial = backfilled ?? ensured.trial;
+
+    const ev = evaluateTrial(trial, cfg, now);
     if (ev.status === 'inactive') {
         return {
             ...baseState(),
@@ -284,7 +321,7 @@ export async function getState(persisted: ActivationState | null = null): Promis
 
     // 新建时已在 ensureTrialLedger 里落盘（含本次运行计数），避免首跑被重复计数
     if (!ensured.created) {
-        const updated = touchTrial(ensured.trial, now);
+        const updated = touchTrial(trial, now);
         await writeVault({trial: updated, license: vault.license});
     }
     return trialState(ev, pair.strong);

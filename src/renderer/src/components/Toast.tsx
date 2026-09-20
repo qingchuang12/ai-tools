@@ -3,8 +3,8 @@
  * 全局提示系统
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { create } from 'zustand';
+import {useCallback, useEffect, useState} from 'react';
+import {create} from 'zustand';
 
 // Toast 类型
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -137,7 +137,7 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+    <div className="fixed bottom-4 end-4 z-50 flex flex-col gap-2 max-w-sm">
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onClose={() => removeToast(t.id)} />
       ))}

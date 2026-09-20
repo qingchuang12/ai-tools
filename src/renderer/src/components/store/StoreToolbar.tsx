@@ -57,7 +57,7 @@ export default function StoreToolbar({
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 px-4 h-[38px] drag-region border-b border-[var(--color-border)] bg-[var(--color-bg)] sticky top-0 z-10 ${isMac ? 'pl-20' : 'pr-[140px]'}`}
+      className={`flex items-center justify-between gap-3 px-4 h-[38px] drag-region border-b border-[var(--color-border)] bg-[var(--color-bg)] sticky top-0 z-10 ${isMac ? 'ps-20' : 'pe-[140px]'}`}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden no-drag">
         <div className="flex items-center bg-[var(--color-surface-hover)] rounded-lg p-0.5 shrink-0">
@@ -184,7 +184,7 @@ export default function StoreToolbar({
 
         <div className="relative w-[200px]">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-muted)]"
+            className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-muted)]"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -201,12 +201,12 @@ export default function StoreToolbar({
             value={searchQuery}
             onChange={e => onSearchQueryChange(e.target.value)}
             placeholder={resourceType === 'mcp' ? t('store.search') : (t('store.searchSkills', {defaultValue: 'Search skills...'}))}
-            className={`w-full pl-9 ${searchQuery ? 'pr-8' : 'pr-3'} py-1.5 rounded-lg bg-[var(--color-surface-hover)] text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] border-none focus:ring-1 focus:ring-[#0a84ff] text-ellipsis`}
+            className={`w-full ps-9 ${searchQuery ? 'pe-8' : 'pe-3'} py-1.5 rounded-lg bg-[var(--color-surface-hover)] text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] border-none focus:ring-1 focus:ring-[#0a84ff] text-ellipsis`}
           />
           {searchQuery && (
             <button
               onClick={() => onSearchQueryChange('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer transition-colors"
+              className="absolute end-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-[var(--color-muted)] hover:text-[var(--color-text)] cursor-pointer transition-colors"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

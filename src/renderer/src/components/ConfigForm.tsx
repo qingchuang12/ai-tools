@@ -130,9 +130,9 @@ export default function ConfigForm({
                 {key}
               </span>
               {isRequired ? (
-                <span className="ml-1 text-[12px] text-[#ff3b30]">*</span>
+                <span className="ms-1 text-[12px] text-[#ff3b30]">*</span>
               ) : (
-                <span className="ml-1 text-[12px] text-[var(--color-muted)]">({t('detail.optional')})</span>
+                <span className="ms-1 text-[12px] text-[var(--color-muted)]">({t('detail.optional')})</span>
               )}
             </label>
             

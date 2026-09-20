@@ -167,7 +167,7 @@ export default function CloudSyncManager({runtimes, onChanged}: Props) {
                         title={cfg.enabled ? t('cloudSync.disableTitle') : t('cloudSync.enableTitle')}
                     >
                         <span
-                            className={`absolute top-[2px] w-4 h-4 rounded-full bg-[var(--color-surface)] transition-all ${cfg.enabled ? 'left-[18px]' : 'left-[2px]'}`}/>
+                            className={`absolute top-[2px] w-4 h-4 rounded-full bg-[var(--color-surface)] transition-all ${cfg.enabled ? 'start-[18px]' : 'start-[2px]'}`}/>
                     </button>
                 </div>
             </div>

@@ -227,7 +227,7 @@ export default function AddServerModal({
         <div>
           <label className="block text-[12px] text-[var(--color-muted2)] mb-1.5">
             {t('addServer.displayName') || 'Display Name'} 
-            <span className="text-[var(--color-muted)] ml-1">({t('common.optional') || 'optional'})</span>
+            <span className="text-[var(--color-muted)] ms-1">({t('common.optional') || 'optional'})</span>
           </label>
           <input
             type="text"
@@ -299,7 +299,7 @@ export default function AddServerModal({
         <div>
           <label className="block text-[12px] text-[var(--color-muted2)] mb-1.5">
             {t('addServer.cwd')}
-            <span className="text-[var(--color-muted)] ml-1">({t('common.optional') || 'optional'})</span>
+            <span className="text-[var(--color-muted)] ms-1">({t('common.optional') || 'optional'})</span>
           </label>
           <input
             type="text"
@@ -376,7 +376,7 @@ export default function AddServerModal({
               className="grid grid-cols-2 gap-2"
               iconSize={20}
               check="check"
-              checkClassName="w-4 h-4 text-[var(--color-accent)] ml-auto"
+              checkClassName="w-4 h-4 text-[var(--color-accent)] ms-auto"
               variant="sync"
               baseClass="flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors"
               selectedClass="border-[var(--color-accent)] bg-[var(--color-accent)]/10"
@@ -391,7 +391,8 @@ export default function AddServerModal({
             onClick={() => setShowJsonInput(!showJsonInput)}
             className="flex items-center gap-2 text-[13px] text-[var(--color-accent)] hover:text-[#5ac8fa]"
           >
-            <svg className={`w-4 h-4 transition-transform ${showJsonInput ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            {/* T-RTL：展开箭头有方向性，RTL 下水平镜像（rotate-90 与 scaleX(-1) 叠加顺序由 CSS transform 保持） */}
+            <svg className={`w-4 h-4 rtl-flip transition-transform ${showJsonInput ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
             {t('addServer.pasteJson') || 'Paste JSON Configuration'}

@@ -1010,7 +1010,7 @@ export default function Library() {
         <div className="flex flex-col h-full bg-[var(--color-bg)]">
             {/* 头部工具栏（一体化标题栏：mac 上兼作拖拽区并为交通灯留白） */}
             <div
-                className={`flex items-center justify-between gap-3 px-4 h-[38px] drag-region border-b border-[var(--color-border)] bg-[var(--color-bg)] sticky top-0 z-10 ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
+                className={`flex items-center justify-between gap-3 px-4 h-[38px] drag-region border-b border-[var(--color-border)] bg-[var(--color-bg)] sticky top-0 z-10 ${isMac ? 'ps-20' : 'pe-[140px]'}`}>
                 <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden no-drag">
                     {/* Tab 切换 */}
                     <div className="flex items-center bg-[var(--color-surface-hover)] rounded-lg p-0.5 shrink-0">
@@ -1599,7 +1599,7 @@ export default function Library() {
                                         <div className="flex-1 min-w-0">
                                             <div className="text-[12px] text-[var(--color-text)] font-medium truncate">
                                                 {c.name}
-                                                <span className="text-[var(--color-muted)] font-normal ml-1.5">
+                                                <span className="text-[var(--color-muted)] font-normal ms-1.5">
                                                     → {getDisplayName(c.target)}
                                                 </span>
                                             </div>

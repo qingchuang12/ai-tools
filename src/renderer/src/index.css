@@ -94,6 +94,38 @@ body {
   background: var(--color-scrollbar-hover);
 }
 
+/* ======================= RTL（阿拉伯语）适配 =======================
+   dir="rtl" 由 i18n.applyDocumentLanguage 设置。组件的方向性样式已全部换成逻辑工具类
+   （ms-/me-/ps-/pe-/start-/end-/text-start/text-end/border-s/border-e），随 dir 自动镜像；
+   下面是 Tailwind 工具类表达不了、必须手写 CSS 的几处：
+   1. 有方向的图标（箭头 / chevron）标 `.rtl-flip`，在 RTL 下水平镜像；
+   2. Markdown 正文的对齐与列表缩进（第三方渲染，无法加类名）；
+   3. 横向滚动容器与文本溢出方向。 */
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+[dir="rtl"] .github-markdown {
+  text-align: right;
+}
+
+[dir="rtl"] .github-markdown ol,
+[dir="rtl"] .github-markdown ul {
+  padding-inline-start: 2em;
+}
+
+[dir="rtl"] .github-markdown blockquote {
+  border-inline-start: 0.25em solid #30363d;
+  border-inline-end: none;
+}
+
+/* RTL 下截断省略号应在**左侧**（行首在右），否则省略号出现在句子开头很怪 */
+[dir="rtl"] .truncate,
+[dir="rtl"] .text-ellipsis {
+  direction: rtl;
+  text-align: right;
+}
+
 /* 拖拽区域 */
 .drag-region {
   -webkit-app-region: drag;
@@ -308,10 +340,10 @@ select:focus {
   overflow-wrap: normal;
 }
 
-/* GitHub 任务列表 */
+/* GitHub 任务列表（用逻辑属性：阿语下缩进与复选框自动换到右侧） */
 .github-markdown ul:has(input[type="checkbox"]) {
   list-style: none;
-  padding-left: 1.5em;
+  padding-inline-start: 1.5em;
 }
 
 .github-markdown li:has(input[type="checkbox"]) {
@@ -320,7 +352,7 @@ select:focus {
 
 .github-markdown li:has(input[type="checkbox"]) input {
   position: absolute;
-  left: -1.5em;
+  inset-inline-start: -1.5em;
   top: 0.3em;
 }
 
@@ -337,7 +369,7 @@ select:focus {
 .github-markdown .markdown-alert {
   padding: 8px 16px;
   margin-bottom: 16px;
-  border-left: 4px solid;
+  border-inline-start: 4px solid;
   border-radius: 6px;
 }
 

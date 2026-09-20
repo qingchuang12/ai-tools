@@ -158,7 +158,7 @@ function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps
 
             {/* 底部信息 - 紧凑设计 */}
             <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--color-border)]/50">
-                <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-[var(--color-muted)] flex-1 min-w-0 mr-2">
+                <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-[var(--color-muted)] flex-1 min-w-0 me-2">
                     {/* 分类 tags - 完整展示多分类（flex-wrap 溢出换行，title 悬停看全名） */}
                     {catList.map((label, i) => {
                         const cc = getCategoryColor(rawCatList[i] ?? label);

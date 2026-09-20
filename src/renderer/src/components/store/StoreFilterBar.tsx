@@ -65,7 +65,7 @@ export default function StoreFilterBar({
 
         {facets.sourceFilter && facets.sourceFilter.length > 0 && (
           <>
-            <span className="text-[12px] text-[var(--color-muted)] shrink-0 ml-2">{t('store.source')}</span>
+            <span className="text-[12px] text-[var(--color-muted)] shrink-0 ms-2">{t('store.source')}</span>
             <select
               value={sourceFilter}
               onChange={e => onSourceFilterChange(e.target.value)}
@@ -83,7 +83,7 @@ export default function StoreFilterBar({
         {hasActiveFilters && (
           <button
             onClick={onClearFilters}
-            className="ml-auto text-[12px] text-[var(--color-muted2)] hover:text-[var(--color-accent)] transition-colors"
+            className="ms-auto text-[12px] text-[var(--color-muted2)] hover:text-[var(--color-accent)] transition-colors"
           >
             {t('store.clearFilters')}
           </button>

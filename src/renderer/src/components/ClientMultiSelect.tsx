@@ -24,7 +24,7 @@ interface ClientMultiSelectProps {
     iconSize?: number;
     /** 勾选框样式：check=对勾 svg；square=方形勾选框（CreateSkillModal 用） */
     check?: 'check' | 'square';
-    /** 勾选 svg 额外类（如 ml-auto / 尺寸 / 颜色），默认 w-5 h-5 */
+    /** 勾选 svg 额外类（如 ms-auto / 尺寸 / 颜色），默认 w-5 h-5 */
     checkClassName?: string;
     /** 配色变体，决定默认 base/选中/未选/禁用 类 */
     variant?: Variant;
@@ -51,19 +51,19 @@ interface ClientMultiSelectProps {
 
 const VARIANT_CLASSES: Record<Variant, { base: string; selected: string; unselected: string; disabled: string }> = {
     sync: {
-        base: 'flex items-center gap-3 p-3 rounded-md border transition-all text-left',
+        base: 'flex items-center gap-3 p-3 rounded-md border transition-all text-start',
         selected: 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/30 text-[var(--color-accent)]',
         unselected: 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-muted)]',
         disabled: 'bg-[#34c759]/10 border-[#34c759]/30 text-[#34c759]',
     },
     uninstall: {
-        base: 'flex items-center gap-3 p-3 rounded-md border transition-all text-left',
+        base: 'flex items-center gap-3 p-3 rounded-md border transition-all text-start',
         selected: 'bg-[#ff3b30]/10 border-[#ff3b30]/30 text-[#ff3b30]',
         unselected: 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-muted)]',
         disabled: 'bg-[#34c759]/10 border-[#34c759]/30 text-[#34c759]',
     },
     install: {
-        base: 'flex items-center gap-2 p-3 rounded-md border text-left transition-colors',
+        base: 'flex items-center gap-2 p-3 rounded-md border text-start transition-colors',
         selected: 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/30 text-[var(--color-accent)]',
         unselected: 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-muted)]',
         disabled: 'bg-[#34c759]/10 border-[#34c759]/30 text-[#34c759]',

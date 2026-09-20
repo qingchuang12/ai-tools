@@ -153,7 +153,7 @@ export default function History() {
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg)]">
       {/* 头部 */}
-      <div className={`flex items-center justify-between px-4 py-2 drag-region relative border-b border-[var(--color-border)] ${isMac ? 'pl-20' : 'pr-[140px]'}`}>
+      <div className={`flex items-center justify-between px-4 py-2 drag-region relative border-b border-[var(--color-border)] ${isMac ? 'ps-20' : 'pe-[140px]'}`}>
         <div className="flex items-center gap-4">
           <h1 className="text-[15px] font-semibold text-[var(--color-text)]">
             {t('history.title')}

@@ -490,7 +490,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                             setImportMenuOpen(false);
                                             importFileInputRef.current?.click();
                                         }}
-                                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-left text-[13px] text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+                                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-start text-[13px] text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
@@ -504,7 +504,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                             setImportMenuOpen(false);
                                             void handlePickFolder();
                                         }}
-                                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-left text-[13px] text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+                                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-start text-[13px] text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
@@ -561,7 +561,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                             <div className="mb-2 flex items-center justify-between">
                                 <label
                                     className="text-[12px] font-medium text-[var(--color-muted2)]">{t('library.attachedFiles') || '附属文件'}
-                                    <span className="ml-1 text-[var(--color-muted)]">({importFiles.length})</span></label>
+                                    <span className="ms-1 text-[var(--color-muted)]">({importFiles.length})</span></label>
                                 <span className="text-[11px] text-[var(--color-muted)]">{t('library.fileImportHint') || '随 Skill 一并导入，保存时写入目标客户端'}</span>
                             </div>
                             <div className="max-h-[150px] overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">

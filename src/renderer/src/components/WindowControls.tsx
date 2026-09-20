@@ -26,7 +26,7 @@ export default function WindowControls() {
     if (isMac) return null;
 
     return (
-        <div className="absolute right-0 top-0 h-full flex items-stretch no-drag">
+        <div className="absolute end-0 top-0 h-full flex items-stretch no-drag">
             <button
                 className="win-ctrl"
                 onClick={() => api.window.minimize()}

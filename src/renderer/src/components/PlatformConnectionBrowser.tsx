@@ -126,7 +126,7 @@ export default function PlatformConnectionBrowser({
         <span className="text-[12px] text-[var(--color-muted2)]">
           {t('platformBrowser.directSource')}：<span className="text-[var(--color-text)]">{sourceName}</span>
           <span
-              className="ml-1 px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)] text-[12px]">{platformLabel(t, platformType)}</span>
+              className="ms-1 px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)] text-[12px]">{platformLabel(t, platformType)}</span>
         </span>
                 {query && (
                     <span className="text-[12px] text-[var(--color-muted)]">{t('platformBrowser.keywords')}：<span className="text-[var(--color-muted2)]">{query}</span></span>
@@ -170,7 +170,7 @@ export default function PlatformConnectionBrowser({
 
                             {showDiag && (
                                 <div
-                                    className="mt-3 text-left rounded-md bg-[var(--color-bg)] border border-[var(--color-border)] overflow-hidden">
+                                    className="mt-3 text-start rounded-md bg-[var(--color-bg)] border border-[var(--color-border)] overflow-hidden">
                                     <div className="px-3 py-2 border-b border-[var(--color-border)] text-[12px] text-[var(--color-muted)]">
                                         {t('platformBrowser.platform')} {diag.platform} · Base {diag.baseUrl} ·
                                         {t('platformBrowser.token')} {diag.authorized ? t('platformBrowser.attached') : t('platformBrowser.notAttached')}

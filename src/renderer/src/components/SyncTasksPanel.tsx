@@ -143,7 +143,7 @@ export default function SyncTasksPanel() {
 
             {/* 任务列表：可滚动，最多展示固定高度 */}
             {hasTasks ? (
-                <div className="max-h-[200px] overflow-y-auto pr-0.5 space-y-1">
+                <div className="max-h-[200px] overflow-y-auto pe-0.5 space-y-1">
                     {tasks.map((task) => {
                         const meta = STATUS_META[task.status];
                         const isFailed = task.status === 'failed';
@@ -174,7 +174,7 @@ export default function SyncTasksPanel() {
                                         {t(meta.labelKey)}
                                         {isFailed && task.error ? ` · ${task.error}` : ''}
                                         {!isFailed && task.detail ? ` · ${task.detail}` : ''}
-                                        <span className="ml-1 opacity-70">
+                                        <span className="ms-1 opacity-70">
                                             {formatTime(task.finishedAt ?? task.startedAt ?? task.createdAt, t)}
                                         </span>
                                     </div>
