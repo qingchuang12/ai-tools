@@ -15,6 +15,7 @@ import Modal from './Modal';
 import {useActivationStore} from '../store/activationStore';
 import {useElectronAPI} from '../lib/electron';
 import {FEATURE_CLOUD_SYNC} from '../../../shared/license-constants';
+import type {RedeemResult} from '../../../shared/activation-types';
 
 type Mode = 'choose' | 'redeem' | 'offline';
 
@@ -121,6 +122,10 @@ export default function ActivationModal() {
     const [activating, setActivating] = useState(false);
     // 去激活需二次确认：确认前不调任何接口，取消/关闭弹窗都保持已激活状态不变
     const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
+    // R6：换绑态——复用激活流程但走 switchMode（新生效→旧解绑），不先去激活
+    const [switching, setSwitching] = useState(false);
+    // R6：换绑后旧授权解绑失败的轻提示标记（新授权已生效，不阻挡）
+    const [unbindWarn, setUnbindWarn] = useState(false);
 
     useEffect(() => {
         if (modalOpen) {
@@ -132,6 +137,8 @@ export default function ActivationModal() {
             setMsg(null);
             setActivating(false);
             setConfirmingDeactivate(false);
+            setSwitching(false);
+            setUnbindWarn(false);
         }
     }, [modalOpen]);
 
@@ -173,17 +180,10 @@ export default function ActivationModal() {
         }
         setBusy(true);
         setMsg(null);
+        setUnbindWarn(false);
         try {
-            const r = await api.activation.redeem(code.trim(), email.trim());
-            if (r.success && r.state) {
-                setMsg({ type: 'ok', text: t('license.status.activated') });
-                await refresh();
-                setTimeout(() => closeModal(), 800);
-            } else if (r.error) {
-                setMsg({ type: 'err', text: t(r.error) });
-            } else {
-                setMsg({ type: 'err', text: t('license.errors.generic') });
-            }
+            const r = await api.activation.redeem(code.trim(), email.trim(), switching);
+            await finalizeResult(r);
         } finally {
             setBusy(false);
         }
@@ -192,16 +192,12 @@ export default function ActivationModal() {
     const doImportFile = async () => {
         setBusy(true);
         setMsg(null);
+        setUnbindWarn(false);
         try {
-            const r = await api.activation.importLicenseFile();
+            const r = await api.activation.importLicenseFile(switching);
             // 用户取消选择：success=false 且无 error，不应提示失败
-            if (r.success && r.state) {
-                setMsg({ type: 'ok', text: t('license.status.activated') });
-                await refresh();
-                setTimeout(() => closeModal(), 800);
-            } else if (r.error) {
-                setMsg({ type: 'err', text: t(r.error) });
-            }
+            if (!r.success && !r.error) return;
+            await finalizeResult(r);
         } finally {
             setBusy(false);
         }
@@ -210,12 +206,11 @@ export default function ActivationModal() {
     const doImportText = async () => {
         setBusy(true);
         setMsg(null);
+        setUnbindWarn(false);
         try {
-            const r = await api.activation.importLicenseText(text.trim());
+            const r = await api.activation.importLicenseText(text.trim(), switching);
             if (r.success && r.state) {
-                setMsg({ type: 'ok', text: t('license.status.activated') });
-                await refresh();
-                setTimeout(() => closeModal(), 800);
+                await finalizeResult(r);
             } else if (r.error) {
                 setMsg({ type: 'err', text: t(r.error) });
             } else if (text.trim()) {
@@ -224,6 +219,45 @@ export default function ActivationModal() {
         } finally {
             setBusy(false);
         }
+    };
+
+    /**
+     * 激活/换绑结果统一收尾：成功→刷新状态并提示（换绑用专门文案）；
+     * 换绑时旧授权解绑失败仅标 `unbindWarn` 轻提示，不回滚新授权、不阻挡（新生效优先）。
+     */
+    const finalizeResult = async (r: RedeemResult) => {
+        if (r.success && r.state) {
+            setMsg({
+                type: 'ok',
+                text: switching ? t('license.modal.switchSuccess') : t('license.status.activated'),
+            });
+            setUnbindWarn(!!r.unbindWarning);
+            await refresh();
+            // 解绑失败时给用户留出阅读轻提示的时间，不自动关弹窗
+            if (!r.unbindWarning) setTimeout(() => closeModal(), 800);
+        } else if (r.error) {
+            setUnbindWarn(false);
+            setMsg({ type: 'err', text: t(r.error) });
+        } else {
+            setUnbindWarn(false);
+            setMsg({ type: 'err', text: t('license.errors.generic') });
+        }
+    };
+
+    /** R6：进入换绑态——复用激活流程，但走 switchMode（新生效→旧解绑），不先去激活 */
+    const startSwitch = () => {
+        setSwitching(true);
+        setMode('choose');
+        setMsg(null);
+        setUnbindWarn(false);
+    };
+
+    /** R6：取消换绑——退回已激活视图，旧授权保持不动 */
+    const cancelSwitch = () => {
+        setSwitching(false);
+        setMode('choose');
+        setMsg(null);
+        setUnbindWarn(false);
     };
 
     const doDeactivate = async () => {
@@ -246,8 +280,9 @@ export default function ActivationModal() {
             : state.status === 'trial' ? t('license.status.trial')
                 : t('license.status.activated');
 
-    // 激活流程页面对「未激活」与「试用中且点了立即激活」共用；已激活态不显示
-    const showActivationFlow = state.status === 'inactive' || (state.status === 'trial' && activating);
+    // 激活流程页面对「未激活」「试用中且点了立即激活」「已激活且换绑中」共用
+    const showActivationFlow =
+        state.status === 'inactive' || (state.status === 'trial' && activating) || (state.status === 'activated' && switching);
 
     return (
         <Modal isOpen={modalOpen} onClose={closeModal} title={title}>
@@ -276,10 +311,14 @@ export default function ActivationModal() {
                         {t('license.modal.redeem')}
                     </button>
 
-                    {msg && (
-                        <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[#34c759]' : 'text-[#ff3b30]'}`}>
-                            {msg.text}
-                        </p>
+                    {state.status === 'activated' && switching && (
+                        <button
+                            onClick={cancelSwitch}
+                            disabled={busy}
+                            className="w-full px-4 py-2 rounded-lg text-[12px] text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:underline transition-colors"
+                        >
+                            {t('license.modal.cancelSwitch')}
+                        </button>
                     )}
 
                     {state.status === 'trial' && (
@@ -320,12 +359,6 @@ export default function ActivationModal() {
                         />
                     </div>
                     <p className="text-[12px] text-[var(--color-muted)]">{t('license.modal.redeemHint')}</p>
-
-                    {msg && (
-                        <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[#34c759]' : 'text-[#ff3b30]'}`}>
-                            {msg.text}
-                        </p>
-                    )}
 
                     <button
                         onClick={doRedeem}
@@ -380,12 +413,6 @@ export default function ActivationModal() {
                         </div>
                     )}
 
-                    {msg && (
-                        <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[#34c759]' : 'text-[#ff3b30]'}`}>
-                            {msg.text}
-                        </p>
-                    )}
-
                     <button
                         onClick={() => { setMode('choose'); setMsg(null); }}
                         className="w-full px-4 py-2 rounded-lg text-[12px] text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:underline transition-colors"
@@ -413,7 +440,7 @@ export default function ActivationModal() {
                 </div>
             )}
 
-            {state.status === 'activated' && (
+            {state.status === 'activated' && !switching && (
                 <div className="space-y-4">
                     {state.degraded === 'hardware_changed' && state.licenseKey && (
                         <div className="px-3 py-2 rounded-md bg-[#ff9f0a]/10 border border-[#ff9f0a]/30 text-[12px] text-[#ff9f0a]">
@@ -435,6 +462,15 @@ export default function ActivationModal() {
                                 {state.licenseKey}
                             </span>
                         </div>
+                    )}
+                    {!confirmingDeactivate && (
+                        <button
+                            onClick={startSwitch}
+                            disabled={busy}
+                            className="w-full px-4 py-2.5 rounded-lg bg-[var(--color-accent)] text-white text-[13px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
+                        >
+                            {t('license.modal.switch')}
+                        </button>
                     )}
                     {!confirmingDeactivate ? (
                         <button
@@ -468,6 +504,14 @@ export default function ActivationModal() {
                         </div>
                     )}
                 </div>
+            )}
+            {msg && (
+                <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[#34c759]' : 'text-[#ff3b30]'}`}>
+                    {msg.text}
+                </p>
+            )}
+            {unbindWarn && (
+                <p className="text-[12px] text-[#ff9f0a]">{t('license.modal.unbindFailed')}</p>
             )}
             <FeatureList t={t} hasFeature={hasFeature} />
         </Modal>

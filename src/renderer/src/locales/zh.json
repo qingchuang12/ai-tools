@@ -50,7 +50,11 @@
       "upgrade": "升级",
       "needActivation": "需要激活后才能使用云同步",
       "openFeatures": "试用 / 激活后开放的功能",
-      "featureLocked": "尚未解锁 · 试用或激活后即可使用"
+      "featureLocked": "尚未解锁 · 试用或激活后即可使用",
+      "switch": "换绑新授权",
+      "switchSuccess": "已换绑，新授权生效",
+      "unbindFailed": "旧授权解绑未成功（不影响新授权使用，可稍后在已激活页重试）",
+      "cancelSwitch": "取消换绑"
     },
     "errors": {
       "generic": "激活失败，请检查激活码或联系支持",

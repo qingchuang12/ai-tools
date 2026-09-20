@@ -37,6 +37,16 @@ export const CHECKOUT_PAGE_PATH = '/checkout/index.html';
 export const REDEEM_API_PATH = '/api/redeem/redeem';
 
 /**
+ * R6：释放本机绑定（换绑场景）端点（服务端 LicenseController，公开）。
+ * 持有旧授权签名 token 即证明归属，校验通过且机器码一致后清空 `machineCode`，
+ * 不吊销授权本身（与已删除的「自吊销」语义不同）。
+ */
+export const UNBIND_API_PATH = '/api/licenses/unbind';
+
+/** R6：解绑为 best-effort 旁路请求，用比兑换（15s）短的超时，避免换绑时主进程被拖死 */
+export const UNBIND_API_TIMEOUT_MS = 8000;
+
+/**
  * C8：机器码首次出现时间端点（服务端 MachineController，公开只读）。
  * 客户端首跑联网问一次，把试用起点回溯到服务端最早见到这台机器的时间。
  */

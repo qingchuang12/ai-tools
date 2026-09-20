@@ -50,7 +50,11 @@
       "upgrade": "Upgrade",
       "needActivation": "Activation required to use cloud sync",
       "openFeatures": "Features unlocked by trial or activation",
-      "featureLocked": "Locked · available after trial or activation"
+      "featureLocked": "Locked · available after trial or activation",
+      "switch": "Switch license",
+      "switchSuccess": "Switched. New license is active.",
+      "unbindFailed": "Old license could not be released. New license still works; retry later from the Activated view.",
+      "cancelSwitch": "Cancel switch"
     },
     "errors": {
       "generic": "Activation failed. Check your code or contact support.",

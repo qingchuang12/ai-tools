@@ -71,6 +71,11 @@ export interface RedeemResult {
     error?: string;
     category?: 'network' | 'license';
     state?: ActivationState;
+    /**
+     * R6：换绑场景下旧授权解绑失败的轻提示标记。新授权已本地生效，解绑失败仅作「尽力而为」，
+     * 不回滚、不阻挡激活，UI 据此展示一条 amber 轻提示即可。
+     */
+    unbindWarning?: boolean;
 }
 
 export interface ActivationApi {
@@ -83,12 +88,13 @@ export interface ActivationApi {
     /**
      * 兑换码 + 购买邮箱 → 后端 redeem → 本地验签 → 落盘。
      * 邮箱是服务端的客户标识（必填）：未注册邮箱会在服务端自动建访客账户。
+     * @param switchMode R6 换绑：为 true 时新授权生效成功后再 best-effort 释放旧授权的本机绑定。
      */
-    redeem: (code: string, email: string) => Promise<RedeemResult>;
-    /** 主进程弹文件选择器导入 license.lic */
-    importLicenseFile: () => Promise<RedeemResult>;
-    /** 直接喂文本（裸 token 或 JSON），供拖拽/粘贴场景 */
-    importLicenseText: (text: string) => Promise<RedeemResult>;
+    redeem: (code: string, email: string, switchMode?: boolean) => Promise<RedeemResult>;
+    /** 主进程弹文件选择器导入 license.lic。@param switchMode 见 `redeem` */
+    importLicenseFile: (switchMode?: boolean) => Promise<RedeemResult>;
+    /** 直接喂文本（裸 token 或 JSON），供拖拽/粘贴场景。@param switchMode 见 `redeem` */
+    importLicenseText: (text: string, switchMode?: boolean) => Promise<RedeemResult>;
     /** 去激活：回到未激活（不重置试用） */
     deactivate: () => Promise<ActivationState>;
     /** 功能 gate 查询（渲染层仅用于 UI 态，安全边界在主进程） */

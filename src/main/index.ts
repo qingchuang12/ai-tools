@@ -610,14 +610,17 @@ ipcMain.handle('activation:get-machine-code', async () => getMachineCode());
 // 按配置模板拼出带 machineId 的收银台 URL（URL 来自包外配置，不在渲染层硬编码）
 ipcMain.handle('activation:get-purchase-url', async (): Promise<string> => license.getPurchaseUrl());
 
-// 兑换码 → 后端 redeem → 本地验签 → 落盘
-ipcMain.handle('activation:redeem', async (_e, code: string, email: string) => license.redeem(code, email));
+// 兑换码 → 后端 redeem → 本地验签 → 落盘（switchMode 透传 R6 换绑语义）
+ipcMain.handle('activation:redeem', async (_e, code: string, email: string, switchMode?: boolean) =>
+    license.redeem(code, email, switchMode));
 
 // 导入 license.lic（主进程弹文件选择器）
-ipcMain.handle('activation:import-license-file', async () => license.importLicenseFile());
+ipcMain.handle('activation:import-license-file', async (_e, switchMode?: boolean) =>
+    license.importLicenseFile(switchMode));
 
 // 导入授权文本（裸 token 或 JSON 包装），供拖拽/粘贴场景
-ipcMain.handle('activation:import-license-text', async (_e, text: string) => license.importLicenseText(text));
+ipcMain.handle('activation:import-license-text', async (_e, text: string, switchMode?: boolean) =>
+    license.importLicenseText(text, switchMode));
 
 // 去激活：回到未激活
 ipcMain.handle('activation:deactivate', async () => deactivate());

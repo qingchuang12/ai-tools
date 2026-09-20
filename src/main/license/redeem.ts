@@ -15,7 +15,7 @@
 
 import {dialog} from 'electron';
 import type {RedeemResult} from '../../shared/activation-types';
-import {CHECKOUT_PAGE_PATH, REDEEM_API_PATH} from './constants';
+import {CHECKOUT_PAGE_PATH, REDEEM_API_PATH, UNBIND_API_PATH, UNBIND_API_TIMEOUT_MS} from './constants';
 import {getConfig} from './config';
 import {logLicenseEvent, PUBLIC_ERROR_KEY, PUBLIC_NETWORK_ERROR_KEY} from './errors';
 import {getMachineCode} from './machine-code';
@@ -156,4 +156,30 @@ export async function readLicenseFileViaDialog(): Promise<string | null> {
 /** 兑换失败结果的统一构造（避免各处手写字面量导致文案不一致） */
 export function redeemFailure(category: 'network' | 'license'): RedeemResult {
     return {success: false, category, error: category === 'network' ? PUBLIC_NETWORK_ERROR_KEY : PUBLIC_ERROR_KEY};
+}
+
+/**
+ * R6：换绑时释放旧授权在当前设备的绑定（**best-effort**）。
+ * 持有旧 token 即证明归属；服务端校验通过且机器码一致后清空 `machineCode`，不吊销授权本身。
+ * 任何失败（网络 / 超时 / 非 2xx）一律返回 `false`，**不抛**——
+ * 调用方按「新生效优先、解绑尽力而为」处理：解绑失败不影响已生效的新授权。
+ */
+export async function unbindPriorOnServer(signedToken: string, machineId: string): Promise<boolean> {
+    const cfg = getConfig();
+    try {
+        const response = await fetch(`${cfg.serviceBaseUrl}${UNBIND_API_PATH}`, {
+            method: 'POST',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({signedToken, machineId}),
+            signal: AbortSignal.timeout(Math.max(1000, UNBIND_API_TIMEOUT_MS)),
+        });
+        if (!response.ok) {
+            logLicenseEvent('LIC_UNBIND_REJECTED', {event: 'unbind_rejected', status: response.status});
+            return false;
+        }
+        return true;
+    } catch (error) {
+        logLicenseEvent('LIC_UNBIND_NETWORK', {event: 'unbind_request_failed', reason: (error as Error).name});
+        return false;
+    }
 }

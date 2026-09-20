@@ -632,11 +632,12 @@ const api = {
         getState: (): Promise<ActivationState> => ipcRenderer.invoke('activation:get-state'),
         getMachineCode: (): Promise<string> => ipcRenderer.invoke('activation:get-machine-code'),
         getPurchaseUrl: (): Promise<string> => ipcRenderer.invoke('activation:get-purchase-url'),
-        redeem: (code: string, email: string): Promise<RedeemResult> =>
-            ipcRenderer.invoke('activation:redeem', code, email),
-        importLicenseFile: (): Promise<RedeemResult> => ipcRenderer.invoke('activation:import-license-file'),
-        importLicenseText: (text: string): Promise<RedeemResult> =>
-            ipcRenderer.invoke('activation:import-license-text', text),
+        redeem: (code: string, email: string, switchMode?: boolean): Promise<RedeemResult> =>
+            ipcRenderer.invoke('activation:redeem', code, email, switchMode),
+        importLicenseFile: (switchMode?: boolean): Promise<RedeemResult> =>
+            ipcRenderer.invoke('activation:import-license-file', switchMode),
+        importLicenseText: (text: string, switchMode?: boolean): Promise<RedeemResult> =>
+            ipcRenderer.invoke('activation:import-license-text', text, switchMode),
         deactivate: (): Promise<ActivationState> => ipcRenderer.invoke('activation:deactivate'),
         hasFeature: (feature: string): Promise<boolean> => ipcRenderer.invoke('license:has-feature', feature),
     } as ActivationApi,

@@ -17,7 +17,14 @@ import {assertFeature as gateAssertFeature} from './feature-gate';
 import {readFirstRunAt, writeFirstRun} from './first-run';
 import {getHardwareFactors, getMachineCodePair, warmupMachineCode} from './machine-code';
 import {probeMachineFirstSeen} from './machine-probe';
-import {buildCheckoutUrl, fetchRedeem, parseLicenseText, readLicenseFileViaDialog, redeemFailure,} from './redeem';
+import {
+    buildCheckoutUrl,
+    fetchRedeem,
+    parseLicenseText,
+    readLicenseFileViaDialog,
+    redeemFailure,
+    unbindPriorOnServer,
+} from './redeem';
 import type {TrialEvaluation} from './trial';
 import {
     applyMachineFirstSeen,
@@ -409,30 +416,62 @@ async function applySignedToken(token: string, serverTimeMs: number | null): Pro
     return {success: true, state: activatedState(outcome.payload, cfg, license, null, pair.strong)};
 }
 
+/**
+ * R6 原子换绑内核：新授权**先本地生效**（覆盖旧 token），生效成功后才去释放旧授权的本机绑定。
+ *
+ * - `switchMode=false`：纯激活，行为与 `applySignedToken` 一致；
+ * - `switchMode=true`：先抓当前 vault 的旧 `signed_token`，跑激活（整对象覆盖＝新生效）；
+ *   成功后若旧 token 存在，则 best-effort 调后端解绑旧码。解绑失败**只标 `unbindWarning`**，
+ *   不回滚新激活、不阻挡（用户拍板：新生效优先、解绑尽力而为）。
+ */
+async function applyWithSwitch(
+    token: string,
+    serverTimeMs: number | null,
+    switchMode: boolean,
+): Promise<RedeemResult> {
+    const priorToken = switchMode ? (await readVault()).license?.signed_token ?? null : null;
+    const result = await applySignedToken(token, serverTimeMs);
+    if (!result.success || !priorToken) return result;
+
+    // 新授权已本地生效，尽力释放旧授权的本机绑定（不阻挡、不回滚）
+    let machineId = '';
+    try {
+        machineId = (await getMachineCodePair()).strong;
+    } catch {
+        machineId = '';
+    }
+    const ok = await unbindPriorOnServer(priorToken, machineId);
+    if (!ok) {
+        logLicenseEvent('LIC_UNBIND_FAILED', {event: 'switch_unbind_best_effort_failed'});
+        result.unbindWarning = true;
+    }
+    return result;
+}
+
 /** 兑换码 + 购买邮箱 → 后端 redeem → 本地验签 → 落盘（邮箱为服务端必填的客户标识） */
-export async function redeem(code: string, email: string): Promise<RedeemResult> {
+export async function redeem(code: string, email: string, switchMode = false): Promise<RedeemResult> {
     const result = await fetchRedeem(code, email);
     if (!result.ok || !result.token) {
         return redeemFailure(result.category ?? 'license');
     }
-    return applySignedToken(result.token, result.serverTimeMs ?? null);
+    return applyWithSwitch(result.token, result.serverTimeMs ?? null, switchMode);
 }
 
 /** 导入 `.lic` 文本（裸 token 或 JSON 包装） */
-export async function importLicenseText(text: string): Promise<RedeemResult> {
+export async function importLicenseText(text: string, switchMode = false): Promise<RedeemResult> {
     const token = parseLicenseText(text);
     if (!token) {
         logLicenseEvent('LIC_MALFORMED', {event: 'import_license_text_unparsable'});
         return {success: false, category: 'license', error: PUBLIC_ERROR_KEY};
     }
-    return applySignedToken(token, null);
+    return applyWithSwitch(token, null, switchMode);
 }
 
 /** 导入 `license.lic` 文件（主进程弹选择器）。用户取消时 `error` 为空，UI 不应提示失败 */
-export async function importLicenseFile(): Promise<RedeemResult> {
+export async function importLicenseFile(switchMode = false): Promise<RedeemResult> {
     const text = await readLicenseFileViaDialog();
     if (text === null) return {success: false};
-    return importLicenseText(text);
+    return importLicenseText(text, switchMode);
 }
 
 /**
