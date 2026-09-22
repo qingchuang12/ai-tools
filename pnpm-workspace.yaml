@@ -1,5 +1,6 @@
 allowBuilds:
   cpu-features: false
   electron: true
+  electron-winstaller: set this to true or false
   esbuild: true
   ssh2: false
