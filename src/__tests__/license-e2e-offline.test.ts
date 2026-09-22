@@ -25,8 +25,6 @@ const OTHER_MID = {strong: 'ZZZZ-YYYY-XXXX-WWWW', soft: 'ZZZZ-YYYY-XXXX-VVVV'};
 const mocks = vi.hoisted(() => ({
     config: {
         version: 1 as const,
-        enabled: true,
-        killSwitch: false,
         sku: 'pro-buyout',
         acceptedSkus: ['pro-buyout', 'pro-subscription'],
         skuFeatures: {'pro-buyout': ['cloud_sync'], 'pro-subscription': ['cloud_sync']} as Record<string, string[]>,
@@ -169,13 +167,7 @@ describe('授权链路离线端到端', () => {
         expect(moved.degraded).toBe('machine_mismatch');
         expect((await license.assertFeature('cloud_sync')).allowed).toBe(false);
 
-        // ⑥ 应急开关（killSwitch）：猛然放行，用于线上止血
-        mocks.config.killSwitch = true;
-        expect((await license.assertFeature('cloud_sync')).allowed).toBe(true);
-        expect((await license.getState(null)).status).toBe('activated');
-
-        // ⑦ 开关复位 + 机器还原：授权自动回来
-        mocks.config.killSwitch = false;
+        // ⑦ 机器还原：授权自动回来
         mocks.mid = {...ORIGINAL_MID};
         expect((await license.getState(null)).status).toBe('activated');
         expect((await license.assertFeature('cloud_sync')).allowed).toBe(true);

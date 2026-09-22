@@ -100,11 +100,6 @@ export async function verifyToken(token: string, options: VerifyOptions = {}): P
     const cfg = getConfig();
     const kid = typeof header.kid === 'string' && header.kid.trim() ? header.kid.trim() : cfg.defaultKid || DEFAULT_KID;
 
-    // 应急开关：enabled=false 时模块整体不介入；killSwitch=true 时跳过验签与 claim 校验。
-    // 二者都「放行」，但保留内部码以便日志区分（事后必须复位）。
-    if (!cfg.enabled) return {ok: true, code: 'LIC_DISABLED', payload: payload as TokenPayload, kid};
-    if (cfg.killSwitch) return {ok: true, code: 'LIC_OK', payload: payload as TokenPayload, kid};
-
     // alg 若声明则必须是 EdDSA，避免被降级到其它算法
     if (header.alg !== undefined && header.alg !== 'EdDSA') {
         return fail('LIC_MALFORMED', {event: 'verify_alg', alg: String(header.alg)});

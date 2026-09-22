@@ -21,8 +21,6 @@ import {TEST_KEY_PAIR} from './helpers/license-test-keys';
 const mocks = vi.hoisted(() => ({
     config: {
         version: 1 as const,
-        enabled: true,
-        killSwitch: false,
         sku: 'pro-subscription',
         acceptedSkus: ['pro-buyout', 'pro-subscription'],
         skuFeatures: {'pro-buyout': ['cloud_sync'], 'pro-subscription': ['cloud_sync']} as Record<string, string[]>,

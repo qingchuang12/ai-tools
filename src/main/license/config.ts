@@ -85,8 +85,6 @@ function cloneDefault(): LicenseConfig {
     const d = DEFAULT_LICENSE_CONFIG;
     return {
         version: 1,
-        enabled: d.enabled,
-        killSwitch: d.killSwitch,
         sku: d.sku,
         acceptedSkus: [...d.acceptedSkus],
         skuFeatures: cloneSkuFeatures(d.skuFeatures),
@@ -109,8 +107,6 @@ export function mergeConfig(raw: unknown): LicenseConfig {
     const src = asRecord(raw);
     if (!src) return base;
 
-    base.enabled = bool(src.enabled, base.enabled);
-    base.killSwitch = bool(src.killSwitch, base.killSwitch);
     base.sku = str(src.sku, base.sku);
     base.acceptedSkus = strArray(src.acceptedSkus, base.acceptedSkus);
     // skuFeatures 是「整表覆盖」语义：包外只写关心的 SKU 即可，写错的条目直接丢弃；

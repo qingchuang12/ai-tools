@@ -3,8 +3,21 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {obfuscateChunks} from 'vite-plugin-electron-obfuscator';
 
+// 编译期 build flag（renderer 侧）：值原样透传，归一化在 src/shared/build-flags.ts。
+// define 产物中不存在 __BUILD_FLAGS__ 标识符（直接内联对象字面量），与 terser/混淆链兼容。
+const buildFlagEnv = {
+    edition: process.env.AI_TOOLS_EDITION ?? null,
+    adRegion: process.env.AI_TOOLS_AD_REGION ?? null,
+    adsEnabled: process.env.AI_TOOLS_ADS ?? null,
+    cloudSyncEnabled: process.env.AI_TOOLS_CLOUD_SYNC ?? null,
+    cloudSyncActivationUnlocks: process.env.AI_TOOLS_CLOUD_SYNC_ACTIVATION_UNLOCKS ?? null,
+};
+
 export default defineConfig({
     plugins: [react(), obfuscateChunks()],
+    define: {
+        __BUILD_FLAGS__: JSON.stringify(buildFlagEnv),
+    },
     root: 'src/renderer',
     base: './',
     build: {

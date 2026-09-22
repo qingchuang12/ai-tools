@@ -18,12 +18,21 @@ import McpSourceManager from '../components/McpSourceManager';
 import CloudSyncManager from '../components/CloudSyncManager';
 import WindowControls from '../components/WindowControls';
 import {type ThemeMode, useStore} from '../store/useStore';
+import {useActivationStore} from '../store/activationStore';
+import {BUILD_FLAGS} from '../build-flags';
 import {ensureLanguageLoaded, SUPPORTED_LANGUAGES} from '../i18n';
 
 export default function Settings() {
     const {t, i18n} = useTranslation();
     const api = useElectronAPI();
     const isMac = useIsMac();
+
+    // 云同步入口：免费版1 恒显（组件内部自行呈现锁态）；免费版2 默认隐藏，激活且拥有
+    // cloud_sync 权益时恢复显示；硬砍模式（cloudSyncActivationUnlocks=false）对激活用户
+    // 也保持隐藏——主进程 IPC 按同一 flag 短路，UI 显示会形成死路入口
+    const cloudSyncEntitled = useActivationStore((s) => s.hasFeature('cloud_sync'));
+    const cloudSyncEntryVisible = BUILD_FLAGS.cloudSyncEnabled
+        || (BUILD_FLAGS.cloudSyncActivationUnlocks && cloudSyncEntitled);
 
 
     const [runtimes, setRuntimes] = useState<AllRuntimes | null>(null);
@@ -544,7 +553,7 @@ export default function Settings() {
                     <ConnectionManager onChanged={handleSourcesChanged}/>
 
                     {/* 云同步 */}
-                    <CloudSyncManager runtimes={runtimes} onChanged={() => loadData()}/>
+                    {cloudSyncEntryVisible && <CloudSyncManager runtimes={runtimes} onChanged={() => loadData()}/>}
 
                     {/* 关于 */}
                     <div

@@ -102,8 +102,6 @@ export const DEFAULT_CLOCK_SKEW_MS = 2 * 60 * 60 * 1000;
 /** 默认配置：包外配置缺失或字段非法时的兜底值（**占位**，上线前通过包外配置覆盖） */
 export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
     version: 1,
-    enabled: true,
-    killSwitch: false,
     sku: PRODUCT_SKU,
     // 接受的 SKU 与「SKU → gate 权益键」映射：可由包外配置覆盖（服务端新增档位无需重新发版）
     acceptedSkus: [...ACCEPTED_SKUS],

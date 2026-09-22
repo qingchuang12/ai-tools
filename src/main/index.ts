@@ -45,6 +45,7 @@ import * as license from './license';
 import {GATE_LOCKED_MESSAGE} from './license/feature-gate';
 import {getCloudSyncStore} from './cloud-sync-store';
 import {getCloudSyncService} from './cloud-sync-service';
+import {CLOUD_SYNC_DISABLED_MESSAGE, cloudSyncHardDisabled} from './build-flags';
 import {checkCloudConsistency, type ConsistencyReport, readCompareEnds} from './cloud-consistency';
 import {getSyncTaskManager, initSyncTaskManager} from './sync-task-manager';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
@@ -243,6 +244,11 @@ app.whenReady().then(async () => {
     // 仅在支持该形态（打包 + NSIS/AppImage）时真正发起；dev / portable / mac 会广播 unsupported。
     setTimeout(() => checkForUpdatesAndNotify(), 3000);
 
+    // 免费版2 编译期硬砍：云同步整体不可用，不产生任何云端流量
+    if (cloudSyncHardDisabled()) {
+        console.warn('[CloudSync] startup pull skipped: disabled by build edition');
+        return;
+    }
     // gate：授权未通过时直接跳过（未授权不该产生云端流量，也不该泄露远端是否可连）
     if (!(await license.assertFeature(FEATURE_CLOUD_SYNC)).allowed) {
         console.warn('[CloudSync] startup pull skipped: license gate denied');
@@ -797,7 +803,10 @@ ipcMain.handle('skills:save-with-cloud-sync', async (_,
     };
 
     try {
-        if (!cloudSyncStore.isActive()) {
+        if (cloudSyncHardDisabled()) {
+            cloud.skipped = true;
+            cloud.message = '云同步在本版本不可用，已跳过';
+        } else if (!cloudSyncStore.isActive()) {
             cloud.skipped = true;
             cloud.message = '云端未配置，已跳过';
         } else if (!clients.includes('cloud')) {
@@ -1195,6 +1204,8 @@ ipcMain.handle('cloud-sync:get-config', async (): Promise<CloudSyncConfig> => {
 ipcMain.handle('cloud-sync:set-config', async (_, patch: CloudSyncConfigInput): Promise<CloudSyncConfig> => {
     // gate 首行：只在「开启」方向拦截，关闭/修改配置不应被授权状态挡住
     if (patch.enabled) {
+        // 免费版2 编译期硬砍时不允许开启（防绕过 UI 入口直调 IPC）
+        if (cloudSyncHardDisabled()) throw new Error(CLOUD_SYNC_DISABLED_MESSAGE);
         const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
         if (!gate.allowed) throw new Error(GATE_LOCKED_MESSAGE);
     }
@@ -1206,12 +1217,14 @@ ipcMain.handle('cloud-sync:set-config', async (_, patch: CloudSyncConfigInput): 
 });
 
 ipcMain.handle('cloud-sync:test', async (): Promise<CloudSyncResult> => {
+    if (cloudSyncHardDisabled()) return {ok: false, message: CLOUD_SYNC_DISABLED_MESSAGE};
     const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
     if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
     return cloudSyncService.testConnection();
 });
 
 ipcMain.handle('cloud-sync:push', async (): Promise<CloudSyncResult> => {
+    if (cloudSyncHardDisabled()) return {ok: false, message: CLOUD_SYNC_DISABLED_MESSAGE};
     const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
     if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
     // 经由同步队列执行（P1-1），与启动 pull / 其他 push 串行，状态可见且避免并发冲突
@@ -1219,6 +1232,7 @@ ipcMain.handle('cloud-sync:push', async (): Promise<CloudSyncResult> => {
 });
 
 ipcMain.handle('cloud-sync:pull', async (): Promise<CloudSyncResult> => {
+    if (cloudSyncHardDisabled()) return {ok: false, message: CLOUD_SYNC_DISABLED_MESSAGE};
     const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
     if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
     return enqueueCloudAndWait('cloud-pull', '从云端下载');
@@ -1231,6 +1245,7 @@ ipcMain.handle('cloud-sync:pull', async (): Promise<CloudSyncResult> => {
  * 云同步未激活时返回空报告（cloud 未激活时暂存区内容无意义，不产生噪音）。
  */
 ipcMain.handle('cloud-sync:check-consistency', async (): Promise<ConsistencyReport> => {
+    if (cloudSyncHardDisabled()) return {items: [], checkedAt: new Date().toISOString()};
     const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
     if (!gate.allowed) return {items: [], checkedAt: new Date().toISOString()};
     if (!getCloudSyncStore().isActive()) {
@@ -1266,6 +1281,7 @@ ipcMain.handle('cloud-sync:read-ends', async (_, req: {
     name: string;
     localClient: string;
 }): Promise<{ local: string | null; cloud: string | null }> => {
+    if (cloudSyncHardDisabled()) return {local: null, cloud: null};
     if (!getCloudSyncStore().isActive()) {
         return {local: null, cloud: null};
     }

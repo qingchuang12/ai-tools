@@ -1,7 +1,5 @@
 {
   "version": 1,
-  "enabled": true,
-  "killSwitch": false,
   "sku": "AI-TOOLS-PRO",
   "acceptedSkus": [
     "pro-buyout",

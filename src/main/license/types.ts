@@ -12,10 +12,6 @@ import type {LicenseErrorCode} from './errors';
 /** 授权配置（源码期落 `assets/license.config.json`，打包后包外 `resources/license/` 可覆盖） */
 export interface LicenseConfig {
     version: 1;
-    /** 总开关：false 时 license 模块整体不介入（状态维持、gate 全放行）——应急热回滚用 */
-    enabled: boolean;
-    /** 熔断：true 时跳过所有验签与 gate（含已激活状态），仅应急，事后必须复位 */
-    killSwitch: boolean;
     sku: string;
     /**
      * 本产品**接受的** SKU 列表：token 的 `sku` 必须命中，否则判 `LIC_SKU_MISMATCH`。

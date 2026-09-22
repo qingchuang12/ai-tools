@@ -15,8 +15,6 @@ import {TEST_KEY_PAIR} from './helpers/license-test-keys';
 const hoisted = vi.hoisted(() => {
     const config = {
         version: 1 as const,
-        enabled: true,
-        killSwitch: false,
         sku: 'AI-TOOLS-PRO',
         // 接受的 SKU = 服务端四个可售档位（见 V4 迁移）；`sku` 仅作产品标识/收银台用
         acceptedSkus: ['pro-buyout', 'pro-plus-buyout', 'pro-subscription', 'pro-plus-subscription'],
@@ -227,18 +225,6 @@ describe('verifyToken', () => {
         const outcome = await verifyToken(makeToken({payload: basePayload(), alg: 'none'}));
         expect(outcome.ok).toBe(false);
         expect(outcome.code).toBe('LIC_MALFORMED');
-    });
-
-    it('killSwitch=true 时跳过验签（应急放行）', async () => {
-        hoisted.config.killSwitch = true;
-        try {
-            // 令牌本身是「签名被篡改」的，正常情况下必失败；killSwitch 下应放行
-            const outcome = await verifyToken(tamperSignature(makeToken({payload: basePayload()})));
-            expect(outcome.ok).toBe(true);
-            expect(outcome.code).toBe('LIC_OK');
-        } finally {
-            hoisted.config.killSwitch = false;
-        }
     });
 });
 

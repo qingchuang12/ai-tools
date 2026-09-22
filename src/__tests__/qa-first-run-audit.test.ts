@@ -22,8 +22,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const mocks = vi.hoisted(() => ({
     config: {
         version: 1 as const,
-        enabled: true,
-        killSwitch: false,
         sku: 'AI-TOOLS-PRO',
         acceptedSkus: ['pro-buyout'],
         skuFeatures: {'pro-buyout': ['cloud_sync']},
@@ -126,8 +124,6 @@ beforeEach(() => {
     mocks.encryption = true;
     mocks.strong = 'AAAA-BBBB-CCCC-DDDD';
     mocks.soft = 'AAAA-BBBB-CCCC-EEEE';
-    mocks.config.enabled = true;
-    mocks.config.killSwitch = false;
     mocks.config.trial.days = 60;
     mocks.config.trial.maxRuns = null;
     mocks.config.clock.skewToleranceMs = 2 * 60 * 60 * 1000;

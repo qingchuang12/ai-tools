@@ -19,17 +19,20 @@
     "build": "pnpm run build:icons && pnpm run link:deps && pnpm run build:main && pnpm run build:renderer",
     "build:icons": "node scripts/build-icons.cjs",
     "link:deps": "node scripts/link-pnpm-deps.cjs",
-    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-platform-data.mjs && node scripts/obfuscate-main.mjs && node scripts/copy-license-assets.mjs",
+    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-platform-data.mjs && node scripts/gen-build-flags.mjs && node scripts/obfuscate-main.mjs && node scripts/copy-license-assets.mjs",
     "build:renderer": "cross-env CONTINUOUS_INTEGRATION=1 vite build",
     "typecheck": "npx tsc -p tsconfig.main.json --noEmit && npx tsc -p tsconfig.json --noEmit",
     "aggregate:registry": "node scripts/aggregate-mcp-registry.mjs",
     "precache:npm-servers": "node scripts/precache-npm-servers.mjs",
     "start": "node scripts/electron-dev-launch.cjs .",
     "electron:dev": "pnpm run build:main && concurrently -k \"pnpm run dev:main\" \"pnpm run dev:renderer\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 node scripts/electron-dev-launch.cjs .\"",
-    "package": "pnpm run build && pnpm run link:deps && electron-builder",
-    "package:mac": "pnpm run build && pnpm run link:deps && electron-builder --mac",
-    "package:win": "pnpm run build && pnpm run link:deps && electron-builder --win --x64",
-    "package:linux": "pnpm run build && pnpm run link:deps && electron-builder --linux",
+    "package": "pnpm run build && pnpm run link:deps && ow-electron-builder",
+    "package:mac": "pnpm run build && pnpm run link:deps && ow-electron-builder --mac",
+    "package:win": "pnpm run build && pnpm run link:deps && ow-electron-builder --win --x64",
+    "package:linux": "pnpm run build && pnpm run link:deps && ow-electron-builder --linux",
+    "package:free1:overseas": "cross-env AI_TOOLS_EDITION=free1 AI_TOOLS_AD_REGION=overseas pnpm run package:win",
+    "package:free1:cn": "cross-env AI_TOOLS_EDITION=free1 AI_TOOLS_AD_REGION=cn pnpm run package:win",
+    "package:free2": "cross-env AI_TOOLS_EDITION=free2 pnpm run package:win",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -62,8 +65,8 @@
     "autoprefixer": "^10.4.16",
     "concurrently": "^9.2.4",
     "cross-env": "^10.1.0",
-    "electron": "43.0.0",
-    "electron-builder": "^24.9.0",
+    "electron": "npm:@overwolf/ow-electron@42.7.1",
+    "@overwolf/ow-electron-builder": "^26.9.3",
     "javascript-obfuscator": "4.2.2",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
@@ -178,8 +181,11 @@
     }
   },
   "allowScripts": {
-    "electron@43.0.0": true,
+    "electron@42.7.1": true,
     "esbuild@0.21.5": true
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@overwolf/ow-electron", "esbuild"]
   },
   "packageManager": "pnpm@12.4.1"
 }

@@ -105,6 +105,9 @@ export class CloudSyncService {
 
     /** 下载：把云端拉到本地暂存区（失败时自动重试，最多重试 2 次） */
     async pull(): Promise<CloudSyncResult> {
+        // 与 push() 同构的授权门：未激活云同步 License 时禁止从云端下载，避免越权拉取。
+        const gate = await assertFeature(FEATURE_CLOUD_SYNC);
+        if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
         return this.withLock(async () => {
         const store = getCloudSyncStore();
         if (!store.isActive()) return {ok: false, message: '云同步未配置或未启用'};

@@ -24,8 +24,6 @@ const T0 = Date.parse('2026-09-20T00:00:00Z');
 const mocks = vi.hoisted(() => ({
     config: {
         version: 1 as const,
-        enabled: true,
-        killSwitch: false,
         sku: 'AI-TOOLS-PRO',
         acceptedSkus: ['pro-subscription'],
         skuFeatures: {'pro-subscription': ['cloud_sync']},

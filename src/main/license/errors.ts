@@ -13,7 +13,6 @@ import {createHash} from 'crypto';
 export type LicenseErrorCode =
     | 'LIC_OK'
     | 'LIC_TRIAL_OK'            // 试用期内（未注册）视作全量权益，gate 放行
-    | 'LIC_DISABLED'            // license.enabled=false，模块整体不介入
     | 'LIC_MALFORMED'           // 非 3 段 / base64url 或 JSON 解析失败
     | 'LIC_UNKNOWN_KID'         // header.kid 无对应公钥
     | 'LIC_BAD_SIGNATURE'       // Ed25519 验签失败
@@ -29,6 +28,9 @@ export type LicenseErrorCode =
     | 'LIC_REDEEM_NETWORK'
     | 'LIC_REDEEM_REJECTED'
     | 'LIC_REDEEM_BAD_RESPONSE'
+    | 'LIC_UNBIND_NETWORK'
+    | 'LIC_UNBIND_REJECTED'
+    | 'LIC_UNBIND_FAILED'
     | 'LIC_INTERNAL';
 
 /** UI 统一文案的 i18n key（激活/兑换类失败一律用它，不解释原因） */

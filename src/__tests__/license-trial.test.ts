@@ -21,8 +21,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const mocks = vi.hoisted(() => ({
     config: {
         version: 1 as const,
-        enabled: true,
-        killSwitch: false,
         sku: 'AI-TOOLS-PRO',
         acceptedSkus: ['pro-buyout', 'pro-plus-buyout', 'pro-subscription', 'pro-plus-subscription'],
         skuFeatures: {
@@ -103,8 +101,6 @@ beforeEach(() => {
     mocks.encryption = true;
     mocks.strong = 'AAAA-BBBB-CCCC-DDDD';
     mocks.soft = 'AAAA-BBBB-CCCC-EEEE';
-    mocks.config.enabled = true;
-    mocks.config.killSwitch = false;
     mocks.config.trial.days = 60;
     mocks.config.trial.maxRuns = null;
     mocks.config.clock.skewToleranceMs = 2 * 60 * 60 * 1000;
@@ -419,15 +415,6 @@ describe('门面状态机', () => {
         expect(after.status).toBe('trial');
         expect((await readVault()).trial).not.toBeNull();
         expect((await readVault()).license?.signed_token).toBeNull();
-    });
-
-    it('killSwitch / enabled 应急开关放行 gate', async () => {
-        mocks.config.killSwitch = true;
-        expect((await license.assertFeature('cloud_sync')).allowed).toBe(true);
-        mocks.config.killSwitch = false;
-
-        mocks.config.enabled = false;
-        expect((await license.assertFeature('cloud_sync')).allowed).toBe(true);
     });
 
     it('试用期内未注册 → gate 视作 pro 全量放行（含 cloud_sync / remote_connect）', async () => {

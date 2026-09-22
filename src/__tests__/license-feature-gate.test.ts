@@ -22,8 +22,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const mocks = vi.hoisted(() => ({
     config: {
         version: 1 as const,
-        enabled: true,
-        killSwitch: false,
         sku: 'AI-TOOLS-PRO',
         acceptedSkus: ['pro-subscription'],
         skuFeatures: {'pro-subscription': ['cloud_sync']},

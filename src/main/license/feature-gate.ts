@@ -11,10 +11,6 @@
  * 权益按 `FEATURE_PROVIDERS` 归一到宿主）才允许进入验签链路；未登记的 feature 一律拒绝。
  * 名单是配置而非代码（包外 `license.config.json` 可改），但漏配的方向现在是「误锁」而不是
  * 「误放」——新增付费功能忘了登记会立刻被用户/测试发现，而不是静默放行。
- *
- * 应急开关（改包外 `license.config.json` 即可，**不需要重新发版**）：
- * - `enabled: false` → 模块整体不介入，gate 全放行；
- * - `killSwitch: true` → 跳过验签，gate 全放行（止血用，事后必须复位）。
  */
 
 import {getConfig} from './config';
@@ -46,8 +42,6 @@ export const GATE_LOCKED_MESSAGE = PUBLIC_LOCKED_KEY;
  */
 export async function assertFeature(feature: string): Promise<GateResult> {
     const cfg = getConfig();
-    if (!cfg.enabled) return {allowed: true, code: 'LIC_DISABLED', payload: null};
-    if (cfg.killSwitch) return {allowed: true, code: 'LIC_OK', payload: null};
 
     // R5：provider 型权益归一到宿主（remote_connect → cloud_sync），两端口径一致
     const required = FEATURE_PROVIDERS[feature] ?? feature;

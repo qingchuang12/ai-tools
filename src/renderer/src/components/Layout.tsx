@@ -11,6 +11,7 @@ import {useIsMac} from '../lib/useIsMac';
 import {HistoryNavIcon, InspectorNavIcon, InstalledNavIcon, SettingsNavIcon, StoreNavIcon,} from './Icons';
 import SyncTasksPanel from './SyncTasksPanel';
 import ActivationBadge from './ActivationBadge';
+import AdSlot from './ads/AdSlot';
 
 interface LayoutProps {
     children: ReactNode;
@@ -121,6 +122,11 @@ export default function Layout({children}: LayoutProps) {
             >
                 {/* 顶部条：窗口拖拽区。mac 上为交通灯预留左侧空间，避免压住红绿灯；Windows 直接贴左。 */}
                 <div className={`h-[38px] drag-region flex-shrink-0 ${isMac ? 'ps-20' : 'ps-3'}`} />
+
+                {/* 广告位：免费版1 且未激活时渲染（激活即消失）；渠道未开通/未填充时收 0 高，不影响主功能 */}
+                <div className="no-drag">
+                    <AdSlot size="160x600" />
+                </div>
 
                 {/* 导航菜单：设为拖拽区，空白处可拖动窗口；导航项加 no-drag 保持可点击 */}
                 <nav className="flex-1 py-2 overflow-y-auto drag-region">
