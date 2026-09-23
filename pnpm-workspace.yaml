@@ -1,6 +1,16 @@
+# 依赖构建脚本裁决（pnpm 10+ 默认阻止依赖的 postinstall 构建脚本）。
+# allowBuilds 是 pnpm 11.24 / 12 共同认可的键（onlyBuiltDependencies 等
+# 旧键在 pnpm 12 已不读，勿再混用两套）。true = 允许跑构建脚本。
+#
+# @overwolf/ow-electron：postinstall 下载 Electron 二进制（devDependencies 以
+# 别名 "electron" 引用它，此处必须写真实包名 @overwolf/ow-electron）。
+# esbuild：postinstall 安装平台二进制。
+# ssh2 / cpu-features：不编译原生 binding，走纯 JS 回退。
+# electron-winstaller：ow-electron-builder 的传递依赖，仅 Squirrel.Windows 打包
+# 用，本项目 win 打包走 NSIS/portable，用不到。
 allowBuilds:
-  cpu-features: false
-  electron: true
-  electron-winstaller: set this to true or false
+  '@overwolf/ow-electron': true
   esbuild: true
+  cpu-features: false
   ssh2: false
+  electron-winstaller: false

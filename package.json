@@ -180,12 +180,5 @@
       ]
     }
   },
-  "allowScripts": {
-    "electron@42.7.1": true,
-    "esbuild@0.21.5": true
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["@overwolf/ow-electron", "esbuild"]
-  },
   "packageManager": "pnpm@12.4.1"
 }
