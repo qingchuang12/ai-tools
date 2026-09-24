@@ -78,7 +78,7 @@ export async function assertFeature(feature: string): Promise<GateResult> {
     }
     // 定期复核停用闸门：与 getState() 共用 isDisabledByRecheck()，避免两处判定漂移。
     // 这是云同步等付费功能的真实闸门——服务端明确吊销 / 离线宽限耗尽后，即便本地 token 仍验签通过也要拒绝。
-    if (outcome.ok && isDisabledByRecheck(vault.license, cfg)) {
+    if (outcome.ok && isDisabledByRecheck(vault.license, cfg, Date.now())) {
         logLicenseEvent('LIC_RECHECK_REVOKED', {event: 'gate_recheck_disabled', feature});
         return {allowed: false, code: 'LIC_RECHECK_REVOKED', payload: null};
     }

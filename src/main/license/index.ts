@@ -324,7 +324,7 @@ export async function getState(persisted: ActivationState | null = null): Promis
         // ② 再判停用：优先级**高于**验签与硬件变更宽限。
         //    若只挂在「验签成功」分支，退款用户换一块硬盘 → mid 不匹配 → 命中 resolveHardwareGrace
         //    → 又白得 7 天可用期（真实绕过）。故必须放在验签之前。
-        if (isDisabledByRecheck(license, cfg)) {
+        if (isDisabledByRecheck(license, cfg, now)) {
             payloadCache = null;
             return {...baseState(), machineCode: pair.strong, degraded: 'token_invalid'};
         }
@@ -447,8 +447,9 @@ export async function deactivate(): Promise<ActivationState> {
         trial: vault.trial,
         // 显式列出而非依赖「字面量未列出即被丢弃」：去激活必须清干净复核状态，
         // 否则「停用 → 去激活 → 重新激活」可能继承旧的 revoked_by_server 标记。
-        // watermark / server_time_floor / binding_reported 保持既有的「丢弃」行为不变——
-        // 清空单调时间下界属既有安全语义变更，已登记为独立待办，本轮不动。
+        // 川哥拍板（2026-09-24）：watermark / server_time_floor 两个防改系统时间的单调水位必须保留——
+        // 它们是反回拨下界，去激活后保留才能防止「改系统时间 + 重新激活」回拨续命；
+        // 只把该清的（token / 激活时间 / mid / 复核四字段）置空，binding_reported 也清（换 token 需重新上报）。
         license: {
             ...vault.license,
             signed_token: null,
@@ -459,8 +460,6 @@ export async function deactivate(): Promise<ActivationState> {
             offline_grace_used_ms: 0,
             last_checked_at: null,
             last_verified_ok_at: null,
-            watermark: null,
-            server_time_floor: null,
             binding_reported: null,
         },
     });

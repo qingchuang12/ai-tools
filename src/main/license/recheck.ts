@@ -14,9 +14,9 @@
  * 3. **429 照常累加宽限**：绝不能因为「服务端在限流」就免扣——否则攻击者只要打满
  *    verify 限流（60/min/IP），客户端就永远只能拿到 429 → 永不停用，限流本身变成永久续命后门。
  *
- * 时间口径：入参 `nowMs` 由调用方给（单测可注入）；`last_checked_at` 单调只增，
- * 且 `elapsed` 取 `max(0, ...)` 并被 `min(elapsed, intervalMs)` 钳住，
- * 因此改系统时间既不能让宽限倒退，也不能一次暴涨把用户停掉。
+ * 时间口径：入参 `nowMs` 由调用方给（单测可注入）；`last_checked_at` 单调只增（防改系统时间倒拨宽限）。
+ * 停用判定走方案 A（自然日）：`now - last_verified_ok_at >= 7天`；该差值直接取真实经过时长，
+ * 改系统时间既不能让 `last_verified_ok_at` 倒退，也不影响既有的付费态水印/服务器时间下界。
  */
 
 import {getConfig} from './config';
@@ -91,11 +91,15 @@ interface VerifyResponse {
  * 开关关闭时一律返回 false —— 这是资损事故的秒级回滚手段（改包外配置重启即恢复，不需发版），
  * 故开关判断放在**这里**而不是两个调用点，保证任何新增调用点都不会漏掉。
  */
-export function isDisabledByRecheck(license: LicenseVault | null, cfg: LicenseConfig): boolean {
+export function isDisabledByRecheck(license: LicenseVault | null, cfg: LicenseConfig, nowMs: number = Date.now()): boolean {
     if (!license || !cfg.recheck.enabled) return false;
     if (license.revoked_by_server === true) return true;
-    const used = typeof license.offline_grace_used_ms === 'number' ? license.offline_grace_used_ms : 0;
-    return used >= cfg.recheck.offlineGraceDays * DAY_MS;
+    // 方案 A（自然日，川哥 2026-09-24 拍板）：自「最近一次服务端明确回答 ACTIVE」起算真实经过天数，
+    // 超过宽限天数即停用。last_verified_ok_at 为 null（从未成功复核）则回落 activated_at；
+    // 两者皆无（理论不可能，新授权落盘即带 activated_at）则不误杀。
+    const since = license.last_verified_ok_at ?? license.activated_at;
+    if (typeof since !== 'number') return false;
+    return (nowMs - since) >= cfg.recheck.offlineGraceDays * DAY_MS;
 }
 
 /** 读 HTTP `Date` 响应头作为服务端时间基准（GMT，无时区歧义）；拿不到返回 null */
@@ -170,11 +174,10 @@ function classify(res: VerifyResponse): RecheckVerdict {
 /**
  * 按 verdict 计算新的 license 账本（**纯函数，不落盘**）。
  *
- * 宽限累加用方案 B（按真实使用时长钳制）：每次 unknown 只累加 `min(经过时长, intervalMs)`。
- * 这样「出差 10 天不开机、回来当天离线打开」只消耗 1 天宽限，不会被误停；
- * 同时天然免疫系统休眠导致的定时器漂移（唤醒后单次 elapsed 很大，但仍被钳到 24h）。
- *
- * ⚠️ 若产品改选方案 A（自然日），只需替换本函数 unknown 分支的累加逻辑，其余代码不动。
+ * 宽限判定用方案 A（自然日，川哥 2026-09-24 拍板）：停用与否由 `isDisabledByRecheck()` 按
+ * 「真实经过天数 = now - 最近一次服务端明确回答 ACTIVE 的时间」在每次 getState/assertFeature 时现算。
+ * 这里 unknown 分支只推进 `last_checked_at`（单调），并由同一函数判定本次是否触发停用钩子；
+ * 不再累加 `offline_grace_used_ms`（该字段在方案 A 下退化为仅保留兼容，不再参与判定）。
  */
 function applyVerdict(
     license: LicenseVault,
@@ -209,13 +212,10 @@ function applyVerdict(
         };
     }
 
-    // unknown：按真实使用时长钳制累加
-    const prevChecked = license.last_checked_at ?? null;
-    const elapsed = prevChecked === null ? 0 : Math.max(0, nowMs - prevChecked);
-    const used = (license.offline_grace_used_ms ?? 0) + Math.min(elapsed, cfg.recheck.intervalMs);
+    // unknown：方案 A —— 不累加 offline_grace_used_ms，停用判定交由 isDisabledByRecheck 现算
     return {
-        license: {...license, last_checked_at: checkedAt, offline_grace_used_ms: used},
-        disabled: used >= cfg.recheck.offlineGraceDays * DAY_MS,
+        license: {...license, last_checked_at: checkedAt},
+        disabled: isDisabledByRecheck(license, cfg, nowMs),
     };
 }
 
