@@ -100,3 +100,44 @@ export interface ActivationApi {
     /** 功能 gate 查询（渲染层仅用于 UI 态，安全边界在主进程） */
     hasFeature: (feature: string) => Promise<boolean>;
 }
+
+/** 当前登录用户资料（A5 me 与登录/第二因子响应中的 `user` 同结构） */
+export interface AccountProfile {
+    id: string;
+    email: string;
+    emailVerified: boolean;
+    status: string;
+    role: string;
+}
+
+/** 登录 / 第二因子校验的统一结果（对外仅暴露统一文案，不回传错误码） */
+export interface AccountAuthResult {
+    ok: boolean;
+    /** 失败分类：network=网络层（用户网坏不应误判为密码错）；auth=其余（不暴露原因） */
+    category?: 'network' | 'auth';
+    /** 统一对外文案（i18n key），UI 直接 `t(error)` 展示 */
+    error?: string;
+    /** 待第二因子：true 时须用 `mfaTicket` 调 `verifyMfa` 换真令牌 */
+    mfaRequired?: boolean;
+    mfaTicket?: string;
+    mfaMethods?: string[];
+    token?: string;
+    profile?: AccountProfile | null;
+}
+
+/**
+ * 账号会话 API（渲染层消费；主进程 `account.ts` 为唯一实现）。
+ * 是 A9 新增账号登录能力的对外出口，也是 R6 换绑解绑与「密钥激活要求登录」的共同前置。
+ */
+export interface AccountApi {
+    /** 邮箱 + 密码登录；MFA 启用时返回 `mfaRequired=true` + 票据，须再调 `verifyMfa` */
+    login: (email: string, password: string) => Promise<AccountAuthResult>;
+    /** 第二因子校验：用登录票据 + 动态码/邮箱码换取真令牌 */
+    verifyMfa: (ticket: string, code: string) => Promise<AccountAuthResult>;
+    /** 登出：best-effort 通知服务端并使本地令牌失效 */
+    logout: () => Promise<void>;
+    /** 当前用户资料（优先缓存，未命中且持令牌时兜底 /me） */
+    getProfile: () => Promise<AccountProfile | null>;
+    /** 是否已登录（令牌是否存在；过期由服务端裁决） */
+    isLoggedIn: () => Promise<boolean>;
+}

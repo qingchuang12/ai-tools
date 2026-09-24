@@ -1185,5 +1185,26 @@
   "errorBoundary": {
     "title": "页面出现异常",
     "retry": "重试"
+  },
+  "account": {
+    "title": "账号",
+    "loginHint": "登录账号后即可在各设备间管理授权，并自助解除绑定。",
+    "login": "登录",
+    "verify": "验证",
+    "working": "处理中…",
+    "cancel": "取消",
+    "logout": "退出登录",
+    "loggedInAs": "已登录：",
+    "emailLabel": "邮箱",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "密码",
+    "passwordPlaceholder": "请输入密码",
+    "codeLabel": "验证码",
+    "codePlaceholder": "6 位验证码",
+    "mfaHint": "请输入验证器应用或邮箱中收到的验证码。",
+    "errors": {
+      "generic": "登录失败，请检查邮箱和密码后重试。",
+      "network": "网络连接失败，请检查网络后重试。"
+    }
   }
 }

@@ -15,7 +15,14 @@
 
 import {dialog} from 'electron';
 import type {RedeemResult} from '../../shared/activation-types';
-import {CHECKOUT_PAGE_PATH, REDEEM_API_PATH, UNBIND_API_PATH, UNBIND_API_TIMEOUT_MS} from './constants';
+import {
+    ACCOUNT_UNBIND_API_PATH,
+    CHECKOUT_PAGE_PATH,
+    REDEEM_API_PATH,
+    REPORT_BINDING_API_PATH,
+    REPORT_BINDING_TIMEOUT_MS,
+    UNBIND_API_TIMEOUT_MS,
+} from './constants';
 import {getConfig} from './config';
 import {logLicenseEvent, PUBLIC_ERROR_KEY, PUBLIC_NETWORK_ERROR_KEY} from './errors';
 import {getMachineCode} from './machine-code';
@@ -45,6 +52,32 @@ export interface RedeemFetchResult {
     error?: string;
     token?: string;
     serverTimeMs?: number | null;
+}
+
+/**
+ * 解析「激活 / 上报绑定」统一响应（两端点响应同构 `ActivateResponse`）。
+ * 服务端所有端点经 `ApiResponseAdvice` 包壳（`$.data` 段），无 `data` 段时兼容扁平结构。
+ * 仅负责解析与字段校验；网络与 HTTP 状态由调用方先行判定。
+ */
+function parseActivateResponse(body: unknown, status: number): RedeemFetchResult {
+    const env = (body ?? null) as RedeemEnvelope | null;
+    const data: RedeemData | null = env ? env.data ?? env : null;
+    const succeeded = env?.success === true || env?.data?.success === true;
+    if (
+        !env ||
+        status >= 400 ||
+        !succeeded ||
+        !data ||
+        typeof data.signedToken !== 'string' ||
+        !data.signedToken.trim()
+    ) {
+        return {ok: false, category: 'license', error: PUBLIC_ERROR_KEY};
+    }
+    return {
+        ok: true,
+        token: data.signedToken.trim(),
+        serverTimeMs: typeof data.serverTime === 'number' && Number.isFinite(data.serverTime) ? data.serverTime : null,
+    };
 }
 
 /** 按服务地址拼出带 machineId 的收银台 URL（页面与 API 同源，均由 billing-license-service 托管） */
@@ -114,26 +147,50 @@ export async function fetchRedeem(code: string, email: string): Promise<RedeemFe
         return {ok: false, category: 'license', error: PUBLIC_ERROR_KEY};
     }
 
-    // 统一壳优先（业务字段在 data 段），无 data 段时按扁平结构取
-    const data: RedeemData | null = body ? body.data ?? body : null;
-    const succeeded = body?.success === true || body?.data?.success === true;
-    if (
-        !response.ok ||
-        !body ||
-        !succeeded ||
-        !data ||
-        typeof data.signedToken !== 'string' ||
-        !data.signedToken.trim()
-    ) {
+    const result = parseActivateResponse(body, response.status);
+    if (!result.ok) {
         logLicenseEvent('LIC_REDEEM_REJECTED', {event: 'redeem_rejected', status: response.status});
+    }
+    return result;
+}
+
+/**
+ * D2（plan-7.0 / A9）：兑换/激活后于启动时上报一次本机机器码完成补绑。
+ *
+ * 持有 `signedToken`（授权本体）即证明归属，服务端验签通过即绑定，**无需登录**；
+ * 已绑同机幂等返回、已绑他机拒绝（`MACHINE_MISMATCH`）。本地「一次性标记」由门面 `getState`
+ * 持久化，本函数只负责发请求并解析响应；失败（网络/拒绝）一律返回 `ok:false`，由调用方按
+ * 「下次启动重试」处理。
+ */
+export async function reportBinding(signedToken: string, machineId: string): Promise<RedeemFetchResult> {
+    const cfg = getConfig();
+    if (!signedToken?.trim() || !machineId?.trim()) {
         return {ok: false, category: 'license', error: PUBLIC_ERROR_KEY};
     }
-
-    return {
-        ok: true,
-        token: data.signedToken.trim(),
-        serverTimeMs: typeof data.serverTime === 'number' && Number.isFinite(data.serverTime) ? data.serverTime : null,
-    };
+    let response: Response;
+    try {
+        response = await fetch(`${cfg.serviceBaseUrl}${REPORT_BINDING_API_PATH}`, {
+            method: 'POST',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({signedToken: signedToken.trim(), machineId: machineId.trim()}),
+            signal: AbortSignal.timeout(Math.max(1000, REPORT_BINDING_TIMEOUT_MS)),
+        });
+    } catch (error) {
+        logLicenseEvent('LIC_REPORT_BINDING_NETWORK', {event: 'report_binding_request_failed', reason: (error as Error).name});
+        return {ok: false, category: 'network', error: PUBLIC_NETWORK_ERROR_KEY};
+    }
+    let body: RedeemEnvelope | null = null;
+    try {
+        body = (await response.json()) as RedeemEnvelope;
+    } catch {
+        logLicenseEvent('LIC_REPORT_BINDING_BAD_RESPONSE', {event: 'report_binding_json_invalid'});
+        return {ok: false, category: 'license', error: PUBLIC_ERROR_KEY};
+    }
+    const result = parseActivateResponse(body, response.status);
+    if (!result.ok) {
+        logLicenseEvent('LIC_REPORT_BINDING_REJECTED', {event: 'report_binding_rejected', status: response.status});
+    }
+    return result;
 }
 
 /** 主进程弹文件选择器导入 `license.lic`；用户取消时返回空结果（不算失败） */
@@ -160,17 +217,26 @@ export function redeemFailure(category: 'network' | 'license'): RedeemResult {
 
 /**
  * R6：换绑时释放旧授权在当前设备的绑定（**best-effort**）。
- * 持有旧 token 即证明归属；服务端校验通过且机器码一致后清空 `machineCode`，不吊销授权本身。
- * 任何失败（网络 / 超时 / 非 2xx）一律返回 `false`，**不抛**——
+ *
+ * 旧端点 `/api/licenses/unbind`（凭旧 signedToken）已于 plan-7.0 / B10 物理删除（始终 403），
+ * 现改调账号侧出口 `POST /api/account/licenses/{licenseKey}/unbind`——**需登录态 Bearer 令牌 + 本人归属**
+ * （服务端 `unbindByOwner(licenseKey, currentUserId())`）。故入参由「旧 token + 机器码」改为
+ * 「accessToken + licenseKey」：机器码由服务端从令牌/会话判定，客户端不再传。
+ *
+ * 任何失败（未登录 / 网络 / 超时 / 非 2xx）一律返回 `false`，**不抛**——
  * 调用方按「新生效优先、解绑尽力而为」处理：解绑失败不影响已生效的新授权。
  */
-export async function unbindPriorOnServer(signedToken: string, machineId: string): Promise<boolean> {
+export async function unbindPriorOnServer(accessToken: string, licenseKey: string): Promise<boolean> {
     const cfg = getConfig();
+    if (!accessToken?.trim() || !licenseKey?.trim()) return false;
     try {
-        const response = await fetch(`${cfg.serviceBaseUrl}${UNBIND_API_PATH}`, {
+        const response = await fetch(`${cfg.serviceBaseUrl}${ACCOUNT_UNBIND_API_PATH(licenseKey.trim())}`, {
             method: 'POST',
-            headers: {'content-type': 'application/json'},
-            body: JSON.stringify({signedToken, machineId}),
+            headers: {
+                'content-type': 'application/json',
+                Authorization: `Bearer ${accessToken.trim()}`,
+            },
+            body: JSON.stringify({}),
             signal: AbortSignal.timeout(Math.max(1000, UNBIND_API_TIMEOUT_MS)),
         });
         if (!response.ok) {

@@ -16,6 +16,7 @@ import {useActivationStore} from '../store/activationStore';
 import {useElectronAPI} from '../lib/electron';
 import {FEATURE_CLOUD_SYNC} from '../../../shared/license-constants';
 import type {RedeemResult} from '../../../shared/activation-types';
+import AccountLoginSection from './AccountLoginSection';
 
 type Mode = 'choose' | 'redeem' | 'offline';
 
@@ -513,6 +514,8 @@ export default function ActivationModal() {
             {unbindWarn && (
                 <p className="text-[12px] text-[#ff9f0a]">{t('license.modal.unbindFailed')}</p>
             )}
+            {/* 账号登录区：默认折叠；挂在各状态区之外，未激活 / 试用 / 已激活均可见 */}
+            <AccountLoginSection />
             <FeatureList t={t} hasFeature={hasFeature} />
         </Modal>
     );

@@ -28,6 +28,13 @@
     "hardwareChangeDays": 7,
     "maxAutoGrace": 1
   },
+  "recheck": {
+    "enabled": true,
+    "intervalMs": 86400000,
+    "offlineGraceDays": 7,
+    "timeoutMs": 8000,
+    "rateLimitedRetryMs": 3600000
+  },
   "features": {
     "proFeature": "pro",
     "gated": ["cloud_sync"]

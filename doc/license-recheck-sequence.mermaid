@@ -1,0 +1,86 @@
+sequenceDiagram
+    autonumber
+    participant Main as src/main/index.ts
+    participant Facade as license/index.ts
+    participant Loop as license/recheck.ts
+    participant Vault as license/vault.ts
+    participant Svc as billing-license-service
+    participant Gate as license/feature-gate.ts
+    participant UI as renderer (activationStore)
+
+    Note over Main, Facade: 应用启动（app.whenReady 之后）
+    Main->>Facade: license.init()
+    Facade->>Facade: warmupMachineCode()
+    Facade-->>Main: ActivationState（不阻塞）
+    Facade->>Loop: startRecheckLoop()
+    Loop->>Loop: void runRecheck()（fire-and-forget，首查）
+
+    Note over Loop, Svc: 一次复核 runRecheck(nowMs = effectiveNow(...))
+    Loop->>Vault: readVault()
+    Vault-->>Loop: {trial, license}
+    Loop->>Loop: licenseKey = extractLicenseKeyFromToken(license.signed_token)
+    alt 无 token / 取不到 licenseKey / cfg.recheck.enabled=false
+        Loop-->>Facade: verdict = 'skipped'（不动任何状态）
+    else 有 token
+        Loop->>Svc: GET /api/licenses/verify/{licenseKey}（AbortSignal.timeout(8s)）
+        alt 200 + data.status = ACTIVE
+            Svc-->>Loop: {success:true, data:{status:'ACTIVE', ...}}
+            Loop->>Loop: verdict = 'active'
+            Loop->>Vault: used=0, revoked_by_server=false,<br/>last_verified_ok_at=now, last_checked_at=now
+            opt HTTP Date 响应头存在
+                Loop->>Vault: raiseLicenseServerFloor(license, dateMs)（复用防回拨）
+            end
+        else 400 + code ∈ {LICENSE_INVALID, LICENSE_EXPIRED}
+            Svc-->>Loop: {success:false, code:'LICENSE_INVALID'}
+            Note right of Loop: 单次即停用，无二次确认（§1.7 第 3 条）
+            Loop->>Loop: verdict = 'revoked'
+            Loop->>Vault: revoked_by_server = true, last_checked_at = now
+            Loop->>Facade: setStateChangeListener → 广播 activation:state-changed
+        else 429（限流）
+            Svc-->>Loop: 429 空 body（无 JSON，须先判 status）
+            Loop->>Loop: verdict = 'unknown'；<b>照常累加宽限</b>（防限流续命后门）
+            Loop->>Vault: used += min(elapsed, intervalMs)
+            Loop->>Loop: 下次调度 rateLimitedRetryMs(1h + jitter)
+        else 5xx / 网络 / 超时 / JSON 畸形 / 其它 4xx / LICENSE_NOT_FOUND
+            Svc-->>Loop: （失败）
+            Loop->>Loop: verdict = 'unknown'
+            Loop->>Vault: used += min(max(0, now - last_checked_at), intervalMs)<br/>last_checked_at = max(last_checked_at, now)
+            alt used >= offlineGraceDays
+                Loop->>Loop: 宽限耗尽 → 停用（同 revoked 效果）
+                Loop->>Facade: 广播状态变化
+            else 仍在宽限内
+                Loop->>Loop: 保持可用
+            end
+        end
+        Loop->>Loop: scheduleNext(24h | 1h)（递归 setTimeout + unref）
+    end
+
+    Note over Facade, UI: 停用如何生效（"马上不能用"）
+    UI->>Facade: activation:get-state
+    Facade->>Vault: readVault()
+    Facade->>Facade: 推进 watermark / anchor（防回拨，不受停用影响）
+    Facade->>Facade: isDisabledByRecheck ?（<b>在 verifyToken 之前</b>，压过硬件宽限）
+    alt revoked_by_server=true 或 宽限耗尽
+        Facade->>Facade: payloadCache = null
+        Facade-->>UI: {status:'inactive', degraded:'token_invalid'}
+    else 未停用
+        Facade->>Facade: verifyToken(...)
+        alt LIC_MACHINE_MISMATCH → resolveHardwareGrace
+            Facade-->>UI: 硬件宽限态（仅未停用时可达）
+        else 验签通过
+            Facade-->>UI: {status:'activated', ...}
+        end
+    end
+
+    UI->>Gate: license:has-feature('cloud_sync')
+    Gate->>Vault: readVault()
+    Gate->>Gate: verifyToken(token, effectiveNow(...))
+    Gate->>Gate: isDisabledByRecheck(license, cfg)
+    alt 已停用
+        Gate-->>Facade: {allowed:false, code:'LIC_RECHECK_REVOKED', payload:null}
+        Facade->>Facade: payloadCache = null（防 currentPayload 残留旧载荷）
+        Facade-->>UI: false
+    else
+        Gate-->>Facade: {allowed:true, code:'LIC_OK'}
+        Facade-->>UI: true
+    end

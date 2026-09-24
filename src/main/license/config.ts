@@ -94,6 +94,7 @@ function cloneDefault(): LicenseConfig {
         trial: {...d.trial},
         clock: {...d.clock},
         grace: {...d.grace},
+        recheck: {...d.recheck},
         features: {proFeature: d.features.proFeature, gated: [...d.features.gated]},
     };
 }
@@ -143,6 +144,19 @@ export function mergeConfig(raw: unknown): LicenseConfig {
     if (grace) {
         base.grace.hardwareChangeDays = Math.max(0, Math.floor(num(grace.hardwareChangeDays, base.grace.hardwareChangeDays)));
         base.grace.maxAutoGrace = Math.max(0, Math.floor(num(grace.maxAutoGrace, base.grace.maxAutoGrace)));
+    }
+
+    const recheck = asRecord(src.recheck);
+    if (recheck) {
+        base.recheck.enabled = bool(recheck.enabled, base.recheck.enabled);
+        // 间隔与超时都设 1s 下限：配置写错不该变成「疯狂打服务端」或「永远超时」
+        base.recheck.intervalMs = Math.max(1000, Math.floor(num(recheck.intervalMs, base.recheck.intervalMs)));
+        base.recheck.offlineGraceDays = Math.max(0, Math.floor(num(recheck.offlineGraceDays, base.recheck.offlineGraceDays)));
+        base.recheck.timeoutMs = Math.max(1000, Math.floor(num(recheck.timeoutMs, base.recheck.timeoutMs)));
+        base.recheck.rateLimitedRetryMs = Math.max(
+            1000,
+            Math.floor(num(recheck.rateLimitedRetryMs, base.recheck.rateLimitedRetryMs)),
+        );
     }
 
     const features = asRecord(src.features);

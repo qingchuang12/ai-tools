@@ -1,0 +1,96 @@
+classDiagram
+    %% ai-tools 定期联网复核授权状态 —— 类/接口图（只画新增与改动部分）
+
+    class LicenseConfig {
+        +version: number
+        +sku: string
+        +acceptedSkus: string[]
+        +skuFeatures: Record~string, string[]~
+        +serviceBaseUrl: string
+        +redeemTimeoutMs: number
+        +clock: ClockConfig
+        +grace: GraceConfig
+        +recheck: RecheckConfig
+    }
+
+    class RecheckConfig {
+        +enabled: boolean
+        +intervalMs: number
+        +offlineGraceDays: number
+        +timeoutMs: number
+        +rateLimitedRetryMs: number
+    }
+
+    note for RecheckConfig "429 照常累加宽限，不做二次确认"
+
+    class LicenseVault {
+        +signed_token: string | null
+        +activated_at: number | null
+        +mid_at_activation: string | null
+        +watermark?: number | null
+        +server_time_floor?: number | null
+        +binding_reported?: boolean | null
+        +last_checked_at?: number | null
+        +last_verified_ok_at?: number | null
+        +offline_grace_used_ms?: number
+        +revoked_by_server?: boolean | null
+    }
+
+    class RecheckOutcome {
+        +verdict: RecheckVerdict
+        +httpStatus: number | null
+        +serverCode: string | null
+        +disabled: boolean
+        +graceUsedMs: number
+    }
+
+    class RecheckApi {
+        +runRecheck(nowMs?: number) Promise~RecheckOutcome~
+        +startRecheckLoop() void
+        +stopRecheckLoop() void
+        +isDisabledByRecheck(license, cfg) boolean
+    }
+
+    class RecheckInternals {
+        -fetchLicenseStatus(licenseKey) Promise~VerifyResponse~
+        -classify(httpStatus, code, status) RecheckVerdict
+        -applyVerdict(vault, verdict, nowMs) ApplyResult
+        -scheduleNext(delayMs) void
+    }
+
+    class VaultIo {
+        +readVault() Promise~VaultData~
+        +writeVault(data) Promise~void~
+        +sanitizeLicense(raw) LicenseVault | null
+    }
+
+    class LicenseFacade {
+        +init() Promise~ActivationState~
+        +getState(persisted) Promise~ActivationState~
+        +assertFeature(feature) Promise~GateResult~
+        +setStateChangeListener(fn) void
+    }
+
+    class FeatureGate {
+        +assertFeature(feature) Promise~GateResult~
+    }
+
+    class VerifyResponse {
+        +httpStatus: number | null
+        +code: string | null
+        +status: string | null
+        +serverTimeMs: number | null
+    }
+
+    LicenseConfig *-- RecheckConfig : 新增 recheck 段
+    LicenseVault ..> RecheckConfig : 宽限阈值 offlineGraceDays
+    RecheckApi ..|> RecheckInternals : 组合
+    RecheckApi ..> RecheckOutcome : 返回
+    RecheckInternals ..> VerifyResponse : 解析 GET /api/licenses/verify/{key}
+    RecheckApi --> VaultIo : 读/写 license 账本
+    RecheckApi ..> LicenseVault : 更新 4 个新字段
+    LicenseFacade --> RecheckApi : init 启动循环 + 首查
+    LicenseFacade --> FeatureGate : 转发 assertFeature
+    FeatureGate ..> RecheckApi : isDisabledByRecheck 闸门
+    FeatureGate --> VaultIo : 读 token
+    VaultIo ..> LicenseVault : 白名单 sanitize（新字段必须登记）

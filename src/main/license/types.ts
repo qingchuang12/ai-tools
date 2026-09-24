@@ -9,6 +9,26 @@
 
 import type {LicenseErrorCode} from './errors';
 
+/**
+ * 定期联网复核配置（包外 license.config.json 可覆盖，无需发版）
+ *
+ * 复核只回答一个问题：服务端现在还认这张授权吗？
+ * `enabled=false` 是资损事故的第一处置手段——改包外配置重启即恢复，不需发版，
+ * 故 `getState` / `assertFeature` 在开关关闭时必须**完全忽略**停用标记。
+ */
+export interface RecheckConfig {
+    /** 总开关；关掉后完全忽略停用标记（资损事故回滚手段） */
+    enabled: boolean;
+    /** 复核间隔（ms），默认 24h */
+    intervalMs: number;
+    /** 离线宽限天数：服务端「答不上来」时最多可继续使用的天数 */
+    offlineGraceDays: number;
+    /** 单次请求超时（ms），默认 8s（短于兑换 15s：这是启动路径上的旁路请求） */
+    timeoutMs: number;
+    /** 命中 429 后的退避间隔（ms），默认 1h */
+    rateLimitedRetryMs: number;
+}
+
 /** 授权配置（源码期落 `assets/license.config.json`，打包后包外 `resources/license/` 可覆盖） */
 export interface LicenseConfig {
     version: 1;
@@ -51,6 +71,8 @@ export interface LicenseConfig {
         /** 终身可自动宽限次数 */
         maxAutoGrace: number;
     };
+    /** 定期联网复核（plan-7.0）；包外可整体关闭，用于资损事故回滚 */
+    recheck: RecheckConfig;
     features: {
         /** 全量权益 key（拥有即拥有全部付费功能） */
         proFeature: string;
@@ -147,6 +169,29 @@ export interface LicenseVault {
     watermark?: number | null;
     /** 后端给的权威时间下界（ms，只增不减）；来源为 redeem 响应的 `serverTime` */
     server_time_floor?: number | null;
+    /**
+     * D2（plan-7.0 / A9）：本授权是否已向服务端补报过本机机器码（一次性标记）。
+     * 补报成功即置 true，之后启动不再触发；去激活/重激活会重置（新 token 落盘时不带此标记）。
+     */
+    binding_reported?: boolean | null;
+    /**
+     * 定期联网复核（plan-7.0）：上次**发起**复核的时刻（不论成败），ms。
+     * 单调只增——回拨时 `elapsed` 取 max(0, ...) 不会倒退也不会暴涨。
+     * 可选：老 vault 没有它，按「从未复核过」处理，无需迁移。
+     */
+    last_checked_at?: number | null;
+    /** 上次服务端**明确回答 ACTIVE** 的时刻，ms；只进日志与自愈观测 */
+    last_verified_ok_at?: number | null;
+    /**
+     * 已消耗的离线宽限（ms），默认 0；复核成功即清零。
+     * 老 vault 缺失按 0 是**刻意**的：升级用户不会因为一断网就被停用（宁可放过也不误杀）。
+     */
+    offline_grace_used_ms?: number;
+    /**
+     * 服务端明确回答吊销 / 过期 → 本地停用标记。
+     * 一旦置 true，**只有下次复核成功才能清 false**，本地改系统时间无法复活。
+     */
+    revoked_by_server?: boolean | null;
 }
 
 /** 验签结果：`code` 是内部码，只进日志 */

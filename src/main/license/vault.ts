@@ -169,6 +169,20 @@ function sanitizeLicense(raw: unknown): LicenseVault | null {
         watermark: typeof raw.watermark === 'number' && Number.isFinite(raw.watermark) ? raw.watermark : null,
         server_time_floor:
             typeof raw.server_time_floor === 'number' && Number.isFinite(raw.server_time_floor) ? raw.server_time_floor : null,
+        binding_reported: raw.binding_reported === true ? true : null,
+        // ---- 定期联网复核（plan-7.0）：老 vault 没有这些字段，按「从未复核过」处理，无需迁移 ----
+        /** 上次发起复核的时刻（不论成败），ms；单调只增 */
+        last_checked_at:
+            typeof raw.last_checked_at === 'number' && Number.isFinite(raw.last_checked_at) ? raw.last_checked_at : null,
+        /** 上次服务端明确回答 ACTIVE 的时刻，ms */
+        last_verified_ok_at:
+            typeof raw.last_verified_ok_at === 'number' && Number.isFinite(raw.last_verified_ok_at)
+                ? raw.last_verified_ok_at
+                : null,
+        /** 已消耗的离线宽限（ms）；老 vault 缺失按 0，天然安全（不会一升级就因断网被停） */
+        offline_grace_used_ms: Math.max(0, Math.floor(numOr(raw.offline_grace_used_ms, 0))),
+        /** 服务端明确回答吊销/过期 → 本地停用；只有复核成功才清 false */
+        revoked_by_server: raw.revoked_by_server === true ? true : null,
     };
 }
 

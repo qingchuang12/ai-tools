@@ -52,6 +52,28 @@ export function expToMs(exp: number | null | undefined): number | null {
 }
 
 /**
+ * 从不验签地提取 token 中的 `lic`（许可证 key）。
+ *
+ * **仅解码 payload 段，不验证签名**——用途是拿到 licenseKey 后连同 Bearer 令牌一起发给服务端，
+ * 归属与授权校验完全由服务端（`unbindByOwner(licenseKey, currentUserId())`）完成，本地无需信任该字段。
+ * 取不到（格式错 / 无 `lic`）返回 null。
+ */
+export function extractLicenseKeyFromToken(token: string): string | null {
+    const raw = (token || '').trim();
+    if (!raw) return null;
+    const parts = raw.split('.');
+    if (parts.length !== 3) return null;
+    const payloadBuf = decodeSegment(parts[1]);
+    if (!payloadBuf) return null;
+    try {
+        const payload = JSON.parse(payloadBuf.toString('utf-8')) as Partial<TokenPayload>;
+        return typeof payload.lic === 'string' && payload.lic ? payload.lic : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * 生效权益 = 「SKU 授予的 gate 键」∪「token 原始 feat」。
  *
  * 前者由包外配置按 SKU 映射（功能开关，见 `SKU_FEATURES` 注释）；后者是服务端的营销权益文案。

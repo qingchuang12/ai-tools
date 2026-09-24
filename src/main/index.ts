@@ -42,6 +42,7 @@ import {createMcpClient, disconnectAllClients, getMcpClient, removeMcpClient} fr
 import {deactivate, getActivationState} from './activation-store';
 import {getMachineCode} from './license/machine-code';
 import * as license from './license';
+import * as account from './account';
 import {GATE_LOCKED_MESSAGE} from './license/feature-gate';
 import {getCloudSyncStore} from './cloud-sync-store';
 import {getCloudSyncService} from './cloud-sync-service';
@@ -635,6 +636,24 @@ ipcMain.handle('activation:deactivate', async () => deactivate());
 ipcMain.handle('license:has-feature', async (_e, feature: string): Promise<boolean> =>
     (await license.assertFeature(feature)).allowed
 );
+
+// ============ 账号（登录态）IPC 处理器 ============
+// 持有登录态（accessToken 持久化 + 登录 / 第二因子校验 / 登出 / 当前用户）。
+// 是 A9「客户端自动路径改造」中新增账号登录能力的落地，也是 R6 换绑解绑与
+// 「密钥激活分支要求登录」的共同前置。对外文案统一收敛，绝不回传错误码。
+ipcMain.handle('account:login', async (_e, email: string, password: string) =>
+    account.login(email, password)
+);
+
+ipcMain.handle('account:verify-mfa', async (_e, ticket: string, code: string) =>
+    account.verifyMfa(ticket, code)
+);
+
+ipcMain.handle('account:logout', async () => account.logout());
+
+ipcMain.handle('account:get-profile', async () => account.getProfile());
+
+ipcMain.handle('account:is-logged-in', async (): Promise<boolean> => account.isLoggedIn());
 
 // ============ Skills IPC 处理器 ============
 // 获取指定客户端的已安装 Skills

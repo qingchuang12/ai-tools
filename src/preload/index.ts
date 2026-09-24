@@ -21,7 +21,14 @@ import type {SkillsExportResult} from '../main/skills-export';
 import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
 import type {UpdateEventPayload} from '../main/updater';
 import type {McpServerConfig} from '../main/config/types';
-import type {ActivationApi, ActivationState, RedeemResult} from '../shared/activation-types';
+import type {
+    AccountApi,
+    AccountAuthResult,
+    AccountProfile,
+    ActivationApi,
+    ActivationState,
+    RedeemResult
+} from '../shared/activation-types';
 
 // 类型定义
 // McpServerConfig 统一 re-export 主进程单一事实源（config/types.ts），不再本地重复定义——
@@ -641,6 +648,17 @@ const api = {
         deactivate: (): Promise<ActivationState> => ipcRenderer.invoke('activation:deactivate'),
         hasFeature: (feature: string): Promise<boolean> => ipcRenderer.invoke('license:has-feature', feature),
     } as ActivationApi,
+
+    // 账号会话（登录态）：持有 accessToken 持久化 + 登录 / 第二因子校验 / 登出 / 当前用户
+    account: {
+        login: (email: string, password: string): Promise<AccountAuthResult> =>
+            ipcRenderer.invoke('account:login', email, password),
+        verifyMfa: (ticket: string, code: string): Promise<AccountAuthResult> =>
+            ipcRenderer.invoke('account:verify-mfa', ticket, code),
+        logout: (): Promise<void> => ipcRenderer.invoke('account:logout'),
+        getProfile: (): Promise<AccountProfile | null> => ipcRenderer.invoke('account:get-profile'),
+        isLoggedIn: (): Promise<boolean> => ipcRenderer.invoke('account:is-logged-in'),
+    } as AccountApi,
 };
 
 // 暴露 API 到渲染进程

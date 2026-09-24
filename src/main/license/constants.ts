@@ -37,14 +37,49 @@ export const CHECKOUT_PAGE_PATH = '/checkout/index.html';
 export const REDEEM_API_PATH = '/api/redeem/redeem';
 
 /**
- * R6：释放本机绑定（换绑场景）端点（服务端 LicenseController，公开）。
- * 持有旧授权签名 token 即证明归属，校验通过且机器码一致后清空 `machineCode`，
- * 不吊销授权本身（与已删除的「自吊销」语义不同）。
+ * R6：释放本机绑定（换绑场景）端点（服务端 AccountAssetController，需登录 + 本人归属）。
+ * ⚠️ 旧端点 `/api/licenses/unbind` 已于 plan-7.0 / B10 **物理删除**（始终 403 不可达），
+ * 故此处改指账号侧出口 `POST /api/account/licenses/{licenseKey}/unbind`（`unbindByOwner(licenseKey, currentUserId())`）。
+ * 客户端须持有登录态 Bearer 令牌且 licenseKey 归属本人，否则 401/403。
  */
-export const UNBIND_API_PATH = '/api/licenses/unbind';
+export const ACCOUNT_UNBIND_API_PATH = (licenseKey: string): string =>
+    `/api/account/licenses/${encodeURIComponent(licenseKey)}/unbind`;
 
 /** R6：解绑为 best-effort 旁路请求，用比兑换（15s）短的超时，避免换绑时主进程被拖死 */
 export const UNBIND_API_TIMEOUT_MS = 8000;
+
+// ==================== 账号体系端点（服务端 AccountController / AccountMfaController） ====================
+// 契约见 billing-license-service `README.md`「账号」段与「二次因子登录校验」段。
+
+/** 登录端点（公开）：`{email,password}` → AuthResponse */
+export const LOGIN_API_PATH = '/api/account/login';
+
+/** 第二因子校验端点（permitAll 半认证）：`{ticket,code}` → AuthResponse（真令牌） */
+export const MFA_VERIFY_API_PATH = '/api/account/mfa/verify';
+
+/** 当前用户端点（Bearer） */
+export const ME_API_PATH = '/api/account/me';
+
+/** 登出端点（Bearer）：tokenVersion+1 令该用户所有令牌失效 */
+export const LOGOUT_API_PATH = '/api/account/logout';
+
+/** 账号 accessToken 密文落点（secret-store 通用密文 id，复用 AES-256-GCM / safeStorage） */
+export const ACCOUNT_ACCESS_TOKEN_SECRET_ID = 'account-access-token';
+
+/** 各账号端点超时（均属交互/启动路径上的旁路请求，短于兑换 15s） */
+export const LOGIN_TIMEOUT_MS = 15000;
+export const MFA_VERIFY_TIMEOUT_MS = 15000;
+export const ME_TIMEOUT_MS = 10000;
+export const LOGOUT_TIMEOUT_MS = 8000;
+
+/**
+ * D2（plan-7.0 / A9）：客户端「自动上报绑定」端点（服务端 LicenseController，公开）。
+ * 凭 signedToken 验签证明归属，无需登录；客户端兑换/激活后于启动时补报一次机器码完成绑定。
+ */
+export const REPORT_BINDING_API_PATH = '/api/licenses/report-binding';
+
+/** D2：上报绑定为启动期旁路请求，用比兑换（15s）短的超时，避免拖慢启动 */
+export const REPORT_BINDING_TIMEOUT_MS = 10000;
 
 /**
  * C8：机器码首次出现时间端点（服务端 MachineController，公开只读）。
@@ -55,6 +90,31 @@ export const MACHINE_FIRST_SEEN_API_PATH = (machineCode: string): string =>
 
 /** C8 探测超时：启动路径上的旁路请求，比兑换（15s）短得多，拿不到就当「没见过」 */
 export const MACHINE_PROBE_TIMEOUT_MS = 5000;
+
+// ==================== 定期联网复核（plan-7.0） ====================
+
+/**
+ * 复核端点（服务端 LicenseController，公开 permitAll、限流 60 次/分钟/IP）。
+ * ⚠️ 是 **GET + licenseKey 路径参数**（不是 POST），且命中限流时返回 **429 且 body 为空**——
+ * 故客户端必须先判 `response.status` 再 `response.json()`，否则 json() 抛异常会被误记成 BAD_RESPONSE。
+ */
+export const LICENSE_VERIFY_API_PATH = (licenseKey: string): string =>
+    `/api/licenses/verify/${encodeURIComponent(licenseKey)}`;
+
+/** 复核总开关默认值（包外可关，用于资损事故秒级回滚） */
+export const DEFAULT_RECHECK_ENABLED = true;
+
+/** 复核间隔默认 24h */
+export const DEFAULT_RECHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** 离线宽限默认 7 天：只覆盖「服务端答不上来」，服务端明确答吊销是立即停，不受宽限影响 */
+export const DEFAULT_RECHECK_OFFLINE_GRACE_DAYS = 7;
+
+/** 单次复核超时 8s：启动路径上的旁路请求，短于兑换（15s） */
+export const DEFAULT_RECHECK_TIMEOUT_MS = 8000;
+
+/** 命中 429 后退避 1h（429 照常累加宽限，免扣会让限流变成永久续命后门） */
+export const DEFAULT_RECHECK_RATE_LIMITED_RETRY_MS = 60 * 60 * 1000;
 
 /** 单公钥文件名（客户心智中的「那一个特殊文件」，上线前替换它即可） */
 export const PUBLIC_KEY_FILE_NAME = 'public.key';
@@ -124,6 +184,13 @@ export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
     grace: {
         hardwareChangeDays: 7,
         maxAutoGrace: 1,
+    },
+    recheck: {
+        enabled: DEFAULT_RECHECK_ENABLED,
+        intervalMs: DEFAULT_RECHECK_INTERVAL_MS,
+        offlineGraceDays: DEFAULT_RECHECK_OFFLINE_GRACE_DAYS,
+        timeoutMs: DEFAULT_RECHECK_TIMEOUT_MS,
+        rateLimitedRetryMs: DEFAULT_RECHECK_RATE_LIMITED_RETRY_MS,
     },
     features: {
         proFeature: FEATURE_PRO,

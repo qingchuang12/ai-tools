@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ActivationModal from './components/ActivationModal';
 import {useApplyTheme} from './lib/useTheme';
 import {useActivationStore} from './store/activationStore';
+import {useAccountStore} from './store/accountStore';
 
 // 页面懒加载：避免 Settings / Inspector 等重依赖（CloudSyncManager、react-syntax-highlighter）
 // 进入首屏 bundle，减小首屏解析/执行体积，加快启动到可交互。
@@ -24,6 +25,11 @@ function App() {
   // 初始化激活状态（全局单例 ticker：加载状态 + 每秒倒计时 / 到期降级）
   useEffect(() => {
     useActivationStore.getState().init();
+  }, []);
+
+  // 初始化账号会话：探测本地令牌是否已登录，命中则补拉 profile
+  useEffect(() => {
+    useAccountStore.getState().init();
   }, []);
 
   return (

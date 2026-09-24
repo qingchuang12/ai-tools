@@ -1185,5 +1185,26 @@
   "errorBoundary": {
     "title": "Something went wrong",
     "retry": "Retry"
+  },
+  "account": {
+    "title": "Account",
+    "loginHint": "Sign in to manage your licenses and devices from your account.",
+    "login": "Sign in",
+    "verify": "Verify",
+    "working": "Please wait…",
+    "cancel": "Cancel",
+    "logout": "Sign out",
+    "loggedInAs": "Signed in as",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "codeLabel": "Verification code",
+    "codePlaceholder": "6-digit code",
+    "mfaHint": "Enter the code from your authenticator app or email.",
+    "errors": {
+      "generic": "Sign-in failed. Check your email and password, then try again.",
+      "network": "Network connection failed. Check your connection and try again."
+    }
   }
 }

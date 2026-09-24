@@ -33,7 +33,7 @@ vi.mock('../main/license/machine-code', () => ({
     getMachineCode: async (): Promise<string> => hoisted.mid,
 }));
 
-const {fetchRedeem} = await import('../main/license/redeem');
+const {fetchRedeem, reportBinding} = await import('../main/license/redeem');
 
 /** 服务端成功响应（统一壳） */
 function envelope(data: Record<string, unknown>): Record<string, unknown> {
@@ -147,6 +147,43 @@ describe('fetchRedeem 响应解析', () => {
     it('网络异常/超时 → 单独归为 network 类（避免用户把断网误判为激活码错误）', async () => {
         stubFetch(() => ({json: {}, throws: true}));
         const r = await fetchRedeem('RC-1', 'buyer@example.com');
+        expect(r.ok).toBe(false);
+        expect(r.category).toBe('network');
+        expect(r.error).toBe('license.errors.network');
+    });
+});
+
+describe('reportBinding（D2 启动旁路补绑）', () => {
+    it('POST 到 /api/licenses/report-binding，上送 signedToken 与 machineId', async () => {
+        stubFetch(() => ({
+            json: envelope({success: true, licenseKey: '2F8A-7C31-9D04-B5E6', signedToken: 'h.p.s', serverTime: 1758000000000}),
+        }));
+        const r = await reportBinding('old.token.sig', hoisted.mid);
+        expect(r.ok).toBe(true);
+        expect(captured.url).toBe('https://billing.example.test/api/licenses/report-binding');
+        expect(captured.body).toEqual({signedToken: 'old.token.sig', machineId: hoisted.mid});
+        expect(r.token).toBe('h.p.s');
+        expect(r.serverTimeMs).toBe(1758000000000);
+    });
+
+    it('signedToken 缺失：不发请求，归为 license 类', async () => {
+        stubFetch(() => ({json: envelope({signedToken: 'x'})}));
+        const r = await reportBinding('   ', hoisted.mid);
+        expect(r.ok).toBe(false);
+        expect(r.category).toBe('license');
+        expect(captured.url).toBeUndefined();
+    });
+
+    it('HTTP 400 → 归为 license 类（不误报 network）', async () => {
+        stubFetch(() => ({status: 400, json: {success: false, errorCode: 'CREDENTIAL_NOT_FOUND'}}));
+        const r = await reportBinding('old.token.sig', hoisted.mid);
+        expect(r.ok).toBe(false);
+        expect(r.category).toBe('license');
+    });
+
+    it('网络异常 → 归为 network 类', async () => {
+        stubFetch(() => ({json: {}, throws: true}));
+        const r = await reportBinding('old.token.sig', hoisted.mid);
         expect(r.ok).toBe(false);
         expect(r.category).toBe('network');
         expect(r.error).toBe('license.errors.network');

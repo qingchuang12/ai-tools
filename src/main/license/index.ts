@@ -17,12 +17,14 @@ import {assertFeature as gateAssertFeature} from './feature-gate';
 import {readFirstRunAt, writeFirstRun} from './first-run';
 import {getHardwareFactors, getMachineCodePair, warmupMachineCode} from './machine-code';
 import {probeMachineFirstSeen} from './machine-probe';
+import {getPersistedAccessToken} from '../account';
 import {
     buildCheckoutUrl,
     fetchRedeem,
     parseLicenseText,
     readLicenseFileViaDialog,
     redeemFailure,
+    reportBinding,
     unbindPriorOnServer,
 } from './redeem';
 import type {TrialEvaluation} from './trial';
@@ -40,14 +42,45 @@ import {
     touchTrial,
 } from './trial';
 import {raiseAnchorFloor, readAnchorFloor} from './anchor';
+import {isDisabledByRecheck, setRecheckDisableHook, startRecheckLoop} from './recheck';
 import type {VaultData} from './vault';
 import {readVault, writeVault} from './vault';
-import {expToMs, resolveFeatures, verifyToken} from './verifier';
+import {expToMs, extractLicenseKeyFromToken, resolveFeatures, verifyToken} from './verifier';
 import type {LicenseConfig, LicenseVault, TokenPayload, TrialVault} from './types';
 import {FEATURE_PRO} from '../../shared/license-constants';
 
 /** 当前会话已验签通过的载荷（供 `assertFeature` / UI 复用，避免重复验签） */
 let payloadCache: TokenPayload | null = null;
+
+/** D2：同进程内已触发过补报的 token 集合（配合持久化标记，避免一次会话内重复发请求） */
+const reportedThisSession = new Set<string>();
+
+/** 授权状态变化监听（运行中被复核停用时的 UI 反馈入口）；null = 未注册 */
+let stateChangeListener: ((state: ActivationState) => void) | null = null;
+
+/**
+ * 注册状态变化监听（传 null 注销）。
+ * P2 用途：主进程在复核停用后可据此向渲染层广播，让用户立刻看到「授权已失效」而不用重启。
+ */
+export function setStateChangeListener(fn: ((state: ActivationState) => void) | null): void {
+    stateChangeListener = fn;
+}
+
+/** 重算一次状态并广播；广播是旁路能力，任何失败都不允许影响授权判定本身 */
+function notifyStateChanged(): void {
+    if (!stateChangeListener) return;
+    void getState(null)
+        .then((state) => {
+            try {
+                stateChangeListener?.(state);
+            } catch (error) {
+                logLicenseEvent('LIC_INTERNAL', {event: 'state_listener_failed', reason: (error as Error).name});
+            }
+        })
+        .catch(() => {
+            /* 广播失败不影响授权判定 */
+        });
+}
 
 /** 空状态模板 */
 function baseState(): ActivationState {
@@ -283,17 +316,28 @@ export async function getState(persisted: ActivationState | null = null): Promis
         // 到期判定必须用 effectiveNow：水印只增，改系统时间救不了已过期的授权。
         // 付费态的单调下界自带一路（trial 在已激活分支不推进），再加 vault 外锚（R2），一起取 max。
         const floor = maxFloor(licenseFloor(vault.license), await readAnchorFloor());
+        // ① 先推进付费水印与 vault 外锚：防回拨不受停用影响，这两步必须照常发生
+        const raised = raiseLicenseWatermark(vault.license, now);
+        if (raised) await writeVault({trial: vault.trial, license: raised});
+        await raiseAnchorFloor(now);
+        const license = raised ?? vault.license;
+        // ② 再判停用：优先级**高于**验签与硬件变更宽限。
+        //    若只挂在「验签成功」分支，退款用户换一块硬盘 → mid 不匹配 → 命中 resolveHardwareGrace
+        //    → 又白得 7 天可用期（真实绕过）。故必须放在验签之前。
+        if (isDisabledByRecheck(license, cfg)) {
+            payloadCache = null;
+            return {...baseState(), machineCode: pair.strong, degraded: 'token_invalid'};
+        }
+        // ③ 才走原有验签流程（含 LIC_MACHINE_MISMATCH → 硬件宽限）
         const outcome = await verifyToken(token, {
             nowMs: effectiveNow(vault.trial, now, floor),
         });
-        // 无论验签成败都要推进付费水印：见过的最新时间不能丢，否则回拨就能续命过期订阅
-        const raised = raiseLicenseWatermark(vault.license, now);
-        if (raised) await writeVault({trial: vault.trial, license: raised});
-        // R2：vault 外锚同步推进（只增不减、步进节流）——vault 可被整体还原，锚要独立于它存在
-        await raiseAnchorFloor(now);
-        const license = raised ?? vault.license;
         if (outcome.ok && outcome.payload) {
             payloadCache = outcome.payload;
+            // D2（plan-7.0 / A9）：已验签的授权若尚未补报过本机机器码，启动期旁路上报一次（不阻塞启动）
+            if (!license?.binding_reported) {
+                void reportBindingOnStartup(token, pair.strong);
+            }
             return activatedState(outcome.payload, cfg, license, null, pair.strong);
         }
         payloadCache = null;
@@ -341,6 +385,34 @@ export async function getState(persisted: ActivationState | null = null): Promis
 }
 
 /**
+ * D2（plan-7.0 / A9）：启动旁路补报本机机器码。
+ *
+ * 场景：授权落地时未携带机器码（落成「未绑定」态），或需把服务端已绑定的事实同步回本地。
+ * 设计约束：
+ * - **不阻塞启动**：`getState` 已直接返回已激活态，本函数 fire-and-forget；
+ * - **去重**：同进程（`reportedThisSession`）+ 跨重启（`LicenseVault.binding_reported`）双重防重复；
+ * - **落盘重签 token**：补绑成功后服务端会**重签** `signedToken`（含本次机器码），必须把新 token 写回
+ *   vault——否则本地旧 token（无 `mid`）下次启动会被 `verifier` 判 `LIC_MACHINE_MISMATCH`；
+ * - **失败不抛**：网络 / 拒绝一律留待下次启动重试。
+ */
+async function reportBindingOnStartup(signedToken: string, machineId: string): Promise<void> {
+    if (reportedThisSession.has(signedToken)) return;
+    reportedThisSession.add(signedToken);
+    try {
+        const r = await reportBinding(signedToken, machineId);
+        if (!r.ok || !r.token) return;
+        // 服务端重签的 token 才是「已绑本机」的权威件，先本地验签再落盘（与 applySignedToken 同口径）
+        const applied = await applySignedToken(r.token, r.serverTimeMs ?? null);
+        if (!applied.success) return;
+        const vault = await readVault();
+        if (!vault.license) return;
+        await writeVault({trial: vault.trial, license: {...vault.license, binding_reported: true}});
+    } catch (error) {
+        logLicenseEvent('LIC_INTERNAL', {event: 'report_binding_unexpected', reason: (error as Error).name});
+    }
+}
+
+/**
  * 确保试用账本存在（原「首次安装发试用」入口，保留导出以兼容既有调用点与测试）。
  *
  * 真正的发试用已经内化为 `getState()` 的自愈逻辑：不再依赖 activation-store 的调用时机，
@@ -355,6 +427,11 @@ export async function grantTrialOnFirstInstall(): Promise<void> {
 /** 门面初始化：必须在 `app.whenReady()` 之后调用（safeStorage 在 ready 前会抛） */
 export async function init(): Promise<ActivationState> {
     warmupMachineCode();
+    // 复核循环内部会**立即**发起首次复核（退款时效优先，启动即查），
+    // 故此处只调 startRecheckLoop()，不再额外 runRecheck()——否则启动会并发两个请求，白白消耗限流额度。
+    // 循环 timer 已 unref()，不阻塞窗口显示也不阻止进程退出。
+    setRecheckDisableHook(notifyStateChanged);
+    startRecheckLoop();
     return getState(null);
 }
 
@@ -368,7 +445,24 @@ export async function deactivate(): Promise<ActivationState> {
     const vault = await readVault();
     await writeVault({
         trial: vault.trial,
-        license: {signed_token: null, activated_at: null, mid_at_activation: null, mid_soft_at_activation: null},
+        // 显式列出而非依赖「字面量未列出即被丢弃」：去激活必须清干净复核状态，
+        // 否则「停用 → 去激活 → 重新激活」可能继承旧的 revoked_by_server 标记。
+        // watermark / server_time_floor / binding_reported 保持既有的「丢弃」行为不变——
+        // 清空单调时间下界属既有安全语义变更，已登记为独立待办，本轮不动。
+        license: {
+            ...vault.license,
+            signed_token: null,
+            activated_at: null,
+            mid_at_activation: null,
+            mid_soft_at_activation: null,
+            revoked_by_server: false,
+            offline_grace_used_ms: 0,
+            last_checked_at: null,
+            last_verified_ok_at: null,
+            watermark: null,
+            server_time_floor: null,
+            binding_reported: null,
+        },
     });
     payloadCache = null;
     return getState(null);
@@ -405,6 +499,14 @@ async function applySignedToken(token: string, serverTimeMs: number | null): Pro
         mid_soft_at_activation: pair.soft,
         watermark: Math.max(now, licenseFloor(vault.license) ?? 0),
         server_time_floor: vault.license?.server_time_floor ?? null,
+        // 新授权不继承旧授权的复核状态：否则「被停用 → 重新激活」会立刻又被判停用，用户无法自救。
+        // 复核从零开始（下次启动即首查），由服务端重新给出权威答案。
+        last_checked_at: null,
+        last_verified_ok_at: null,
+        offline_grace_used_ms: 0,
+        revoked_by_server: false,
+        // 新 token 尚未补报本机机器码（与既有「新激活需补绑」语义一致）
+        binding_reported: null,
     };
     if (cfg.clock.useServerTimeFloor && typeof serverTimeMs === 'number' && Number.isFinite(serverTimeMs)) {
         license = raiseLicenseServerFloor(license, serverTimeMs) ?? license;
@@ -433,17 +535,23 @@ async function applyWithSwitch(
     const result = await applySignedToken(token, serverTimeMs);
     if (!result.success || !priorToken) return result;
 
-    // 新授权已本地生效，尽力释放旧授权的本机绑定（不阻挡、不回滚）
-    let machineId = '';
-    try {
-        machineId = (await getMachineCodePair()).strong;
-    } catch {
-        machineId = '';
-    }
-    const ok = await unbindPriorOnServer(priorToken, machineId);
-    if (!ok) {
-        logLicenseEvent('LIC_UNBIND_FAILED', {event: 'switch_unbind_best_effort_failed'});
-        result.unbindWarning = true;
+    // 新授权已本地生效，尽力释放旧授权的本机绑定（不阻挡、不回滚）。
+    // R6 修复：旧端点已删除，改走账号侧出口——从旧 token 解出 licenseKey，配合登录态 Bearer 调用。
+    const priorLicenseKey = extractLicenseKeyFromToken(priorToken);
+    const accessToken = getPersistedAccessToken();
+    if (priorLicenseKey && accessToken) {
+        const ok = await unbindPriorOnServer(accessToken, priorLicenseKey);
+        if (!ok) {
+            logLicenseEvent('LIC_UNBIND_FAILED', {event: 'switch_unbind_best_effort_failed'});
+            result.unbindWarning = true;
+        }
+    } else {
+        // 未登录或旧 token 取不到 licenseKey：无法调用账号侧解绑，仅记日志（best-effort）
+        logLicenseEvent('LIC_UNBIND_SKIPPED', {
+            event: 'switch_unbind_no_session',
+            hasToken: !!accessToken,
+            hasLicenseKey: !!priorLicenseKey,
+        });
     }
     return result;
 }
@@ -480,6 +588,13 @@ export async function importLicenseFile(switchMode = false): Promise<RedeemResul
  */
 export async function assertFeature(feature: string): Promise<{allowed: boolean; code: LicenseErrorCode}> {
     const result = await gateAssertFeature(feature);
-    if (result.payload) payloadCache = result.payload;
+    if (result.code === 'LIC_RECHECK_REVOKED') {
+        // 停用后旧载荷不能留在会话缓存里：currentPayload() 会被 updater.ts 消费，
+        // 而 update-gate 是「payload 为 null 即放行」口径，陈旧的 update_until / max_major_version
+        // 会让已停用用户被「按旧权益」误拦更新。清空后与「未激活放行」的既有设计自洽。
+        payloadCache = null;
+    } else if (result.payload) {
+        payloadCache = result.payload;
+    }
     return {allowed: result.allowed, code: result.code};
 }
