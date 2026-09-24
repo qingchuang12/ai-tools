@@ -509,6 +509,7 @@
     "connect": "اتصال",
     "disconnect": "قطع الاتصال",
     "connecting": "جارٍ الاتصال…",
+    "installing": "Installing dependencies, please wait…",
     "connected": "متصل",
     "disconnected": "غير متصل",
     "error": "خطأ",

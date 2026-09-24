@@ -40,20 +40,6 @@ function formatDate(dateStr: string): string {
     return date.toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'});
 }
 
-function getCategoryColor(categoryId: string): { bg: string; text: string; border: string } {
-    const colors: Record<string, { bg: string; text: string; border: string }> = {
-        coding: {bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/30'},
-        testing: {bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/30'},
-        devops: {bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30'},
-        'data-analytics': {bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30'},
-        security: {bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/30'},
-        'content-writing': {bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/30'},
-        productivity: {bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/30'},
-        design: {bg: 'bg-pink-500/10', text: 'text-pink-400', border: 'border-pink-500/30'},
-    };
-    return colors[categoryId] || {bg: 'bg-[var(--color-surface-hover)]', text: 'text-[var(--color-muted2)]', border: 'border-[var(--color-border)]'};
-}
-
 function SkillAvatar({author, size = 48}: { author: string; size?: number }) {
     const [avatarError, setAvatarError] = useState(false);
     const avatarUrl = `https://avatars.githubusercontent.com/${author}`;
@@ -67,8 +53,9 @@ function SkillAvatar({author, size = 48}: { author: string; size?: number }) {
                  style={{width: size, height: size}} onError={() => setAvatarError(true)}/>
         );
     }
+    // 彩色底上首字母固定用白色，浅色主题下 text 令牌会变深色、压在彩底上不可读
     return (
-        <div className={`rounded-xl ${colors[colorIndex]} flex items-center justify-center text-[var(--color-text)] font-bold`}
+        <div className={`rounded-xl ${colors[colorIndex]} flex items-center justify-center text-white font-bold`}
              style={{width: size, height: size, fontSize: size * 0.4}}>
             {initial}
         </div>
@@ -563,7 +550,7 @@ export default function SkillDetail() {
     if (isLoading && !skillView) {
         return (
             <div className="flex items-center justify-center h-full bg-[var(--color-bg)]">
-                <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[#0a84ff] rounded-full animate-spin"/>
+                <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin"/>
             </div>
         );
     }
@@ -571,8 +558,8 @@ export default function SkillDetail() {
     if (!skillView) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-[var(--color-bg)]">
-                <div className="w-12 h-12 rounded-full bg-[#ff3b30]/10 flex items-center justify-center mb-3">
-                    <svg className="w-6 h-6 text-[#ff3b30]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                <div className="w-12 h-12 rounded-full bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-[var(--color-danger)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                          strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round"
                               d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
@@ -595,7 +582,7 @@ export default function SkillDetail() {
     const catId = skillView.categoryId ?? '';
     const catTranslated = hasCategory ? translateCategoryName(catId, t, i18n) : '';
     const catLabel = hasCategory ? (catTranslated === catId ? (skillView.category ?? catId) : catTranslated) : '';
-    // 分类 tag 列表：rawCats 为原始 id（getCategoryColor 按 id 精确匹配取色），catLabels 为对应译文
+    // 分类 tag 列表：rawCats 为原始 id，catLabels 为对应译文（本地化按同索引对应）
     const fromList = !!skillView.categories?.length;
     const rawCats = fromList ? skillView.categories! : (skillView.categoryId ? [skillView.categoryId] : []);
     const catLabels = localizeCategoryList(
@@ -653,7 +640,7 @@ export default function SkillDetail() {
                                         <h1 className="text-2xl font-bold text-[var(--color-text)]">{skillView.name}</h1>
                                         {skillView.type === 'local' && (
                                             <span
-                                                className="px-2 py-0.5 rounded text-[12px] font-medium bg-[#34c759]/10 text-[#34c759] border border-[#34c759]/30">
+                                                className="px-2 py-0.5 rounded text-[12px] font-medium bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)] text-[var(--color-success)] border border-[color-mix(in_srgb,var(--color-success)_30%,transparent)]">
                         {t('detail.installed')}
                       </span>
                                         )}
@@ -671,15 +658,13 @@ export default function SkillDetail() {
 
                             {hasCategory && (
                                 <div className="flex flex-wrap gap-2">
-                                    {catLabels.map((label, i) => {
-                                        const cc = getCategoryColor(rawCats[i] ?? label);
-                                        return (
-                                            <span key={label} title={label}
-                                                  className={`inline-block px-2 py-1 rounded-md text-[12px] font-medium border ${cc.bg} ${cc.text} ${cc.border}`}>
-                                                {label}
-                                            </span>
-                                        );
-                                    })}
+                                    {/* 分类徽章配色全站统一走 accent 主题令牌（与列表卡片/ServerCard 一致） */}
+                                    {catLabels.map(label => (
+                                        <span key={label} title={label}
+                                              className="inline-block px-2 py-1 rounded-md text-[12px] font-medium border bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-accent)] border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)]">
+                                            {label}
+                                        </span>
+                                    ))}
                                 </div>
                             )}
 
@@ -982,7 +967,7 @@ export default function SkillDetail() {
                             stackedSublabel
                             disabledIds={installedInClients}
                             sublabel={{installed: t('detail.alreadyInstalled'), available: t('detail.available')}}
-                            unselectedClass="bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[#636366]"
+                            unselectedClass="bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-surface-active)]"
                         />
                     </div>
 

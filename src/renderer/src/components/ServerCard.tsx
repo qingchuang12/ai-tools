@@ -61,7 +61,7 @@ function ServerCard({ server, dataSource, isInstalled, platformConnId }: ServerC
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
-      className="card p-3 cursor-pointer hover:bg-[var(--color-surface-hover)]/30 transition-colors flex flex-col h-[115px]"
+      className="card p-3 cursor-pointer hover:bg-[var(--color-surface-hover)]/30 transition-colors flex flex-col min-h-[115px]"
     >
       {/* 顶部内容区域 */}
       <div className="flex items-start gap-2.5 flex-1 min-h-0">
@@ -77,7 +77,7 @@ function ServerCard({ server, dataSource, isInstalled, platformConnId }: ServerC
               {server.displayName}
             </h3>
             {catList.slice(0, 3).map(cat => (
-              <span key={cat} className="px-1.5 py-0 rounded-full text-[9px] bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20 flex-shrink-0 whitespace-nowrap">
+              <span key={cat} className="px-1.5 py-0 rounded-full text-[9px] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] flex-shrink-0 whitespace-nowrap">
                 {cat}
               </span>
             ))}
@@ -99,7 +99,7 @@ function ServerCard({ server, dataSource, isInstalled, platformConnId }: ServerC
       </div>
 
       {/* 底部信息 - 紧凑设计 */}
-      <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--color-border)]/50">
+      <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[color-mix(in_srgb,var(--color-border)_50%,transparent)]">
         {isSmitheryListItem(server) ? (
           // Smithery 数据源
           <>

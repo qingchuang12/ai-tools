@@ -69,7 +69,7 @@ function PlatformIcon({name, iconUrl}: { name: string; iconUrl?: string }) {
     const colorIndex = name.charCodeAt(0) % colors.length;
     return (
         <div
-            className={`w-12 h-12 rounded-xl ${colors[colorIndex]} flex items-center justify-center text-[var(--color-text)] font-bold text-lg`}>
+            className={`w-12 h-12 rounded-xl ${colors[colorIndex]} flex items-center justify-center text-white font-bold text-lg`}>
             {initial}
         </div>
     );
@@ -310,7 +310,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-full bg-[var(--color-bg)]">
-                <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[#0a84ff] rounded-full animate-spin"/>
+                <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin"/>
             </div>
         );
     }
@@ -318,8 +318,8 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
     if (error || !detail) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-[var(--color-bg)]">
-                <div className="w-12 h-12 rounded-full bg-[#ff3b30]/10 flex items-center justify-center mb-3">
-                    <svg className="w-6 h-6 text-[#ff3b30]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                <div className="w-12 h-12 rounded-full bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-[var(--color-danger)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                          strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round"
                               d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
@@ -387,14 +387,14 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                                         <h1 className="text-2xl font-bold text-[var(--color-text)]">{detail.displayName}</h1>
                                         {detail.isVerified && (
                                             <span
-                                                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[12px] font-medium bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20">
+                                                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[12px] font-medium bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)]">
                         <VerifiedIcon className="w-3 h-3"/>
                                                 {t('detail.verified') || 'Verified'}
                       </span>
                                         )}
                                         {detail.isHosted && (
                                             <span
-                                                className="px-1.5 py-0.5 rounded text-[12px] font-medium bg-[#34c759]/15 text-[#34c759] border border-[#34c759]/20">
+                                                className="px-1.5 py-0.5 rounded text-[12px] font-medium bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)] border border-[color-mix(in_srgb,var(--color-success)_20%,transparent)]">
                         {t('detail.hosted') || 'Hosted'}
                       </span>
                                         )}
@@ -432,7 +432,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                                     {catNames.map(cat => (
                                         <span
                                             key={cat}
-                                            className="px-2 py-0.5 rounded-full text-[12px] bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20"
+                                            className="px-2 py-0.5 rounded-full text-[12px] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)]"
                                         >
                       {cat}
                     </span>
@@ -443,11 +443,11 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
 
                         {/* 运行时警告 */}
                         {canInstall && !runtimeAvailable && runtime !== 'docker' && (
-                            <div className="card p-4 border-[#ff9f0a]/30 bg-[#ff9f0a]/5 mb-6">
+                            <div className="card p-4 border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_5%,transparent)] mb-6">
                                 <div className="flex items-start gap-3">
                                     <span className="text-xl">{runtime === 'node' ? '⬢' : '🐍'}</span>
                                     <div className="flex-1">
-                                        <h3 className="text-[13px] font-semibold text-[#ff9f0a] mb-1">{t('detail.runtimeRequired')}</h3>
+                                        <h3 className="text-[13px] font-semibold text-[var(--color-warning)] mb-1">{t('detail.runtimeRequired')}</h3>
                                         <p className="text-[12px] text-[var(--color-muted2)] mb-3">
                                             {t('detail.runtimeRequiredDesc', {
                                                 runtime: runtime === 'node' ? 'Node.js' : 'Python',
@@ -467,7 +467,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                   <code>{detail.readme}</code>
                 </pre>
                             ) : (
-                                <p className="text-[14px] text-[#8b949e] text-center py-4">{t('detail.noReadme')}</p>
+                                <p className="text-[14px] text-[var(--color-muted)] text-center py-4">{t('detail.noReadme')}</p>
                             )}
                         </div>
                     </div>
@@ -583,7 +583,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                                     <span className="text-[var(--color-muted)]">{t('detail.runtime') || 'Runtime'}</span>
                                     <div className="flex items-center gap-1">
                                         <span
-                                            className={`w-2 h-2 rounded-full ${runtimeAvailable || runtime === 'docker' ? 'bg-[#34c759]' : 'bg-[#ff9f0a]'}`}/>
+                                            className={`w-2 h-2 rounded-full ${runtimeAvailable || runtime === 'docker' ? 'bg-[var(--color-success)]' : 'bg-[var(--color-warning)]'}`}/>
                                         {/* 远程托管型无本地命令，展示接入类型（sse/http 等） */}
                                         <span className="text-[var(--color-text)] capitalize">
                                             {'url' in detail.install ? detail.install.type : detail.install.command}
@@ -622,7 +622,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                 <div className="space-y-4">
                     {installError && (
                         <div
-                            className="p-3 rounded-md bg-[#ff3b30]/10 border border-[#ff3b30]/20 text-[#ff3b30] text-[12px]">
+                            className="p-3 rounded-md bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-danger)_20%,transparent)] text-[var(--color-danger)] text-[12px]">
                             {installError}
                         </div>
                     )}
@@ -644,7 +644,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                                 type="text"
                                 value={remoteUrl}
                                 onChange={(e) => setRemoteUrl(e.target.value)}
-                                className="w-full px-2.5 py-1.5 rounded-md bg-[var(--color-surface-hover)] text-[12px] text-[var(--color-text)] font-mono border-none focus:ring-1 focus:ring-[#0a84ff]"
+                                className="w-full px-2.5 py-1.5 rounded-md bg-[var(--color-surface-hover)] text-[12px] text-[var(--color-text)] font-mono border-none focus:ring-1 focus:ring-[var(--color-accent)]"
                             />
                             <p className="text-[11px] text-[var(--color-muted)] mt-1">{t('detail.remoteUrlHint')}</p>
                         </div>
@@ -662,7 +662,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                                         <div key={key}>
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className="text-[12px] font-mono text-[var(--color-text)]">{key}</span>
-                                                {isRequired && <span className="text-[#ff3b30] text-[12px]">*</span>}
+                                                {isRequired && <span className="text-[var(--color-danger)] text-[12px]">*</span>}
                                                 {schema?.description && (
                                                     <span
                                                         className="text-[12px] text-[var(--color-muted)] truncate">{(schema.description as string)}</span>
@@ -676,7 +676,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                                                     [key]: e.target.value
                                                 }))}
                                                 placeholder={isRequired ? (t('detail.required') || 'required') : ''}
-                                                className="w-full px-2.5 py-1.5 rounded-md bg-[var(--color-surface-hover)] text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] border-none focus:ring-1 focus:ring-[#0a84ff]"
+                                                className="w-full px-2.5 py-1.5 rounded-md bg-[var(--color-surface-hover)] text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] border-none focus:ring-1 focus:ring-[var(--color-accent)]"
                                             />
                                         </div>
                                     );
@@ -701,7 +701,7 @@ export default function PlatformServerDetail({connId, serverId, seedItem}: Props
                             stackedSublabel
                             disabledIds={installedClients}
                             sublabel={{installed: t('detail.alreadyInstalled'), available: t('detail.available')}}
-                            unselectedClass="bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[#636366]"
+                            unselectedClass="bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-surface-active)]"
                         />
                         {clients.filter(c => c.installed && c.supportsMcp).length === 0 && (
                             <p className="text-center text-[var(--color-muted)] text-[13px] py-4">

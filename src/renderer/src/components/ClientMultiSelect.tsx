@@ -52,21 +52,21 @@ interface ClientMultiSelectProps {
 const VARIANT_CLASSES: Record<Variant, { base: string; selected: string; unselected: string; disabled: string }> = {
     sync: {
         base: 'flex items-center gap-3 p-3 rounded-md border transition-all text-start',
-        selected: 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/30 text-[var(--color-accent)]',
+        selected: 'bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] text-[var(--color-accent)]',
         unselected: 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-muted)]',
-        disabled: 'bg-[#34c759]/10 border-[#34c759]/30 text-[#34c759]',
+        disabled: 'bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)] border-[color-mix(in_srgb,var(--color-success)_30%,transparent)] text-[var(--color-success)]',
     },
     uninstall: {
         base: 'flex items-center gap-3 p-3 rounded-md border transition-all text-start',
-        selected: 'bg-[#ff3b30]/10 border-[#ff3b30]/30 text-[#ff3b30]',
+        selected: 'bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] text-[var(--color-danger)]',
         unselected: 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-muted)]',
-        disabled: 'bg-[#34c759]/10 border-[#34c759]/30 text-[#34c759]',
+        disabled: 'bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)] border-[color-mix(in_srgb,var(--color-success)_30%,transparent)] text-[var(--color-success)]',
     },
     install: {
         base: 'flex items-center gap-2 p-3 rounded-md border text-start transition-colors',
-        selected: 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/30 text-[var(--color-accent)]',
+        selected: 'bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] text-[var(--color-accent)]',
         unselected: 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-muted)]',
-        disabled: 'bg-[#34c759]/10 border-[#34c759]/30 text-[#34c759]',
+        disabled: 'bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)] border-[color-mix(in_srgb,var(--color-success)_30%,transparent)] text-[var(--color-success)]',
     },
 };
 

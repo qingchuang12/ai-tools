@@ -509,6 +509,7 @@
     "connect": "Подключить",
     "disconnect": "Отключить",
     "connecting": "Подключение…",
+    "installing": "Installing dependencies, please wait…",
     "connected": "Подключено",
     "disconnected": "Отключено",
     "error": "Ошибка",

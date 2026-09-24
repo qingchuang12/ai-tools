@@ -66,14 +66,14 @@ function DefaultIcon({name, repoUrl}: { name: string; repoUrl?: string | null })
         );
     }
 
-    // 回退到首字母图标
+    // 回退到首字母图标（彩底上首字母固定白色，浅色主题下 text 令牌变深色会不可读）
     const initial = name.charAt(0).toUpperCase();
     const colors = ['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500', 'bg-pink-500'];
     const colorIndex = name.charCodeAt(0) % colors.length;
 
     return (
         <div
-            className={`w-12 h-12 rounded-xl ${colors[colorIndex]} flex items-center justify-center text-[var(--color-text)] font-bold text-lg`}>
+            className={`w-12 h-12 rounded-xl ${colors[colorIndex]} flex items-center justify-center text-white font-bold text-lg`}>
             {initial}
         </div>
     );
@@ -111,8 +111,8 @@ export default function Detail() {
         if (!connId) {
             return (
                 <div className="flex flex-col items-center justify-center h-full bg-[var(--color-bg)]">
-                    <div className="w-12 h-12 rounded-full bg-[#ff3b30]/10 flex items-center justify-center mb-3">
-                        <svg className="w-6 h-6 text-[#ff3b30]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                    <div className="w-12 h-12 rounded-full bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] flex items-center justify-center mb-3">
+                        <svg className="w-6 h-6 text-[var(--color-danger)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                              strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round"
                                   d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
@@ -293,7 +293,7 @@ export default function Detail() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-full bg-[var(--color-bg)]">
-                <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[#0a84ff] rounded-full animate-spin"/>
+                <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin"/>
             </div>
         );
     }
@@ -301,8 +301,8 @@ export default function Detail() {
     if (error || !server) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-[var(--color-bg)]">
-                <div className="w-12 h-12 rounded-full bg-[#ff3b30]/10 flex items-center justify-center mb-3">
-                    <svg className="w-6 h-6 text-[#ff3b30]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                <div className="w-12 h-12 rounded-full bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-[var(--color-danger)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                          strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round"
                               d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
@@ -400,12 +400,12 @@ export default function Detail() {
 
                         {/* 运行时警告 */}
                         {!runtimeAvailable && (
-                            <div className="card p-4 border-[#ff9f0a]/30 bg-[#ff9f0a]/5 mb-6">
+                            <div className="card p-4 border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_5%,transparent)] mb-6">
                                 <div className="flex items-start gap-3">
                                     <span
                                         className="text-xl">{runtime === 'node' ? '⬢' : runtime === 'python' ? '🐍' : '🐳'}</span>
                                     <div className="flex-1">
-                                        <h3 className="text-[13px] font-semibold text-[#ff9f0a] mb-1">
+                                        <h3 className="text-[13px] font-semibold text-[var(--color-warning)] mb-1">
                                             {t('detail.runtimeRequired')}
                                         </h3>
                                         <p className="text-[12px] text-[var(--color-muted2)] mb-3">
@@ -581,7 +581,7 @@ export default function Detail() {
                                 <span className="text-[var(--color-muted)]">Runtime</span>
                                 <div className="flex items-center gap-1">
                                     <span
-                                        className={`w-2 h-2 rounded-full ${runtimeAvailable ? 'bg-[#34c759]' : 'bg-[#ff9f0a]'}`}/>
+                                        className={`w-2 h-2 rounded-full ${runtimeAvailable ? 'bg-[var(--color-success)]' : 'bg-[var(--color-warning)]'}`}/>
                                     <span className="text-[var(--color-text)] capitalize">{runtime}</span>
                                 </div>
                             </div>
@@ -616,7 +616,7 @@ export default function Detail() {
                 <div className="space-y-4">
                     {installError && (
                         <div
-                            className="p-3 rounded-md bg-[#ff3b30]/10 border border-[#ff3b30]/20 text-[#ff3b30] text-[12px]">
+                            className="p-3 rounded-md bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-danger)_20%,transparent)] text-[var(--color-danger)] text-[12px]">
                             {installError}
                         </div>
                     )}
@@ -656,7 +656,7 @@ export default function Detail() {
                             stackedSublabel
                             disabledIds={installedClients}
                             sublabel={{installed: t('detail.alreadyInstalled'), available: t('detail.available')}}
-                            unselectedClass="bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[#636366]"
+                            unselectedClass="bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-surface-active)]"
                         />
 
                         {clients.filter(c => c.installed && c.supportsMcp).length === 0 && (

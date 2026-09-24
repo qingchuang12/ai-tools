@@ -509,6 +509,7 @@
     "connect": "Connetti",
     "disconnect": "Disconnetti",
     "connecting": "Connessione...",
+    "installing": "Installing dependencies, please wait…",
     "connected": "Connesso",
     "disconnected": "Disconnesso",
     "error": "Errore",

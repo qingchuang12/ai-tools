@@ -18,8 +18,8 @@ const EXPIRY_OPTIONS: { labelKey: string; value: number | null }[] = [
 ];
 
 function scopeColor(scope: TokenScope): string {
-    if (scope === 'admin') return 'bg-[#ff3b30]/15 text-[#ff3b30]';
-    if (scope.includes('download')) return 'bg-[#0a84ff]/15 text-[#0a84ff]';
+    if (scope === 'admin') return 'bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]';
+    if (scope.includes('download')) return 'bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)]';
     return 'bg-[var(--color-surface-hover)] text-[var(--color-muted2)]';
 }
 
@@ -133,7 +133,7 @@ export default function TokenManager() {
                 <h2 className="text-[13px] font-semibold text-[var(--color-text)]">{t('tokenManager.title')}</h2>
                 <button
                     onClick={() => setShowCreate(true)}
-                    className="px-2.5 py-1 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 transition-colors"
+                    className="px-2.5 py-1 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_90%,transparent)] transition-colors"
                 >
                     + {t('tokenManager.import')}
                 </button>
@@ -158,7 +158,7 @@ export default function TokenManager() {
                                         <span className="text-[12px] font-medium text-[var(--color-text)] truncate">{tk.name}</span>
                                         {tk.revoked && (
                                             <span
-                                                className="text-[12px] px-1.5 py-0.5 rounded bg-[#ff9f0a]/15 text-[#ff9f0a]">{t('tokenManager.revoked')}</span>
+                                                className="text-[12px] px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]">{t('tokenManager.revoked')}</span>
                                         )}
                                     </div>
                                     <div className="flex flex-wrap gap-1 mt-1">
@@ -208,7 +208,7 @@ export default function TokenManager() {
                             {revealed[tk.id] && (
                                 <div className="mt-2 flex items-center gap-2">
                                     <code
-                                        className="flex-1 px-2 py-1.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[12px] text-[#5ac8fa] font-mono break-all">
+                                        className="flex-1 px-2 py-1.5 rounded bg-[var(--color-bg)] border border-[var(--color-border)] text-[12px] text-[var(--color-info)] font-mono break-all">
                                         {revealed[tk.id]}
                                     </code>
                                     <button onClick={() => handleCopy(revealed[tk.id])}
@@ -263,7 +263,7 @@ export default function TokenManager() {
                                 className="px-3 py-1.5 rounded-md bg-[var(--color-surface-hover)] text-[var(--color-text)] text-[12px] hover:bg-[var(--color-surface-hover)]/80 transition-colors">{t('tokenManager.cancel')}
                         </button>
                         <button onClick={handleImport}
-                                className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 transition-colors">{t('tokenManager.importBtn')}
+                                className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_90%,transparent)] transition-colors">{t('tokenManager.importBtn')}
                         </button>
                     </div>
                 </div>
@@ -282,7 +282,7 @@ function IconBtn({children, onClick, title, danger}: {
         <button
             title={title}
             onClick={onClick}
-            className={`p-1.5 rounded transition-colors ${danger ? 'text-[var(--color-muted2)] hover:text-[#ff3b30] hover:bg-[#ff3b30]/10' : 'text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}`}
+            className={`p-1.5 rounded transition-colors ${danger ? 'text-[var(--color-muted2)] hover:text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]' : 'text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}`}
         >
             {children}
         </button>

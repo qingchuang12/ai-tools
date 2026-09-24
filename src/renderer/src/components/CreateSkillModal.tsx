@@ -386,7 +386,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-bg)]/50 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_50%,transparent)] backdrop-blur-sm"
             onClick={e => {
                 if (e.target === e.currentTarget) requestClose();
             }}
@@ -410,7 +410,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                 <div className="space-y-5 px-6 py-5">
                     {error && (
                         <div
-                            className="flex items-start gap-2 rounded-lg border border-[#ff3b30]/40 bg-[#ff3b30]/10 px-3 py-2 text-[12px] text-[#ff6961]">
+                            className="flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] px-3 py-2 text-[12px] text-[var(--color-danger)]">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                  strokeWidth="2" className="mt-0.5 shrink-0">
                                 <circle cx="12" cy="12" r="10"/>
@@ -433,7 +433,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                             onDrop={handleDrop}
                             className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
                                 dragActive
-                                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10'
+                                    ? 'border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]'
                                     : 'border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-muted)]'
                             } ${uploading ? 'pointer-events-none opacity-60' : ''}`}
                         >
@@ -477,7 +477,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                     {/* 导入方式选择浮层：文件 / 文件夹 二选一 */}
                     {importMenuOpen && (
                         <div
-                            className="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--color-bg)]/60"
+                            className="fixed inset-0 z-[60] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_60%,transparent)]"
                             onClick={e => {
                                 if (e.target === e.currentTarget) setImportMenuOpen(false);
                             }}
@@ -490,7 +490,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                             setImportMenuOpen(false);
                                             importFileInputRef.current?.click();
                                         }}
-                                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-start text-[13px] text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+                                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-start text-[13px] text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
@@ -504,7 +504,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                             setImportMenuOpen(false);
                                             void handlePickFolder();
                                         }}
-                                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-start text-[13px] text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+                                        className="flex w-full items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-start text-[13px] text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
@@ -572,7 +572,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                         <span className="text-[10px] text-[var(--color-muted)]">{formatFileSize(f.data.byteLength)}</span>
                                         <button
                                             onClick={() => removeImportFile(f.path)}
-                                            className="rounded px-1.5 py-0.5 text-[10px] text-[var(--color-muted2)] transition-colors hover:bg-[#ff3b30]/10 hover:text-[#ff6961]"
+                                            className="rounded px-1.5 py-0.5 text-[10px] text-[var(--color-muted2)] transition-colors hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] hover:opacity-70"
                                         >
                                             {t('library.fileRemove') || '移除'}
                                         </button>
@@ -614,7 +614,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                     <button
                                         onClick={handleNewFile}
                                         disabled={!newFilePath.trim()}
-                                        className="rounded-lg bg-[var(--color-accent)] px-3 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[var(--color-accent)]/85 disabled:opacity-50"
+                                        className="rounded-lg bg-[var(--color-accent)] px-3 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_85%,transparent)] disabled:opacity-50"
                                     >
                                         {t('common.confirm') || '确定'}
                                     </button>
@@ -637,13 +637,13 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                                 onClick={() => !deleted && openSkillFile(f)}
                                                 className={`flex cursor-pointer items-center gap-2 border-b border-[var(--color-border)] px-3 py-1.5 last:border-b-0 ${
                                                     activeFile === f.path && !deleted
-                                                        ? 'bg-[var(--color-accent)]/10'
+                                                        ? 'bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]'
                                                         : 'hover:bg-[var(--color-surface-hover)]'
                                                 } ${deleted ? 'opacity-50' : ''}`}
                                             >
                                                 <span className="flex-1 truncate font-mono text-[12px] text-[var(--color-text)]">{f.path}</span>
                                                 {f.kind === 'protected' && (
-                                                    <span className="rounded bg-[var(--color-muted)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-muted2)]">
+                                                    <span className="rounded bg-[color-mix(in_srgb,var(--color-muted)_15%,transparent)] px-1.5 py-0.5 text-[10px] text-[var(--color-muted2)]">
                                                         {t('library.fileProtected') || '正文'}
                                                     </span>
                                                 )}
@@ -653,12 +653,12 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                                     </span>
                                                 )}
                                                 {modified && (
-                                                    <span className="rounded bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
+                                                    <span className="rounded bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
                                                         {t('library.fileModified') || '已修改'}
                                                     </span>
                                                 )}
                                                 {deleted && (
-                                                    <span className="rounded bg-[#ff3b30]/15 px-1.5 py-0.5 text-[10px] text-[#ff6961]">
+                                                    <span className="rounded bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] px-1.5 py-0.5 text-[10px] text-[var(--color-danger)]">
                                                         {t('library.fileDeletedTag') || '已删除'}
                                                     </span>
                                                 )}
@@ -670,8 +670,8 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                                     disabled={f.kind === 'protected'}
                                                     className={`rounded px-1.5 py-0.5 text-[10px] transition-colors disabled:opacity-30 ${
                                                         confirmDelete === f.path
-                                                            ? 'bg-[#ff3b30] text-white'
-                                                            : 'text-[var(--color-muted2)] hover:bg-[#ff3b30]/10 hover:text-[#ff6961]'
+                                                            ? 'bg-[var(--color-danger)] text-white'
+                                                            : 'text-[var(--color-muted2)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] hover:opacity-70'
                                                     }`}
                                                 >
                                                     {confirmDelete === f.path
@@ -704,7 +704,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                             </span>
                                         )}
                                     </div>
-                                    {fileReadError && <p className="text-[12px] text-[#ff6961]">{fileReadError}</p>}
+                                    {fileReadError && <p className="text-[12px] text-[var(--color-danger)]">{fileReadError}</p>}
                                     {!fileReadonly && !fileReadError && (
                                         <textarea
                                             value={fileContent}
@@ -732,7 +732,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                             leadingCheck
                             variant="sync"
                             baseClass="flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] transition-colors"
-                            selectedClass="border-[var(--color-accent)] bg-[var(--color-accent)]/15 text-white"
+                            selectedClass="border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-white"
                             unselectedClass="border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-muted2)] hover:border-[var(--color-muted)]"
                         />
                     </div>
@@ -748,7 +748,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                     <button
                         onClick={handleSubmit}
                         disabled={submitting}
-                        className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-accent)]/85 disabled:opacity-50"
+                        className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_85%,transparent)] disabled:opacity-50"
                     >
                         {submitting && (
                             <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -763,7 +763,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
 
             {confirmDiscard && (
                 <div
-                    className="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--color-bg)]/60"
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_60%,transparent)]"
                     onClick={e => {
                         if (e.target === e.currentTarget) setConfirmDiscard(false);
                     }}
@@ -784,7 +784,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                                     setConfirmDiscard(false);
                                     onClose();
                                 }}
-                                className="rounded-lg bg-[#ff3b30] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#ff3b30]/85"
+                                className="rounded-lg bg-[var(--color-danger)] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[color-mix(in_srgb,var(--color-danger)_85%,transparent)]"
                             >
                                 {t('library.discardChanges') || '放弃'}
                             </button>
@@ -794,7 +794,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
             )}
         {skillClientWarn && (
                 <div
-                    className="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--color-bg)]/60"
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-bg)_60%,transparent)]"
                     onClick={e => {
                         if (e.target === e.currentTarget) setSkillClientWarn(false);
                     }}
@@ -808,7 +808,7 @@ export function CreateSkillModal({onClose, clients, editData, defaultClients, on
                         <div className="mt-5 flex justify-end gap-3">
                             <button
                                 onClick={() => setSkillClientWarn(false)}
-                                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-accent)]/85"
+                                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_85%,transparent)]"
                             >
                                 {t('common.confirm') || '确定'}
                             </button>

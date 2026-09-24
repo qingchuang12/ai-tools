@@ -1080,7 +1080,7 @@ export default function Library() {
                                     onClick={toggleServerSelectMode}
                                     className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${
                                         serverSelectMode
-                                            ? 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/80'
+                                            ? 'bg-[var(--color-accent)] text-white hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)]'
                                             : 'bg-[var(--color-surface-hover)] text-[var(--color-text)] hover:bg-[var(--color-surface-active)]'
                                     }`}
                                 >
@@ -1092,7 +1092,7 @@ export default function Library() {
                             {serverSelectMode && selectedServers.length > 0 && (
                                 <button
                                     onClick={handleOpenServerBatchSync}
-                                    className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-accent)] text-white rounded-md text-[12px] font-medium hover:bg-[var(--color-accent)]/80 transition-colors"
+                                    className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-accent)] text-white rounded-md text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)] transition-colors"
                                 >
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                          strokeWidth={2}>
@@ -1104,7 +1104,7 @@ export default function Library() {
                             )}
                             <button
                                 onClick={() => setShowAddModal(true)}
-                                className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-accent)] text-white rounded-md text-[12px] font-medium hover:bg-[var(--color-accent)]/80 transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-accent)] text-white rounded-md text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)] transition-colors"
                             >
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                      strokeWidth={2}>
@@ -1133,7 +1133,7 @@ export default function Library() {
                                     onClick={toggleSelectMode}
                                     className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${
                                         selectMode
-                                            ? 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/80'
+                                            ? 'bg-[var(--color-accent)] text-white hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)]'
                                             : 'bg-[var(--color-surface-hover)] text-[var(--color-text)] hover:bg-[var(--color-surface-active)]'
                                     }`}
                                 >
@@ -1145,7 +1145,7 @@ export default function Library() {
                             {selectMode && selectedSkills.length > 0 && (
                                 <button
                                     onClick={handleOpenBatchSync}
-                                    className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-accent)] text-white rounded-md text-[12px] font-medium hover:bg-[var(--color-accent)]/80 transition-colors"
+                                    className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-accent)] text-white rounded-md text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)] transition-colors"
                                 >
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                          strokeWidth={2}>
@@ -1157,7 +1157,7 @@ export default function Library() {
                             )}
                             <button
                                 onClick={() => setShowCreateSkill(true)}
-                                className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-accent)] text-white rounded-md text-[12px] font-medium hover:bg-[var(--color-accent)]/80 transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1 bg-[var(--color-accent)] text-white rounded-md text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)] transition-colors"
                             >
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"
                                      strokeWidth={2}>
@@ -1410,9 +1410,9 @@ export default function Library() {
                                     ? (t('library.cloudConflictCloudNewer') || '云端更新')
                                     : (t('library.cloudConflictSame') || '时间相同');
                             const resolutionColor = conflict.resolution === 'local_newer'
-                                ? 'text-green-400'
+                                ? 'text-[var(--color-success)]'
                                 : conflict.resolution === 'cloud_newer'
-                                    ? 'text-orange-400'
+                                    ? 'text-[var(--color-warning)]'
                                     : 'text-[var(--color-muted2)]';
 
                             return (
@@ -1420,7 +1420,7 @@ export default function Library() {
                                     key={conflict.name}
                                     className={`flex items-center gap-3 p-3 rounded-md border transition-all ${
                                         isOverwrite
-                                            ? 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/30'
+                                            ? 'bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)]'
                                             : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] opacity-60'
                                     }`}
                                 >
@@ -1456,7 +1456,7 @@ export default function Library() {
                                     </div>
                                     <span className={`flex-shrink-0 text-[12px] font-medium px-2 py-0.5 rounded ${
                                         isOverwrite
-                                            ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]'
+                                            ? 'bg-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] text-[var(--color-accent)]'
                                             : 'bg-[var(--color-surface-hover)] text-[var(--color-muted2)]'
                                     }`}>
                                         {isOverwrite
@@ -1580,7 +1580,7 @@ export default function Library() {
                                     <div key={key}
                                          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md border transition-all ${
                                              isOverwrite
-                                                 ? 'bg-[#ff9f0a]/8 border-[#ff9f0a]/30'
+                                                 ? 'bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)]'
                                                  : 'bg-[var(--color-surface-hover)]/30 border-[var(--color-border)]'
                                          }`}>
                                         <button
@@ -1590,7 +1590,7 @@ export default function Library() {
                                             }))}
                                             className={`flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center text-[10px] transition-colors ${
                                                 isOverwrite
-                                                    ? 'bg-[#ff9f0a] border-[#ff9f0a] text-white'
+                                                    ? 'bg-[var(--color-warning)] border-[var(--color-warning)] text-white'
                                                     : 'border-[var(--color-border)]'
                                             }`}
                                         >
@@ -1609,7 +1609,7 @@ export default function Library() {
                                                 {t('consistency.cloudTime') || '云端'}：{c.cloudUpdatedAt ? new Date(c.cloudUpdatedAt).toLocaleString() : '—'}
                                             </div>
                                         </div>
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded text-green-500 bg-green-500/10 flex-shrink-0">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded text-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)] flex-shrink-0">
                                             {t('consistency.localNewer') || '本地更新'}
                                         </span>
                                     </div>

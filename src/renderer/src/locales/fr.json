@@ -509,6 +509,7 @@
     "connect": "Connecter",
     "disconnect": "Déconnecter",
     "connecting": "Connexion...",
+    "installing": "Installing dependencies, please wait…",
     "connected": "Connecté",
     "disconnected": "Déconnecté",
     "error": "Erreur",

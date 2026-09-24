@@ -11,6 +11,7 @@
 import {create} from 'zustand';
 import {useElectronAPI} from '../lib/electron';
 import type {AccountProfile} from '../../../shared/activation-types';
+import {useActivationStore} from './activationStore';
 
 interface AccountStore {
     profile: AccountProfile | null;
@@ -33,6 +34,25 @@ interface AccountStore {
 
 let started = false;
 
+/**
+ * A9：登录成功后自动到账（best-effort、不阻塞 UI、不弹窗）。
+ * 拉本账号授权列表并自动激活一条未绑定/已绑本机的授权；若有授权到账则刷新激活态，
+ * 让 UI 立即反映「已激活」，无需用户手动兑换。任何失败一律静默（不影响登录态）。
+ */
+async function claimLicensesAfterLogin(): Promise<void> {
+    try {
+        // 已激活则无需再领（避免每次启动重复激活），仅未激活/试用态尝试自动到账
+        if (useActivationStore.getState().state?.status === 'activated') return;
+        const api = useElectronAPI();
+        const res = await api.account.claimLicenses();
+        if (res?.claimed) {
+            await useActivationStore.getState().refresh();
+        }
+    } catch {
+        /* best-effort：失败时保持原登录态与试用态，不报错 */
+    }
+}
+
 export const useAccountStore = create<AccountStore>((set, get) => ({
     profile: null,
     loggedIn: false,
@@ -54,6 +74,8 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
                 }
                 const p = await api.account.getProfile();
                 set({ loggedIn: Boolean(p), profile: p, loading: false });
+                // 已登录用户启动即尝试自动到账（A9）：拉本账号授权列表并自动激活未领授权
+                if (p) void claimLicensesAfterLogin();
             } catch {
                 // 主进程未就绪或浏览器 mock：保持未登录，不阻塞 UI
                 set({ loggedIn: false, profile: null, loading: false });
@@ -68,6 +90,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
             const r = await api.account.login(email, password);
             if (r.ok) {
                 set({ busy: false, loggedIn: true, profile: r.profile ?? null, mfaTicket: null, error: null });
+                void claimLicensesAfterLogin();
                 return true;
             }
             // 待第二因子不是失败：存票据并切 MFA 输入态，文案不落 error
@@ -96,6 +119,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
             const r = await api.account.verifyMfa(ticket, code);
             if (r.ok) {
                 set({ busy: false, loggedIn: true, profile: r.profile ?? null, mfaTicket: null, error: null });
+                void claimLicensesAfterLogin();
                 return true;
             }
             set({ busy: false, error: r.error ?? 'account.errors.generic' });

@@ -138,7 +138,7 @@ export default function AccountLoginSection() {
                 </div>
             )}
 
-            {error && <p className="mt-2 text-[12px] text-[#ff3b30]">{t(error)}</p>}
+            {error && <p className="mt-2 text-[12px] text-[var(--color-danger)]">{t(error)}</p>}
         </div>
     );
 }

@@ -140,4 +140,9 @@ export interface AccountApi {
     getProfile: () => Promise<AccountProfile | null>;
     /** 是否已登录（令牌是否存在；过期由服务端裁决） */
     isLoggedIn: () => Promise<boolean>;
+    /**
+     * A9：登录后自动到账。拉本账号授权列表，自动激活一条未绑定/已绑本机的授权（best-effort、不弹窗）。
+     * @returns `{claimed:true}` 表示本次有授权被自动激活；无候选/未登录/失败均返回 `{claimed:false}`
+     */
+    claimLicenses: () => Promise<{claimed: boolean}>;
 }

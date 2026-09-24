@@ -292,8 +292,18 @@ export class SecretStore {
 
     /** 读取密文明文，不存在或解密失败返回 null */
     getRawSecret(id: string): string | null {
+        let raw: Buffer;
         try {
-            return this.decrypt(fs.readFileSync(this.secretPath(id)));
+            raw = fs.readFileSync(this.secretPath(id));
+        } catch (e) {
+            // 文件不存在 = 「从未保存过」（如首次运行尚未登录、还没写过 token），是正常态，静默返回 null；
+            // 其余读取异常照实打印。
+            if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+            console.error(`[SecretStore] 读取密文失败 secretId=${id}:`, (e as Error).message);
+            return null;
+        }
+        try {
+            return this.decrypt(raw);
         } catch (e) {
             // 解密失败通常是「密钥与写入时不一致」（如 dev↔打包 切换导致派生密钥变化）。
             // 静默返回 null 会让上层误报「密码错误」且无从排查，这里打印明确告警。

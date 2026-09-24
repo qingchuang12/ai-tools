@@ -2,7 +2,7 @@
  * 兑换请求/响应契约单测（`fetchRedeem`）
  *
  * 覆盖：服务端统一壳（`$.data.signedToken`）与扁平结构的兼容、`serverTime` 透传、
- * 请求体字段（`customerEmail` 必填；不再发已废弃的 `customerId`/`sku`）、
+ * 请求体字段（`credential` 必填、`customerEmail` 客户端仍必填；不再发已废弃的 `customerId`/`sku`）、
  * 网络失败与拒绝路径的分类（network vs license）。
  *
  * 说明：服务端所有端点经 `ApiResponseAdvice` 包壳（`{success, code, data, traceId, timestamp}`），
@@ -66,13 +66,13 @@ beforeEach(() => {
     captured = {};
 });
 
-describe('fetchRedeem 请求体（与服务端 RedeemCodeRequest 对齐）', () => {
+describe('fetchRedeem 请求体（与服务端 ActivateRequest 对齐）', () => {
     it('上送 code / customerEmail / machineId，不再发 customerId 与 sku', async () => {
         stubFetch(() => ({json: envelope({success: true, signedToken: 'a.b.c'})}));
         const r = await fetchRedeem(' RC-1 ', ' Buyer@Example.com ');
         expect(r.ok).toBe(true);
         expect(captured.body).toEqual({
-            code: 'RC-1',
+            credential: 'RC-1',
             customerEmail: 'Buyer@Example.com',
             machineId: hoisted.mid,
         });

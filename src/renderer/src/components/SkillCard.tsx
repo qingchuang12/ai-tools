@@ -23,34 +23,8 @@ interface SkillCardProps {
     sourceUrl?: string;
 }
 
-// 获取分类颜色
-// 覆盖各源实际下发的分类 id：内置 8 类 + ClawHub 14 类（含 docs taxonomy）。
-// 未命中的分类统一走末尾灰底兜底，避免「有标签但没配色」看起来像坏了。
-function getCategoryColor(categoryId: string): { bg: string; text: string } {
-    const colors: Record<string, { bg: string; text: string }> = {
-        coding: {bg: 'bg-blue-500/15', text: 'text-blue-400'},
-        testing: {bg: 'bg-green-500/15', text: 'text-green-400'},
-        devops: {bg: 'bg-orange-500/15', text: 'text-orange-400'},
-        'data-analytics': {bg: 'bg-purple-500/15', text: 'text-purple-400'},
-        security: {bg: 'bg-red-500/15', text: 'text-red-400'},
-        'content-writing': {bg: 'bg-cyan-500/15', text: 'text-cyan-400'},
-        productivity: {bg: 'bg-yellow-500/15', text: 'text-yellow-400'},
-        design: {bg: 'bg-pink-500/15', text: 'text-pink-400'},
-        // ClawHub 分类（adapter 的 CLAWHUB_CATEGORIES）；other 走灰底兜底，不单列
-        integrations: {bg: 'bg-indigo-500/15', text: 'text-indigo-400'},
-        automation: {bg: 'bg-teal-500/15', text: 'text-teal-400'},
-        research: {bg: 'bg-violet-500/15', text: 'text-violet-400'},
-        development: {bg: 'bg-sky-500/15', text: 'text-sky-400'},
-        communication: {bg: 'bg-emerald-500/15', text: 'text-emerald-400'},
-        creative: {bg: 'bg-fuchsia-500/15', text: 'text-fuchsia-400'},
-        knowledge: {bg: 'bg-lime-500/15', text: 'text-lime-400'},
-        agents: {bg: 'bg-rose-500/15', text: 'text-rose-400'},
-        operations: {bg: 'bg-amber-500/15', text: 'text-amber-400'},
-        finance: {bg: 'bg-emerald-500/15', text: 'text-emerald-400'},
-        lifestyle: {bg: 'bg-fuchsia-500/15', text: 'text-fuchsia-400'},
-    };
-    return colors[categoryId] || {bg: 'bg-[var(--color-surface-hover)]', text: 'text-[var(--color-muted2)]'};
-}
+// 分类徽章配色全站统一走 accent 主题令牌（与 ServerCard 一致），
+// 不再按分类 id 硬编码彩色轮转——同一「分类」概念在商店/库/详情呈现同一视觉语言。
 
 function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps) {
     const {t, i18n} = useTranslation();
@@ -105,11 +79,10 @@ function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps
     const rawCategories = (Array.isArray(rawCats) ? rawCats : []).filter(
         (c): c is string => typeof c === 'string' && c.trim().length > 0
     );
-    // 分类原始值（slug 或中文名），保留用于取配色——getCategoryColor 按 id 精确匹配
+    // 分类原始值（slug 或中文名）传给 localizeCategoryList 查译文，返回数组与之一一对应。
     const rawCatList = rawCategories.length ? [...new Set(rawCategories)] : (skill.category ? [skill.category] : []);
     // 展示文案走 i18n：技能分类 id 各平台不统一（clawhub / modelscope 为 slug，coze / skillhub 为中文名），
     // 统一在 `category.*` 命名空间查译文，未命中才回退原文。
-    // 返回数组与 rawCatList 一一对应，取色时用同索引的原始值。
     const catList = localizeCategoryList({categories: rawCatList}, t, i18n);
 
     // 平台直连源（如 ModelScope）的技能带真实封面图（extra.coverUrl），优先展示；
@@ -124,7 +97,7 @@ function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps
             onKeyDown={handleKeyDown}
             role="button"
             tabIndex={0}
-            className="card p-3 cursor-pointer hover:bg-[var(--color-surface-hover)]/30 transition-colors flex flex-col h-[115px]"
+            className="card p-3 cursor-pointer hover:bg-[var(--color-surface-hover)]/30 transition-colors flex flex-col min-h-[115px]"
         >
             {/* 顶部内容区域 */}
             <div className="flex items-start gap-2.5 flex-1 min-h-0">
@@ -145,7 +118,7 @@ function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps
               </span>
                         )}
                         {requiresApiKey && (
-                            <span className="rounded bg-amber-500/15 text-amber-400 text-[9px] px-1 py-0 flex-shrink-0">
+                            <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)] text-[9px] px-1 py-0 flex-shrink-0">
                 {t('store.requiresApiKey')}
               </span>
                         )}
@@ -157,18 +130,15 @@ function SkillCard({skill, isInstalled, connectionId, sourceUrl}: SkillCardProps
             </div>
 
             {/* 底部信息 - 紧凑设计 */}
-            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[var(--color-border)]/50">
+            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-[color-mix(in_srgb,var(--color-border)_50%,transparent)]">
                 <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-[var(--color-muted)] flex-1 min-w-0 me-2">
-                    {/* 分类 tags - 完整展示多分类（flex-wrap 溢出换行，title 悬停看全名） */}
-                    {catList.map((label, i) => {
-                        const cc = getCategoryColor(rawCatList[i] ?? label);
-                        return (
-                            <span key={label} title={label}
-                                  className={`px-1.5 py-0.5 rounded text-[9px] font-medium whitespace-nowrap ${cc.bg} ${cc.text}`}>
-                                {label}
-                            </span>
-                        );
-                    })}
+                    {/* 分类 tags - 完整展示多分类（flex-wrap 溢出换行，title 悬停看全名）；配色与 ServerCard 统一 */}
+                    {catList.map(label => (
+                        <span key={label} title={label}
+                              className="px-1.5 py-0 rounded-full text-[9px] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] flex-shrink-0 whitespace-nowrap">
+                            {label}
+                        </span>
+                    ))}
                     {/* 作者 */}
                     <span className="truncate">@{skill.author}</span>
                 </div>

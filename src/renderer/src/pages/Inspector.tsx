@@ -195,6 +195,9 @@ export default function Inspector() {
     [tools, inspectorRuntime.selectedToolName]
   );
   const [, setErrorMessage] = useState<string>('');
+  // 连接中是否检测到「依赖下载/安装中」：收到 installing 事件后置位，用于把连接状态文案
+  // 从「连接中」切换为「正在安装依赖，请稍候…」（橙色进度态，不标红失败）。
+  const [installingHint, setInstallingHint] = useState(false);
 
   // 将 store 写入封装为与原本 useState setter 同签名的本地代理，缩小改动面
   const setStatus = useCallback(
@@ -369,10 +372,17 @@ export default function Inspector() {
       }
     });
 
+    const unsubInstalling = api.mcp.onInstalling(({ sessionId: sid }) => {
+      if (sid === sessionId) {
+        setInstallingHint(true);
+      }
+    });
+
     return () => {
       unsubStderr();
       unsubDisconnected();
       unsubError();
+      unsubInstalling();
     };
   }, [api, sessionId, addLog]);
 
@@ -408,6 +418,7 @@ export default function Inspector() {
     }
 
     setStatus('connecting');
+    setInstallingHint(false);
     setErrorMessage('');
     setTools([]);
     setResources([]);
@@ -573,7 +584,7 @@ export default function Inspector() {
           <div key={key}>
             <label className="block text-[12px] text-[var(--color-muted2)] mb-1">
               {key}
-              {required.includes(key) && <span className="text-[#ff3b30] ms-1">*</span>}
+              {required.includes(key) && <span className="text-[var(--color-danger)] ms-1">*</span>}
               {schema.description && (
                 <span className="text-[var(--color-muted)] ms-2">- {schema.description}</span>
               )}
@@ -605,7 +616,7 @@ export default function Inspector() {
                 value={toolArgs[key] || ''}
                 onChange={(e) => setToolArgs(prev => ({ ...prev, [key]: e.target.value }))}
                 placeholder={schema.default !== undefined ? String(schema.default) : t('inspector.enterParam', { key })}
-                className="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[13px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)]"
+                className="w-full px-3 py-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)]"
               />
             )}
           </div>
@@ -626,15 +637,15 @@ export default function Inspector() {
           {/* 连接状态 */}
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${
-              status === 'connected' ? 'bg-[#34c759]' :
-              status === 'connecting' ? 'bg-[#ff9f0a] animate-pulse' :
-              status === 'error' ? 'bg-[#ff3b30]' :
-              'bg-[#636366]'
+              status === 'connected' ? 'bg-[var(--color-success)]' :
+              status === 'connecting' ? 'bg-[var(--color-warning)] animate-pulse' :
+              status === 'error' ? 'bg-[var(--color-danger)]' :
+              'bg-[var(--color-muted)]'
             }`} />
             <span className="text-[12px] text-[var(--color-muted2)]">
               {status === 'connected' && serverInfo?.name 
                 ? `${serverInfo.name} v${serverInfo.version || '?'}`
-                : status === 'connecting' ? (t('inspector.connecting') || 'Connecting...')
+                : status === 'connecting' ? (installingHint ? (t('inspector.installing') || '正在安装依赖，请稍候…') : (t('inspector.connecting') || 'Connecting...'))
                 : status === 'error' ? (t('inspector.error') || 'Error')
                 : (t('inspector.disconnected') || 'Disconnected')
               }
@@ -647,8 +658,8 @@ export default function Inspector() {
           disabled={status === 'connecting'}
           className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors no-drag ${
             status === 'connected'
-              ? 'bg-[#ff3b30] text-white hover:bg-[#ff3b30]/80'
-              : 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/80'
+              ? 'bg-[var(--color-danger)] text-white hover:bg-[color-mix(in_srgb,var(--color-danger)_80%,transparent)]'
+              : 'bg-[var(--color-accent)] text-white hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)]'
           } disabled:opacity-50`}
         >
           {status === 'connected' 
@@ -696,7 +707,7 @@ export default function Inspector() {
                     onChange={(e) => setCommand(e.target.value)}
                     disabled={status === 'connected'}
                     placeholder={t('inspector.commandPlaceholder')}
-                    className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                    className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -709,7 +720,7 @@ export default function Inspector() {
                     onChange={(e) => setArgs(e.target.value)}
                     disabled={status === 'connected'}
                     placeholder={t('inspector.argumentsPlaceholder')}
-                    className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                    className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -722,7 +733,7 @@ export default function Inspector() {
                     onChange={(e) => setCwd(e.target.value)}
                     disabled={status === 'connected'}
                     placeholder={t('inspector.cwdPlaceholder') || 'Optional, defaults to home directory'}
-                    className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                    className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                   />
                 </div>
 
@@ -735,7 +746,7 @@ export default function Inspector() {
                     <button
                       onClick={addEnvVar}
                       disabled={status === 'connected'}
-                      className="text-[12px] text-[var(--color-accent)] hover:text-[#5ac8fa] disabled:opacity-50"
+                      className="text-[12px] text-[var(--color-accent)] hover:text-[var(--color-info)] disabled:opacity-50"
                     >
                       {t('inspector.add')}
                     </button>
@@ -748,7 +759,7 @@ export default function Inspector() {
                         onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
                         disabled={status === 'connected'}
                         placeholder={t('inspector.keyPlaceholder')}
-                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                       />
                       <input
                         type="text"
@@ -756,13 +767,13 @@ export default function Inspector() {
                         onChange={(e) => updateEnvVar(index, 'value', e.target.value)}
                         disabled={status === 'connected'}
                         placeholder={t('inspector.valuePlaceholder')}
-                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                       />
                       <button
                         type="button"
                         onClick={() => removeEnvVar(index)}
                         disabled={status === 'connected'}
-                        className="w-6 h-6 flex items-center justify-center text-[#ff3b30] hover:text-[#ff6961] hover:bg-[#ff3b30]/10 rounded disabled:opacity-50 disabled:hover:bg-transparent"
+                        className="w-6 h-6 flex items-center justify-center text-[var(--color-danger)] hover:opacity-70 hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] rounded disabled:opacity-50 disabled:hover:bg-transparent"
                       >
                         ×
                       </button>
@@ -783,7 +794,7 @@ export default function Inspector() {
                     onChange={(e) => setUrl(e.target.value)}
                     disabled={status === 'connected'}
                     placeholder={t('inspector.urlPlaceholder')}
-                    className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                    className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                   />
                 </div>
 
@@ -796,7 +807,7 @@ export default function Inspector() {
                     <button
                       onClick={addHeader}
                       disabled={status === 'connected'}
-                      className="text-[12px] text-[var(--color-accent)] hover:text-[#5ac8fa] disabled:opacity-50"
+                      className="text-[12px] text-[var(--color-accent)] hover:text-[var(--color-info)] disabled:opacity-50"
                     >
                       {t('inspector.add')}
                     </button>
@@ -809,7 +820,7 @@ export default function Inspector() {
                         onChange={(e) => updateHeader(index, 'key', e.target.value)}
                         disabled={status === 'connected'}
                         placeholder={t('inspector.headerNamePlaceholder')}
-                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                       />
                       <input
                         type="text"
@@ -817,13 +828,13 @@ export default function Inspector() {
                         onChange={(e) => updateHeader(index, 'value', e.target.value)}
                         disabled={status === 'connected'}
                         placeholder={t('inspector.valuePlaceholder')}
-                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder-[#636366] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
+                        className="flex-1 min-w-0 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
                       />
                       <button
                         type="button"
                         onClick={() => removeHeader(index)}
                         disabled={status === 'connected'}
-                        className="w-6 h-6 flex items-center justify-center text-[#ff3b30] hover:text-[#ff6961] hover:bg-[#ff3b30]/10 rounded disabled:opacity-50 disabled:hover:bg-transparent"
+                        className="w-6 h-6 flex items-center justify-center text-[var(--color-danger)] hover:opacity-70 hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] rounded disabled:opacity-50 disabled:hover:bg-transparent"
                       >
                         ×
                       </button>
@@ -887,7 +898,7 @@ export default function Inspector() {
                       onClick={() => handleSelectTool(tool)}
                       className={`w-full text-start px-2 py-2 rounded transition-colors ${
                         selectedTool?.name === tool.name
-                          ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]'
+                          ? 'bg-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] text-[var(--color-accent)]'
                           : 'text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]/50'
                       }`}
                     >
@@ -968,7 +979,7 @@ export default function Inspector() {
                               key={arg.name}
                               className={`text-[12px] px-1.5 py-0.5 rounded ${
                                 arg.required 
-                                  ? 'bg-[#ff3b30]/20 text-[#ff6961]' 
+                                  ? 'bg-[color-mix(in_srgb,var(--color-danger)_20%,transparent)] text-[var(--color-danger)]' 
                                   : 'bg-[var(--color-surface)] text-[var(--color-muted2)]'
                               }`}
                             >
@@ -1001,7 +1012,7 @@ export default function Inspector() {
                   <button
                     onClick={handleRunTool}
                     disabled={isRunning || status !== 'connected'}
-                    className="flex-shrink-0 px-4 py-1.5 bg-[#34c759] text-white rounded-lg text-[13px] font-medium hover:bg-[#34c759]/80 disabled:opacity-50 transition-colors"
+                    className="flex-shrink-0 px-4 py-1.5 bg-[var(--color-success)] text-white rounded-lg text-[13px] font-medium hover:bg-[color-mix(in_srgb,var(--color-success)_80%,transparent)] disabled:opacity-50 transition-colors"
                   >
                     {isRunning ? (t('inspector.running') || 'Running...') : (t('inspector.run') || 'Run')}
                   </button>
@@ -1021,8 +1032,8 @@ export default function Inspector() {
                   {t('inspector.result') || 'Result'}
                 </h3>
                 {resultError ? (
-                  <div className="p-3 bg-[#ff3b30]/10 border border-[#ff3b30]/30 rounded-lg">
-                    <p className="text-[13px] text-[#ff3b30]">{resultError}</p>
+                  <div className="p-3 bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] rounded-lg">
+                    <p className="text-[13px] text-[var(--color-danger)]">{resultError}</p>
                   </div>
                 ) : result !== null ? (
                   <div>
@@ -1087,7 +1098,7 @@ export default function Inspector() {
       {/* 拖拽调整日志高度的手柄 */}
       <div
         onMouseDown={handleLogResizeMouseDown}
-        className={`h-1 cursor-row-resize hover:bg-[var(--color-accent)]/50 transition-colors flex-shrink-0 ${isResizingLog ? 'bg-[var(--color-accent)]' : ''}`}
+        className={`h-1 cursor-row-resize hover:bg-[color-mix(in_srgb,var(--color-accent)_50%,transparent)] transition-colors flex-shrink-0 ${isResizingLog ? 'bg-[var(--color-accent)]' : ''}`}
       />
 
       {/* 底部日志区域 */}

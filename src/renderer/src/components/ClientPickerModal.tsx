@@ -68,14 +68,14 @@ export default function ClientPickerModal({
 
     const theme = isUninstall
         ? {
-            ring: 'border-[#ff3b30]/50 bg-[#ff3b30]/10 text-[#ff3b30]',
-            pill: 'bg-[#ff3b30]/10 text-[#ff3b30]',
-            badge: 'bg-[#ff3b30] text-white',
+            ring: 'border-[color-mix(in_srgb,var(--color-danger)_50%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] text-[var(--color-danger)]',
+            pill: 'bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] text-[var(--color-danger)]',
+            badge: 'bg-[var(--color-danger)] text-white',
             btn: 'btn btn-danger disabled:opacity-50',
         }
         : {
-            ring: 'border-[var(--color-accent)]/50 bg-[var(--color-accent)]/10 text-[var(--color-accent)]',
-            pill: 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]',
+            ring: 'border-[color-mix(in_srgb,var(--color-accent)_50%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-accent)]',
+            pill: 'bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-accent)]',
             badge: 'bg-[var(--color-accent)] text-white',
             btn: 'btn btn-primary disabled:opacity-50',
         };

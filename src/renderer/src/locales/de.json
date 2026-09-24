@@ -509,6 +509,7 @@
     "connect": "Verbinden",
     "disconnect": "Trennen",
     "connecting": "Verbinden...",
+    "installing": "Installing dependencies, please wait…",
     "connected": "Verbunden",
     "disconnected": "Getrennt",
     "error": "Fehler",

@@ -126,7 +126,7 @@ export default function PlatformConnectionBrowser({
         <span className="text-[12px] text-[var(--color-muted2)]">
           {t('platformBrowser.directSource')}：<span className="text-[var(--color-text)]">{sourceName}</span>
           <span
-              className="ms-1 px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)] text-[12px]">{platformLabel(t, platformType)}</span>
+              className="ms-1 px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)] text-[12px]">{platformLabel(t, platformType)}</span>
         </span>
                 {query && (
                     <span className="text-[12px] text-[var(--color-muted)]">{t('platformBrowser.keywords')}：<span className="text-[var(--color-muted2)]">{query}</span></span>
@@ -135,14 +135,14 @@ export default function PlatformConnectionBrowser({
 
             {loading ? (
                 <div className="flex items-center justify-center py-10">
-                    <div className="w-7 h-7 border-2 border-[var(--color-border)] border-t-[#0a84ff] rounded-full animate-spin"/>
+                    <div className="w-7 h-7 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin"/>
                 </div>
             ) : items.length === 0 ? (
                 <div className="py-8 px-4 text-center">
                     <div
-                        className={`w-10 h-10 mx-auto mb-3 rounded-full flex items-center justify-center ${unsupported ? 'bg-[var(--color-accent)]/15' : 'bg-[#ff9f0a]/15'}`}>
+                        className={`w-10 h-10 mx-auto mb-3 rounded-full flex items-center justify-center ${unsupported ? 'bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)]' : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)]'}`}>
                         <span
-                            className={`text-[18px] leading-none ${unsupported ? 'text-[var(--color-accent)]' : 'text-[#ff9f0a]'}`}>!</span>
+                            className={`text-[18px] leading-none ${unsupported ? 'text-[var(--color-accent)]' : 'text-[var(--color-warning)]'}`}>!</span>
                     </div>
                     <p className="text-[12px] text-[var(--color-muted2)] max-w-md mx-auto">
                         {unsupported
@@ -153,7 +153,7 @@ export default function PlatformConnectionBrowser({
                     {page > 1 && (
                         <button
                             onClick={() => goToPage(1)}
-                            className="mt-3 px-2.5 py-1 rounded bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 cursor-pointer transition-colors"
+                            className="mt-3 px-2.5 py-1 rounded bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_90%,transparent)] cursor-pointer transition-colors"
                         >
                             {t('platformBrowser.backToFirstPage')}
                         </button>
@@ -179,7 +179,7 @@ export default function PlatformConnectionBrowser({
                                         <div key={i} className="px-3 py-2 border-b border-[var(--color-border)] last:border-0">
                                             <div className="flex items-start gap-2">
                                                 <span
-                                                    className={a.ok ? 'text-[#34c759]' : 'text-[#ff3b30]'}>{a.ok ? '✓' : '✗'}</span>
+                                                    className={a.ok ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}>{a.ok ? '✓' : '✗'}</span>
                                                 <div className="min-w-0 flex-1">
                                                     <div className="text-[12px] text-[var(--color-muted2)] break-all">{a.url}</div>
                                                     <div className="text-[12px] text-[var(--color-muted)] mt-0.5">
@@ -191,7 +191,7 @@ export default function PlatformConnectionBrowser({
                                                     </div>
                                                     {a.message && (
                                                         <div
-                                                            className="text-[12px] text-[#ff9f0a] mt-0.5">{a.message}</div>
+                                                            className="text-[12px] text-[var(--color-warning)] mt-0.5">{a.message}</div>
                                                     )}
                                                 </div>
                                             </div>
@@ -219,7 +219,7 @@ export default function PlatformConnectionBrowser({
                                     <button
                                         disabled={installing === it.id}
                                         onClick={() => handleAdd(it)}
-                                        className="px-2.5 py-1 rounded bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 transition-colors disabled:opacity-50"
+                                        className="px-2.5 py-1 rounded bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_90%,transparent)] transition-colors disabled:opacity-50"
                                     >
                                         {installing === it.id ? t('platformBrowser.installing') : t('platformBrowser.add')}
                                     </button>

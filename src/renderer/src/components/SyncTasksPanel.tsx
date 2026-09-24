@@ -36,8 +36,8 @@ function formatTime(ts: number | undefined, t: TFunction): string {
 const STATUS_META: Record<SyncTaskStatus, {labelKey: string; iconColor: string}> = {
     pending: {labelKey: 'syncTasks.queued', iconColor: 'text-amber-500'},
     running: {labelKey: 'syncTasks.syncing', iconColor: 'text-[var(--color-accent)]'},
-    success: {labelKey: 'syncTasks.done', iconColor: 'text-green-500'},
-    failed: {labelKey: 'syncTasks.failed', iconColor: 'text-red-500'},
+    success: {labelKey: 'syncTasks.done', iconColor: 'text-[var(--color-success)]'},
+    failed: {labelKey: 'syncTasks.failed', iconColor: 'text-[var(--color-danger)]'},
 };
 
 export default function SyncTasksPanel() {
@@ -122,7 +122,7 @@ export default function SyncTasksPanel() {
                         {t('syncTasks.title') || '同步任务'}
                     </span>
                     {failedCount > 0 && (
-                        <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-500">
+                        <span className="rounded-full bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-danger)]">
                             {failedCount}
                         </span>
                     )}
@@ -186,7 +186,7 @@ export default function SyncTasksPanel() {
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleRetry(task.id); }}
                                             title={t('syncTasks.retry') || '重试'}
-                                            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                                            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors"
                                         >
                                             {t('syncTasks.retry') || '重试'}
                                         </button>
@@ -292,10 +292,10 @@ export default function SyncTasksPanel() {
                         {/* 失败原因 */}
                         {detailTask.status === 'failed' && detailTask.error && (
                             <div>
-                                <div className="text-[11px] uppercase tracking-wider text-red-500 mb-1">
+                                <div className="text-[11px] uppercase tracking-wider text-[var(--color-danger)] mb-1">
                                     {t('syncTasks.detailFieldError') || '失败原因'}
                                 </div>
-                                <div className="rounded-md bg-red-500/10 px-2.5 py-2 text-red-400 break-words whitespace-pre-wrap">
+                                <div className="rounded-md bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] px-2.5 py-2 text-[var(--color-danger)] break-words whitespace-pre-wrap">
                                     {detailTask.error}
                                 </div>
                             </div>
@@ -304,10 +304,10 @@ export default function SyncTasksPanel() {
                         {/* 成功摘要 */}
                         {detailTask.status === 'success' && detailTask.detail && (
                             <div>
-                                <div className="text-[11px] uppercase tracking-wider text-green-500 mb-1">
+                                <div className="text-[11px] uppercase tracking-wider text-[var(--color-success)] mb-1">
                                     {t('syncTasks.detailFieldResult') || '结果'}
                                 </div>
-                                <div className="rounded-md bg-green-500/10 px-2.5 py-2 text-green-400 break-words whitespace-pre-wrap">
+                                <div className="rounded-md bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)] px-2.5 py-2 text-[var(--color-success)] break-words whitespace-pre-wrap">
                                     {detailTask.detail}
                                 </div>
                             </div>

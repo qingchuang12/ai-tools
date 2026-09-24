@@ -62,8 +62,17 @@ export async function probeMachineFirstSeen(): Promise<number | null> {
         }
         body = (await response.json()) as FirstSeenEnvelope;
     } catch (error) {
-        // 断网 / 超时 / JSON 解析失败一律当「没见过」：离线时用户仍应拿到试用
-        logLicenseEvent('LIC_INTERNAL', {event: 'machine_probe_failed', reason: (error as Error).name});
+        // 断网 / 超时 / JSON 解析失败一律当「没见过」：离线时用户仍应拿到试用。
+        // Node fetch 对网络层失败（DNS/连接拒绝/连接超时）统一抛 TypeError("fetch failed")，
+        // 真正原因在 cause.code（ENOTFOUND / ECONNREFUSED / UND_ERR_CONNECT_TIMEOUT…），
+        // 只记 name 的话日志只剩一个 TypeError 无从排查；detail/cause 均不含机器码与 URL。
+        const err = error as Error & {cause?: {code?: string}};
+        logLicenseEvent('LIC_INTERNAL', {
+            event: 'machine_probe_failed',
+            reason: err.name,
+            detail: String(err.message || '').slice(0, 120),
+            cause: err.cause?.code,
+        });
         return null;
     }
 

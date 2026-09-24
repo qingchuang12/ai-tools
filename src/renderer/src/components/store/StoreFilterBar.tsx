@@ -45,7 +45,7 @@ export default function StoreFilterBar({
   const hasActiveFilters = hasActiveStoreFilters(sort, facets.sortOptions, sourceFilter);
 
   return (
-    <div className="px-4 pt-3 pb-2 border-b border-[var(--color-border)] bg-[var(--color-bg)]/60 backdrop-blur-sm">
+    <div className="px-4 pt-3 pb-2 border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-bg)_60%,transparent)] backdrop-blur-sm">
       <div className="flex items-center gap-2">
         {hasSort && (
           <>

@@ -64,7 +64,7 @@ function FeatureList({
                 <li className="flex items-center gap-2 text-[13px]">
                     {cloudOpen ? (
                         <svg
-                            className="text-[#34c759]"
+                            className="text-[var(--color-success)]"
                             width="14"
                             height="14"
                             viewBox="0 0 16 16"
@@ -97,7 +97,7 @@ function FeatureList({
                     </span>
                 </li>
                 <li className="flex items-center gap-2 text-[13px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-muted2)]/70" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[color-mix(in_srgb,var(--color-muted2)_70%,transparent)]" />
                     <span className="text-[var(--color-muted2)]">{t('license.feature.moreComing')}</span>
                 </li>
             </ul>
@@ -427,7 +427,7 @@ export default function ActivationModal() {
                 <div className="space-y-4">
                     <p className="text-[13px] text-[var(--color-text)]">
                         {t('license.modal.trialRemaining')}
-                        <span className="font-semibold text-[#ff9f0a] ms-1">
+                        <span className="font-semibold text-[var(--color-warning)] ms-1">
                             {formatRemaining(state.trialExpiresAt, t)}
                         </span>
                     </p>
@@ -444,13 +444,13 @@ export default function ActivationModal() {
             {state.status === 'activated' && !switching && (
                 <div className="space-y-4">
                     {state.degraded === 'hardware_changed' && state.licenseKey && (
-                        <div className="px-3 py-2 rounded-md bg-[#ff9f0a]/10 border border-[#ff9f0a]/30 text-[12px] text-[#ff9f0a]">
+                        <div className="px-3 py-2 rounded-md bg-[color-mix(in_srgb,var(--color-warning)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] text-[12px] text-[var(--color-warning)]">
                             {t('license.modal.hardwareChanged', { days: 7 })}
                         </div>
                     )}
                     <p className="text-[13px] text-[var(--color-text)]">
                         {t('license.modal.activatedRemaining')}
-                        <span className="font-semibold text-[#34c759] ms-1">
+                        <span className="font-semibold text-[var(--color-success)] ms-1">
                             {formatRemaining(state.activatedExpiresAt, t)}
                         </span>
                     </p>
@@ -477,20 +477,20 @@ export default function ActivationModal() {
                         <button
                             onClick={() => { setConfirmingDeactivate(true); setMsg(null); }}
                             disabled={busy}
-                            className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[#ff3b30] text-[13px] font-medium hover:bg-[#ff3b30]/10 transition-colors disabled:opacity-50"
+                            className="w-full px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[var(--color-danger)] text-[13px] font-medium hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] transition-colors disabled:opacity-50"
                         >
                             {t('license.modal.deactivate')}
                         </button>
                     ) : (
                         <div className="space-y-3">
-                            <div className="px-3 py-2 rounded-md bg-[#ff3b30]/10 border border-[#ff3b30]/30 text-[12px] text-[#ff3b30]">
+                            <div className="px-3 py-2 rounded-md bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] text-[12px] text-[var(--color-danger)]">
                                 {t('license.modal.deactivateConfirm')}
                             </div>
                             <div className="flex gap-2">
                                 <button
                                     onClick={doDeactivate}
                                     disabled={busy}
-                                    className="flex-1 px-4 py-2.5 rounded-lg bg-[#ff3b30] text-white text-[13px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
+                                    className="flex-1 px-4 py-2.5 rounded-lg bg-[var(--color-danger)] text-white text-[13px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
                                 >
                                     {t('license.modal.confirmDeactivate')}
                                 </button>
@@ -507,12 +507,12 @@ export default function ActivationModal() {
                 </div>
             )}
             {msg && (
-                <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[#34c759]' : 'text-[#ff3b30]'}`}>
+                <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
                     {msg.text}
                 </p>
             )}
             {unbindWarn && (
-                <p className="text-[12px] text-[#ff9f0a]">{t('license.modal.unbindFailed')}</p>
+                <p className="text-[12px] text-[var(--color-warning)]">{t('license.modal.unbindFailed')}</p>
             )}
             {/* 账号登录区：默认折叠；挂在各状态区之外，未激活 / 试用 / 已激活均可见 */}
             <AccountLoginSection />

@@ -276,6 +276,7 @@ export interface McpApi {
     onStderr: (callback: (data: { sessionId: string; message: string }) => void) => () => void;
     onDisconnected: (callback: (data: { sessionId: string; code: number }) => void) => () => void;
     onError: (callback: (data: { sessionId: string; error: string }) => void) => () => void;
+    onInstalling: (callback: (data: { sessionId: string; message: string }) => void) => () => void;
 }
 
 interface ElectronAPI {
@@ -957,6 +958,8 @@ const mockAPI: ElectronAPI = {
         },
         onError: () => () => {
         },
+        onInstalling: () => () => {
+        },
     },
     activation: {
         getState: async (): Promise<ActivationState> => ({
@@ -1000,6 +1003,7 @@ const mockAPI: ElectronAPI = {
         logout: async (): Promise<void> => undefined,
         getProfile: async (): Promise<AccountProfile | null> => null,
         isLoggedIn: async (): Promise<boolean> => false,
+        claimLicenses: async (): Promise<{claimed: boolean}> => ({claimed: false}),
     },
     cache: {
         get: async () => null,

@@ -130,7 +130,7 @@ export default function ConfigForm({
                 {key}
               </span>
               {isRequired ? (
-                <span className="ms-1 text-[12px] text-[#ff3b30]">*</span>
+                <span className="ms-1 text-[12px] text-[var(--color-danger)]">*</span>
               ) : (
                 <span className="ms-1 text-[12px] text-[var(--color-muted)]">({t('detail.optional')})</span>
               )}
@@ -148,7 +148,7 @@ export default function ConfigForm({
                   w-full px-3 py-2 rounded-md bg-[var(--color-bg)] border text-[13px] text-[var(--color-text)]
                   transition-colors
                   ${hasError 
-                    ? 'border-[#ff3b30]' 
+                    ? 'border-[var(--color-danger)]' 
                     : 'border-[var(--color-border)] focus:border-[var(--color-accent)]'
                   }
                 `}
@@ -164,7 +164,7 @@ export default function ConfigForm({
                   type="checkbox"
                   checked={values[key] || false}
                   onChange={(e) => handleChange(key, e.target.checked)}
-                  className="w-4 h-4 rounded border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-accent)] focus:ring-[#0a84ff]/50"
+                  className="w-4 h-4 rounded border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-accent)] focus:ring-[color-mix(in_srgb,var(--color-accent)_50%,transparent)]"
                 />
                 <span className="text-[12px] text-[var(--color-muted2)]">Enable</span>
               </label>
@@ -178,7 +178,7 @@ export default function ConfigForm({
                   w-full px-3 py-2 rounded-md bg-[var(--color-bg)] border text-[13px] text-[var(--color-text)]
                   placeholder:text-[var(--color-muted)] transition-colors
                   ${hasError 
-                    ? 'border-[#ff3b30]' 
+                    ? 'border-[var(--color-danger)]' 
                     : 'border-[var(--color-border)] focus:border-[var(--color-accent)]'
                   }
                 `}
@@ -193,7 +193,7 @@ export default function ConfigForm({
                   w-full px-3 py-2 rounded-md bg-[var(--color-bg)] border text-[13px] text-[var(--color-text)]
                   placeholder:text-[var(--color-muted)] transition-colors
                   ${hasError 
-                    ? 'border-[#ff3b30]' 
+                    ? 'border-[var(--color-danger)]' 
                     : 'border-[var(--color-border)] focus:border-[var(--color-accent)]'
                   }
                 `}
@@ -201,7 +201,7 @@ export default function ConfigForm({
             )}
 
             {hasError && (
-              <p className="mt-1 text-[12px] text-[#ff3b30]">{errors[key]}</p>
+              <p className="mt-1 text-[12px] text-[var(--color-danger)]">{errors[key]}</p>
             )}
           </div>
         );

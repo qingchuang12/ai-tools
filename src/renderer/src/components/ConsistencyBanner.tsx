@@ -21,9 +21,10 @@ const RESOLUTION_LABEL: Partial<Record<ConsistencyItem['resolution'], string>> =
 };
 
 const RESOLUTION_COLOR: Partial<Record<ConsistencyItem['resolution'], string>> = {
-    local_newer: 'text-green-500 bg-green-500/10',
-    cloud_newer: 'text-orange-400 bg-orange-400/10',
+    local_newer: 'text-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)]',
+    cloud_newer: 'text-[var(--color-warning)] bg-[color-mix(in_srgb,var(--color-warning)_10%,transparent)]',
     diverged: 'text-[var(--color-muted2)] bg-[var(--color-surface-hover)]',
+    // 分叉态用紫色做三源区分编码（无对应语义令牌，保留调色板色）
     local_diverged: 'text-purple-400 bg-purple-400/10',
 };
 
@@ -93,7 +94,7 @@ export default function ConsistencyBanner({
                 <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                         onClick={() => onCompare(item)}
-                        className="text-[11px] px-2 py-0.5 rounded text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                        className="text-[11px] px-2 py-0.5 rounded text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors"
                     >
                         {t('consistency.compare') || '对照'}
                     </button>
@@ -112,7 +113,7 @@ export default function ConsistencyBanner({
                                 onClick={() => onResolve(item, 'download')}
                                 disabled={resolving}
                                 title={t('consistency.overwriteLocalTitle') || '用云端版本覆盖所有已安装客户端'}
-                                className="text-[11px] px-2 py-0.5 rounded text-blue-400 hover:bg-blue-400/10 transition-colors disabled:opacity-50"
+                                className="text-[11px] px-2 py-0.5 rounded text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors disabled:opacity-50"
                             >
                                 {resolving ? '…' : (t('consistency.overwriteLocal') || '覆盖本地')}
                             </button>
@@ -120,7 +121,7 @@ export default function ConsistencyBanner({
                                 onClick={() => onResolve(item, 'upload')}
                                 disabled={resolving}
                                 title={t('consistency.overwriteCloudTitle') || '用本地版本覆盖云端'}
-                                className="text-[11px] px-2 py-0.5 rounded text-green-500 hover:bg-green-500/10 transition-colors disabled:opacity-50"
+                                className="text-[11px] px-2 py-0.5 rounded text-[var(--color-success)] hover:bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)] transition-colors disabled:opacity-50"
                             >
                                 {resolving ? '…' : (t('consistency.overwriteCloud') || '覆盖云端')}
                             </button>
@@ -132,10 +133,10 @@ export default function ConsistencyBanner({
     };
 
     return (
-        <div className="rounded-lg border border-[#ff9f0a]/40 bg-[#ff9f0a]/5 mb-3 overflow-hidden">
+        <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_5%,transparent)] mb-3 overflow-hidden">
             {/* 摘要行 */}
             <div className="flex items-center gap-2 px-3 py-2">
-        <span className="w-5 h-5 rounded-full bg-[#ff9f0a]/15 text-[#ff9f0a] flex items-center justify-center flex-shrink-0 text-[13px]">
+        <span className="w-5 h-5 rounded-full bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)] flex items-center justify-center flex-shrink-0 text-[13px]">
             !
         </span>
                 <span className="text-[12.5px] text-[var(--color-text)] flex-1 min-w-0 truncate">
@@ -161,7 +162,7 @@ export default function ConsistencyBanner({
                 </button>
                 <button
                     onClick={() => setExpanded(!expanded)}
-                    className="text-[12px] text-[#ff9f0a] hover:underline flex-shrink-0"
+                    className="text-[12px] text-[var(--color-warning)] hover:underline flex-shrink-0"
                 >
                     {expanded
                         ? (t('consistency.collapse') || '收起')
@@ -171,10 +172,10 @@ export default function ConsistencyBanner({
 
             {/* 明细：Skill 与 MCP 分组展示，互不混排（用户反馈） */}
             {expanded && (
-                <div className="border-t border-[#ff9f0a]/20 px-3 py-2 max-h-[320px] overflow-y-auto space-y-2">
+                <div className="border-t border-[color-mix(in_srgb,var(--color-warning)_20%,transparent)] px-3 py-2 max-h-[320px] overflow-y-auto space-y-2">
                     {skillCount > 0 && (
                         <div>
-                            <div className="text-[10.5px] font-semibold text-[var(--color-text)]/80 mb-1 px-1">
+                            <div className="text-[10.5px] font-semibold text-[color-mix(in_srgb,var(--color-text)_80%,transparent)] mb-1 px-1">
                                 {t('consistency.skillsGroup', {count: skillCount}) || `Skills（${skillCount}）`}
                             </div>
                             <div className="space-y-1.5">
@@ -184,7 +185,7 @@ export default function ConsistencyBanner({
                     )}
                     {serverCount > 0 && (
                         <div>
-                            <div className="text-[10.5px] font-semibold text-[var(--color-text)]/80 mb-1 px-1">
+                            <div className="text-[10.5px] font-semibold text-[color-mix(in_srgb,var(--color-text)_80%,transparent)] mb-1 px-1">
                                 {t('consistency.serversGroup', {count: serverCount}) || `MCP Servers（${serverCount}）`}
                             </div>
                             <div className="space-y-1.5">

@@ -48,7 +48,7 @@ export interface LicenseConfig {
     defaultKid: string;
     /**
      * billing-license-service 服务地址（origin，结尾不带 `/`）。
-     * 收银台页与兑换 API 均由它派生（见 `CHECKOUT_PAGE_PATH` / `REDEEM_API_PATH`），
+     * 收银台页与兑换 API 均由它派生（见 `CHECKOUT_PAGE_PATH` / `ACTIVATE_API_PATH`），
      * 一处配置即与后台服务一一对应，不会出现跳转与兑换指向两个实例的漂移。
      */
     serviceBaseUrl: string;

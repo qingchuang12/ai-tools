@@ -212,7 +212,7 @@ export default function StorePage() {
         {/* 翻页时 react-query 保留上一页数据作占位（keepPreviousData），若不给可见反馈，
             用户点击翻页后会看到「内容没变化」。用顶部进度条表明请求正在进行。 */}
         {data.isFetching && data.items.length > 0 && (
-          <div className="h-[2px] w-full bg-[var(--color-accent)]/15 overflow-hidden">
+          <div className="h-[2px] w-full bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] overflow-hidden">
             <div className="h-full w-1/3 bg-[var(--color-accent)] animate-pulse" />
           </div>
         )}
@@ -295,7 +295,7 @@ function LoadingSpinner() {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center h-full">
-      <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[#0a84ff] rounded-full animate-spin mb-3" />
+      <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin mb-3" />
       <p className="text-[13px] text-[var(--color-muted2)]">{t('store.loading')}</p>
     </div>
   );

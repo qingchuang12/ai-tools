@@ -68,6 +68,20 @@ export class McpClient extends EventEmitter {
     private httpHeaders?: Record<string, string>;
     private sessionId?: string;
     private abortController?: AbortController;
+    // 是否处于「依赖下载/安装中」：stderr 命中安装特征时置位，仅用于 UI 友好提示；
+    // 最终成败仍以「进程是否退出（exited）」为准，避免误判导致误杀进程。
+    private installing = false;
+    // 子进程是否已退出：exit 事件置位，作为 waitForReady 判断「真失败」的可靠信号。
+    private exited = false;
+    // 常见包管理器安装/下载日志特征词（用于 looksLikeInstalling 识别）。
+    private static readonly INSTALL_HINTS = [
+        'added', 'packages', 'reify', 'downloading', 'download', 'fetch', 'fetching',
+        'extract', 'extracting', 'linking', 'resolving', 'collecting', 'building',
+        'install', 'installing', 'progress', 'resolved', 'storing', 'idealtree',
+        'audited', 'npm warn', 'up to date', 'packages are looking', 'packages in',
+        'added 1 package', 'added 2 packages', 'added 3 packages', 'added 4 packages',
+        'added 5 packages',
+    ];
     // Node 原生 http 请求句柄（用于断开时强制销毁连接）
     private httpReq?: http.ClientRequest;
     // —— SSE 传输（旧版 /sse 模式）相关 ——
@@ -224,23 +238,48 @@ export class McpClient extends EventEmitter {
         const cleaned: NodeJS.ProcessEnv = {...env};
         const raw = cleaned.NODE_OPTIONS;
         if (raw) {
-            const kept = raw
-                .split(/\s+/)
-                .filter((flag) => {
-                    const f = flag.trim();
-                    if (!f) return false;
-                    // 去掉 Node inspector 调试标记
-                    if (/^--inspect(-brk)?(=\S*)?$/.test(f)) return false;
-                    if (/^--inspect-port(=\S*)?$/.test(f)) return false;
-                    // 去掉沙箱安全删除 shim 的 --require
-                    if (f.includes('genie-safe-delete')) return false;
-                    return true;
-                });
+            const tokens = raw.split(/\s+/).filter(Boolean);
+            const kept: string[] = [];
+            for (let i = 0; i < tokens.length; i++) {
+                const f = tokens[i];
+                // 去掉 Node inspector 调试标记
+                if (/^--inspect(-brk)?(=\S*)?$/.test(f)) continue;
+                if (/^--inspect-port(=\S*)?$/.test(f)) continue;
+                // --require / --import 是宿主向子进程注入 preload 的通用载体
+                // （IDEA javascript-debugger 的 debugConnector.js、安全删除 shim 等都走它），一律不透传。
+                // 兼容 --require=<path> 与 --require <path> 两种形式：值 token 必须一并剔除，
+                // 否则裸路径残留在 NODE_OPTIONS 里会让 Node 直接拒绝启动。
+                // 用户确需给某 server 传 --require 时，应写在该 server 配置的 env 里（不经本函数、原样生效）。
+                if (/^--require(=\S+)?$/.test(f) || /^--import(=\S+)?$/.test(f)) {
+                    if (!f.includes('=') && i + 1 < tokens.length && !tokens[i + 1].startsWith('--')) i++;
+                    continue;
+                }
+                // profiler 注入同理
+                if (/^--(cpu|heap)-prof(=\S+)?$/.test(f)) continue;
+                kept.push(f);
+            }
             const joined = kept.join(' ').trim();
             if (joined) cleaned.NODE_OPTIONS = joined;
             else delete cleaned.NODE_OPTIONS;
         }
         return cleaned;
+    }
+
+    /**
+     * 控制台输出解码：优先按 UTF-8 严格解码（MCP server 正常输出）；
+     * 失败再按 GBK 兜底——中文 Windows 的 cmd.exe / 老程序 stderr 走 OEM 代码页（936），
+     * 直接 toString('utf8') 会把「系统找不到指定的文件」打成乱码，影响排障。
+     */
+    private decodeConsole(data: Buffer): string {
+        try {
+            return new TextDecoder('utf-8', {fatal: true}).decode(data);
+        } catch {
+            try {
+                return new TextDecoder('gbk').decode(data);
+            } catch {
+                return data.toString('utf8');
+            }
+        }
     }
 
     /**
@@ -459,10 +498,17 @@ export class McpClient extends EventEmitter {
                     ...config.env,
                 };
 
+                this.installing = false;
+                this.exited = false;
+
                 // 启动进程
+                // Node 22（Electron 43）对 shell:true + args 数组发 DEP0190 弃用警告（参数仅拼接、不转义）。
+                // shell 模式下 Node 内部本就是把 command 与 args 空格拼接成整串交给 shell，这里显式合并：
+                // 语义完全一致、消除弃用警告；MCP 配置为结构化 command+args，不含 shell 语法。
                 // Windows: shell:true 会经 cmd.exe 派生，需 windowsHide 避免弹黑窗，退出时用 taskkill /T 杀整棵进程树；
                 // macOS/Linux: detached 建立独立进程组，退出时 kill(-pid) 可一并终止全部子进程。
-                this.process = spawn(config.command!, config.args || [], {
+                const shellCommand = [config.command!, ...(config.args || [])].join(' ');
+                this.process = spawn(shellCommand, {
                     stdio: ['pipe', 'pipe', 'pipe'],
                     env,
                     cwd: config.cwd || undefined,
@@ -477,13 +523,20 @@ export class McpClient extends EventEmitter {
 
                 // 处理 stderr
                 this.process.stderr?.on('data', (data: Buffer) => {
-                    const message = data.toString();
+                    const message = this.decodeConsole(data);
                     console.error('[MCP stderr]', message);
                     this.emit('stderr', message);
+                    // 识别「依赖下载/安装中」：命中常见包管理器安装日志特征即标记，
+                    // 上报渲染层用于友好提示（不立即标红失败）；误判只影响文案，不杀进程。
+                    if (!this.installing && this.looksLikeInstalling(message)) {
+                        this.installing = true;
+                        this.emit('installing', { message });
+                    }
                 });
 
                 // 处理进程退出
                 this.process.on('exit', (code) => {
+                    this.exited = true;
                     this.connected = false;
                     this.emit('disconnected', code ?? 0);
                     this.rejectAllPending(new Error(`Process exited with code ${code}`));
@@ -496,17 +549,9 @@ export class McpClient extends EventEmitter {
                     reject(error);
                 });
 
-                // 发送初始化请求
-                this.sendRequest('initialize', {
-                    protocolVersion: '2024-11-05',
-                    capabilities: {},
-                    clientInfo: {
-                        name: 'AI-Tools Inspector',
-                        version: '1.0.0',
-                    },
-                }).then((result: unknown) => {
-                    const initResult = result as { serverInfo?: { name?: string; version?: string } };
-                    this.serverInfo = initResult.serverInfo || null;
+                // 等待 initialize 就绪：下载中智能等待（进程存活时不立即杀进程判失败）
+                this.waitForReady({ totalTimeout: 300000 }).then((serverInfo) => {
+                    this.serverInfo = serverInfo;
                     this.connected = true;
 
                     // 发送 initialized 通知
@@ -523,6 +568,51 @@ export class McpClient extends EventEmitter {
                 reject(error);
             }
         });
+    }
+
+    /**
+     * 等待 initialize 握手就绪（stdio 专用）。
+     * 与一次性 sendRequest 不同：当 server 进程仍在运行（未退出）但握手未就绪时，
+     * 不立即杀进程判失败，而是睡眠后自动重发 initialize，直到：
+     *  - server 响应 initialize → 成功返回 serverInfo；
+     *  - 子进程退出（exited=true）→ 真失败；
+     *  - 超过总等待上限（默认 5 分钟）→ 失败。
+     * 典型场景：命令为 `npx -y <包>` 首次冷启动，npm 需联网下载/解压依赖，
+     * 期间进程活着但未开始 JSON-RPC 握手；本方法确保装完依赖后自动连上，而非 30s 即报失败。
+     */
+    private async waitForReady(opts: { totalTimeout: number }): Promise<{ name?: string; version?: string }> {
+        const start = Date.now();
+        const attempt = async (): Promise<{ name?: string; version?: string }> => {
+            try {
+                const result = await this.sendRequest('initialize', {
+                    protocolVersion: '2024-11-05',
+                    capabilities: {},
+                    clientInfo: { name: 'AI-Tools Inspector', version: '1.0.0' },
+                }) as { serverInfo?: { name?: string; version?: string } };
+                return result.serverInfo || {};
+            } catch (error) {
+                // 进程已退出 → 真正的失败（无论是否曾处于安装中）
+                if (this.exited || !this.process) {
+                    throw error;
+                }
+                // 进程仍存活：总等待未超上限则继续等待并重试（不杀进程）
+                if (Date.now() - start < opts.totalTimeout) {
+                    await new Promise((r) => setTimeout(r, 1000));
+                    return attempt();
+                }
+                throw new Error(`Initialize timed out after ${Math.round(opts.totalTimeout / 1000)}s (server did not respond)`);
+            }
+        };
+        return attempt();
+    }
+
+    /**
+     * 判断 stderr 输出是否像是依赖下载/安装日志（npm/npx/pnpm/yarn/uvx/uv/pip/poetry/deno/bun 等）。
+     * 仅用于「安装中」友好提示；误判不会杀进程（成败仍以进程是否退出为准）。
+     */
+    private looksLikeInstalling(message: string): boolean {
+        const m = message.toLowerCase();
+        return McpClient.INSTALL_HINTS.some((hint) => m.includes(hint));
     }
 
     /**

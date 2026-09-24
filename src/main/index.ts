@@ -528,6 +528,11 @@ ipcMain.handle('mcp:connect', async (_, sessionId: string, config: {
             mainWindow?.webContents.send('mcp:error', {sessionId, error: error.message});
         });
 
+        // 依赖下载/安装中（stdio 冷启动 npm/npx 拉包）：仅作友好提示，连接未失败
+        client.on('installing', (data: { message: string }) => {
+            mainWindow?.webContents.send('mcp:installing', {sessionId, message: data.message});
+        });
+
         const serverInfo = await client.connect(config);
         return {success: true, serverInfo};
     } catch (error) {
@@ -654,6 +659,9 @@ ipcMain.handle('account:logout', async () => account.logout());
 ipcMain.handle('account:get-profile', async () => account.getProfile());
 
 ipcMain.handle('account:is-logged-in', async (): Promise<boolean> => account.isLoggedIn());
+
+// A9：登录后自动到账（拉本账号授权列表 → 自动激活未绑定/本机授权）。best-effort、不弹窗。
+ipcMain.handle('account:claim-licenses', async (): Promise<{claimed: boolean}> => license.claimLicenses());
 
 // ============ Skills IPC 处理器 ============
 // 获取指定客户端的已安装 Skills

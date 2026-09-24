@@ -149,7 +149,7 @@ export default function ConsistencyCompareModal({
                     </span>
                     <button
                         onClick={() => setFullView(!fullView)}
-                        className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                        className="flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors"
                     >
                         {fullView ? (
                             <>
@@ -208,7 +208,7 @@ export default function ConsistencyCompareModal({
                                          className={`px-2 py-px font-mono text-[11px] leading-4 whitespace-pre-wrap break-all ${
                                              row.same
                                                  ? 'text-[var(--color-muted)]'
-                                                 : 'bg-[#ff9f0a]/10 text-[var(--color-text)]'
+                                                 : 'bg-[color-mix(in_srgb,var(--color-warning)_10%,transparent)] text-[var(--color-text)]'
                                          }`}>
                                         {row.left || ' '}
                                     </div>
@@ -230,7 +230,7 @@ export default function ConsistencyCompareModal({
                                          className={`px-2 py-px font-mono text-[11px] leading-4 whitespace-pre-wrap break-all ${
                                              row.same
                                                  ? 'text-[var(--color-muted)]'
-                                                 : 'bg-[#0a84ff]/10 text-[var(--color-text)]'
+                                                 : 'bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-text)]'
                                          }`}>
                                         {row.right || ' '}
                                     </div>

@@ -9,10 +9,24 @@ import {useActivationStore} from '../store/activationStore';
 import type {ActivationStatus} from '../lib/electron';
 import {formatCompactDuration} from '../lib/format';
 
+// 三态配色全部引用主题令牌（style 内联支持 CSS 变量与 color-mix，Electron 130+ 生效），
+// 跟随浅色/暗色主题自动切换，不再写死暗色值。
 const STYLE: Record<ActivationStatus, { bg: string; color: string; dot: string }> = {
-    inactive: { bg: 'rgba(99,99,102,0.15)', color: '#a1a1a6', dot: '#636366' },
-    trial: { bg: 'rgba(255,159,10,0.15)', color: '#ff9f0a', dot: '#ff9f0a' },
-    activated: { bg: 'rgba(52,199,89,0.15)', color: '#34c759', dot: '#34c759' },
+    inactive: {
+        bg: 'color-mix(in srgb, var(--color-muted) 15%, transparent)',
+        color: 'var(--color-muted2)',
+        dot: 'var(--color-muted)',
+    },
+    trial: {
+        bg: 'color-mix(in srgb, var(--color-warning) 15%, transparent)',
+        color: 'var(--color-warning)',
+        dot: 'var(--color-warning)',
+    },
+    activated: {
+        bg: 'color-mix(in srgb, var(--color-success) 15%, transparent)',
+        color: 'var(--color-success)',
+        dot: 'var(--color-success)',
+    },
 };
 
 export default function ActivationBadge() {

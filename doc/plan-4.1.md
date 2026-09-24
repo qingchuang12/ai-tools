@@ -11,6 +11,12 @@
 
 **「激活版」不是第三种产物**：用户在免费版1 里输入激活码，`license` 权益链路判定通过后广告自动消失——这是**运行时状态**，不单独打包。故整体只出 **2 个安装包**（海外版另按地区出 1 个，共 3 条打包命令）。
 
+### C. MCP 调试器连接——下载中智能等待（本会话新增）
+MCP Inspector（调试器）点「连接」走 stdio：`mcp-client.ts` `connectStdio` spawn server 进程后立刻发 initialize 握手，握手固定等 30 秒（`sendRequest` 硬编码 30000），超时即 `disconnect()` 杀进程并回报失败，UI 标红「Connection failed」。当命令是 `npx -y <包>` 首次冷启动，npm 需联网下载/解压依赖，期间进程活着但未握手（stdout 无 JSON-RPC、仅 stderr 安装日志），30 秒到即判失败；二次因 npm 缓存命中而成功——与用户反馈「有时程序还在下载导致失败、过一阵就好」吻合。目标：识别「依赖下载/安装中」状态，不立即标红失败、自动持续等待握手，UI 显示「正在安装依赖，请稍候…」；仅进程退出或超总上限（5 分钟）方判失败。
+
+### D. 整体界面 UI/UE 优化——设计 token 统一（本会话新增）
+全站 UI 复查发现：设计系统（`index.css` 的 `--color-*` 令牌 + `tailwind.config.cjs` 的 `accent/success/danger/warning/info` + `.card`/`.btn-primary`/`.btn-danger`/`.tag-success`/`.status-dot` 工具类）已完整且带浅色主题覆盖，但大量组件绕过它们直接写死十六进制值，导致：① 分类徽章三套配色并存；② success/danger/warning/info 写死暗色值，浅色主题对比度差、品牌色偏移（真实 bug）；③ 主蓝 `#0a84ff` 等魔法值破坏 token 体系；④ 卡片 `h-[115px]` 固定高度裁切内容；⑤ 浅色主题残留破损（骨架屏分隔线、README 空态灰、默认图标深色文字压彩底）。目标：统一到既有 token / 工具类，全站主题感知一致。纯展示层改动，不涉及逻辑/状态/IPC。
+
 ## 广告渠道
 
 - **海外：Overwolf（ow-electron）**。核实来源：npm registry、GitHub（overwolf/ow-electron-packages-sample）、官方文档站（overwolf.github.io/tools/ow-electron）。事实：
@@ -33,24 +39,19 @@
 
 ## 范围与边界
 
-- 做：广告接入、免费版编译开关、ow-electron 底座与打包链验证、授权客户端跨仓对齐（见 TODOS）。
-- 暂不做：`packageManager: pnpm@12.4.1` 与全局 pnpm 11.24.0 的版本口径对齐（项目内已按 manage-package-manager-versions 自动切 12.4.1，行为一致）；360联盟 SDK 实现（待商务文档）；Overwolf 发布链双签（待 Console 开通）。
+- 做：广告接入、免费版编译开关、ow-electron 底座与打包链验证、授权客户端跨仓对齐；以及 **C. MCP Inspector 连接下载中智能等待修复**（见 TODOS）。
+- 暂不做：`packageManager: pnpm@12.4.1` 与全局 pnpm 11.24.0 的版本口径对齐（项目内已按 manage-package-manager-versions 自动切 12.4.1，行为一致）；360联盟 SDK 实现（待商务文档）；Overwolf 发布链双签（待 Console 开通）；HTTP/SSE 传输的类似等待（本次仅改 stdio，远程 server 无「下载」语义）。
 
 
 ## TODOS（仅未完成）
 
+> **核查结论（2026-09-24）**：广告 `AdSlot` 已落地（`src/renderer/src/components/ads/*` + `Layout.tsx:128` 挂载 + `build-flags.test.ts` 覆盖），原「trial/AdSlot 落地」开发项已完成，仅剩 GUI 冒烟（转下「验证」项）。授权客户端两条开发项（统一激活端点切换、登录后自动到账 A9）均已于本会话完成：`redeem.ts` 改走 `POST /api/licenses/activate`（请求体 `code`→`credential`）、新增 `claim.ts` + `account:claim-licenses` IPC、preload/renderer/store 三层接线，登录成功即自动触发；仅剩真实后端 E2E 验证（见登记表）。
+
 ### 底座与广告
 - [ ] **【验证】ow-electron 底座实机验证 + 打包链实跑（含二进制补齐）** — 前置：手动补齐 `@overwolf/ow-electron` 42.7.1 Electron 二进制（2026-09-22 外网 DNS 全部不可达，`node install.js` 报 fetch failed；网络恢复后在项目根执行 `node node_modules/electron/install.js`，幂等约 100MB，完成后 `node_modules/electron/dist/electron.exe` 应存在；仍失败先确认代理/VPN，勿改包版本）。待做：① `webviewTag:true` + `--test-ad` 实机跑通 owadview（需 GUI）；② 打包链实跑——`@overwolf/ow-electron-builder` 已写入 package.json，但本机 `pnpm install` 反复报 `os error 2/5/183`（符号链接/文件已存在/拒绝访问），`7zip-bin` 等打包传递依赖未装齐，**须先修本机文件系统/安全软件环境再重跑 install**。
-- [ ] **【开发】** trial/AdSlot 落地后实机冒烟（dev 下 free1/free2 组合的广告位与云同步入口显隐、激活态切换）。
+- [ ] **【验证】** trial/AdSlot 实机冒烟（dev 下 free1/free2 组合的广告位与云同步入口显隐、激活态切换）——AdSlot/selectAdProvider/Overwolf/Union360/Noop 三 provider 已落地，仅剩 GUI 冒烟。
 
-### 授权客户端（登记自 billing-license-service `plan-7.0` A9，2026-09-23）
-
-> 服务端侧**已就绪**（`POST /api/licenses/activate` 与 D2 自动上报绑定端点均已上线，338 测试全绿）。服务端契约见其 `README.md`「凭证激活」段 /「客户端自动上报绑定（plan-7.0 / D2）」段与 `接口调用时序图.md` §1.7.6 / §3.13 / §4.10 / §4.12 / §4.13。已核实（2026-09-23）：客户端支持凭证类型 = **仅兑换码**、无「两套硬编码逻辑」、无可复用轮询代码；凭证路径引用点仅 `src/main/license/constants.ts:34/37/44` → `redeem.ts:54/98/170`。
-
-- [ ] **【开发】接入统一激活端点** `POST /api/licenses/activate` — 服务端把「绑定设备 + 拿签名令牌」从四处入口收敛为**单一端点**，`credential` 传兑换码（`RC-` 前缀）或许可证密钥、由服务端自动识别；响应与既有 `RedeemResponse` 同构（含客户端已消费的 `serverTime`，字段口径不变）。**已定案（服务端 B2 = C，2026-09-23 口径修正）**：无机器码订单**照常自动发兑换码**（系统发兑换码邮件 + 客户可登录网站查看），客服人工发码仅用于活动/运营发放、与自动发码并存——故兑换码是**长期存在的主凭证**，本项成立且必要；客户端继续以兑换码为主凭证，切换目标端点不变。
-- [ ] **【开发】购买后自动存证 + 轮询上限 1 小时（服务端决策 B5 = 手动按钮 + 轮询）** — 付款后轮询 `GET /api/checkout/{checkoutId}/status` 自动存证并激活，**最长轮询 1 小时，超时即停止轮询**；同时保留手动「检查我的订单」按钮兜底。**服务端已确认无阻碍**：该端点不受任何限流，且对渠道的主动对账已有 30 秒冷却窗口（`CheckoutService:38` `COMPENSATION_COOLDOWN_SECONDS = 30`），1 小时内高频轮询不会放大渠道 API 调用。
-
-> 实现提示：客户端对外文案已按设计统一收敛为 `license.errors.generic`（`license/errors.ts` 明确「绝不回传错误码」），故服务端新增/改名的错误码（如 `CREDENTIAL_NOT_FOUND`）**无需客户端 i18n 改动**——不要为它加文案映射。
+> 实现提示：客户端对外文案已统一收敛为 `license.errors.generic`（`license/errors.ts` 明确「绝不回传错误码」），服务端新增/改名错误码（如 `CREDENTIAL_NOT_FOUND`/`LOGIN_REQUIRED`）**无需客户端 i18n 改动**。
 
 ### 外部对接
 - [ ] **【外部】** 360联盟商务对接：确认 PC 桌面 SDK 是否存在并取文档 → 补齐 `AdProvider` 实现（官网三次超时，公开渠道无桌面文档）。

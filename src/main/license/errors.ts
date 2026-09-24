@@ -36,7 +36,9 @@ export type LicenseErrorCode =
     | 'LIC_REPORT_BINDING_BAD_RESPONSE'
     | 'LIC_ACCOUNT_NETWORK'        // 账号请求网络层失败（登录 / 二因子 / 登出 / me）
     | 'LIC_ACCOUNT_REJECTED'      // 账号请求被服务端拒绝（HTTP >=400，不暴露细分原因）
+    | 'LIC_ACCOUNT_BAD_RESPONSE'  // 账号请求响应 JSON 畸形（解析失败）
     | 'LIC_ACCOUNT_INTERNAL'      // 本地令牌读取等内部异常
+    | 'LIC_CLAIM_FAILED'          // A9：登录后自动到账激活失败（best-effort，不影响登录态）
     | 'LIC_UNBIND_SKIPPED'        // R6：未登录或取不到 licenseKey，跳过换绑解绑
     | 'LIC_RECHECK_NETWORK'       // 复核：网络层失败（fetch 抛异常 / 超时）
     | 'LIC_RECHECK_RATE_LIMITED'  // 复核：命中 429（照常累加宽限，免扣会让限流变成续命后门）

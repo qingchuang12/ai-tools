@@ -581,6 +581,10 @@ const api = {
             ipcRenderer.on('mcp:error', (_, data) => callback(data));
             return () => ipcRenderer.removeAllListeners('mcp:error');
         },
+        onInstalling: (callback: (data: { sessionId: string; message: string }) => void) => {
+            ipcRenderer.on('mcp:installing', (_, data) => callback(data));
+            return () => ipcRenderer.removeAllListeners('mcp:installing');
+        },
     },
 
     // 缓存管理 (SWR 本地持久化缓存)
@@ -658,6 +662,7 @@ const api = {
         logout: (): Promise<void> => ipcRenderer.invoke('account:logout'),
         getProfile: (): Promise<AccountProfile | null> => ipcRenderer.invoke('account:get-profile'),
         isLoggedIn: (): Promise<boolean> => ipcRenderer.invoke('account:is-logged-in'),
+        claimLicenses: (): Promise<{claimed: boolean}> => ipcRenderer.invoke('account:claim-licenses'),
     } as AccountApi,
 };
 

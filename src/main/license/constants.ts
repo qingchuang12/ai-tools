@@ -33,8 +33,11 @@ export const CONFIG_FILE_NAME = 'license.config.json';
 /** 收银台页路径：billing-license-service 同源托管（static/checkout），与 machineId 查询参数一起构成页面契约 */
 export const CHECKOUT_PAGE_PATH = '/checkout/index.html';
 
-/** 兑换端点路径：服务端 RedeemCodeController 的对外契约 */
-export const REDEEM_API_PATH = '/api/redeem/redeem';
+/**
+ * 统一激活端点路径：服务端 LicenseController 的 `POST /api/licenses/activate`（plan-7.0 方案 A）。
+ * 取代旧的 `/api/redeem/redeem`；`credential` 传兑换码（RC- 前缀）或许可证密钥，由服务端自动识别。
+ */
+export const ACTIVATE_API_PATH = '/api/licenses/activate';
 
 /**
  * R6：释放本机绑定（换绑场景）端点（服务端 AccountAssetController，需登录 + 本人归属）。
@@ -80,6 +83,16 @@ export const REPORT_BINDING_API_PATH = '/api/licenses/report-binding';
 
 /** D2：上报绑定为启动期旁路请求，用比兑换（15s）短的超时，避免拖慢启动 */
 export const REPORT_BINDING_TIMEOUT_MS = 10000;
+
+/**
+ * A9（plan-7.0）：本账号名下授权列表端点（服务端 AccountAssetController，Bearer）。
+ * 返回 `List<LicenseResponse>`（业务数组在 `$.data`，兼容扁平结构），字段见 `LicenseResponse.java`：
+ * `licenseKey` / `status`(ACTIVE|EXPIRED|REVOKED|REISSUED) / `machineCode`(未绑定为 null) / `customerEmail` 等。
+ */
+export const MY_LICENSES_API_PATH = '/api/account/licenses';
+
+/** A9：拉取本账号授权列表为登录后/启动旁路请求，超时短于兑换（15s） */
+export const MY_LICENSES_TIMEOUT_MS = 10000;
 
 /**
  * C8：机器码首次出现时间端点（服务端 MachineController，公开只读）。
@@ -167,8 +180,8 @@ export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
     acceptedSkus: [...ACCEPTED_SKUS],
     skuFeatures: SKU_FEATURES,
     defaultKid: DEFAULT_KID,
-    // billing-license-service 服务地址：收银台页（在线激活跳转）与兑换 API（兑换码激活）都由它
-    // 派生（CHECKOUT_PAGE_PATH / REDEEM_API_PATH），一处配置即与后台服务对应。
+    // billing-license-service 服务地址：收银台页（在线激活跳转）与兑换 API（凭证激活）都由它
+    // 派生（CHECKOUT_PAGE_PATH / ACTIVATE_API_PATH），一处配置即与后台服务对应。
     // 默认指向本地服务（默认端口 8000）；生产域名由包外 license.config.json 覆盖，无需发版
     serviceBaseUrl: 'http://localhost:8000',
     redeemTimeoutMs: 15000,

@@ -29,9 +29,9 @@ const MAX_CLIENT_ICONS = 5;
 /** 差异行：新增(+)/移除(-)/修改(~) 统一配色 */
 function DiffChangeRow({id, kind, label}: { id: string; kind: 'added' | 'removed' | 'modified'; label?: string }) {
     const style = {
-        added: {sign: '+', cls: 'bg-[#34c759]/10 border-[#34c759]/20 text-[#34c759]'},
-        removed: {sign: '-', cls: 'bg-[#ff3b30]/10 border-[#ff3b30]/20 text-[#ff3b30]'},
-        modified: {sign: '~', cls: 'bg-[#ff9f0a]/10 border-[#ff9f0a]/20 text-[#ff9f0a]'},
+        added: {sign: '+', cls: 'bg-[color-mix(in_srgb,var(--color-success)_10%,transparent)] border-[color-mix(in_srgb,var(--color-success)_20%,transparent)] text-[var(--color-success)]'},
+        removed: {sign: '-', cls: 'bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] border-[color-mix(in_srgb,var(--color-danger)_20%,transparent)] text-[var(--color-danger)]'},
+        modified: {sign: '~', cls: 'bg-[color-mix(in_srgb,var(--color-warning)_10%,transparent)] border-[color-mix(in_srgb,var(--color-warning)_20%,transparent)] text-[var(--color-warning)]'},
     }[kind];
     return (
         <div className={`flex items-center gap-2 px-3 py-2 rounded-md border ${style.cls}`}>
@@ -145,7 +145,7 @@ export default function History() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full bg-[var(--color-bg)]">
-        <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[#0a84ff] rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
       </div>
     );
   }
@@ -168,7 +168,7 @@ export default function History() {
             <button
               onClick={handleClearAll}
               disabled={isClearing}
-              className="px-2.5 py-1 rounded text-[12px] text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-colors disabled:opacity-50"
+              className="px-2.5 py-1 rounded text-[12px] text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] transition-colors disabled:opacity-50"
             >
               {isClearing ? t('history.clearing') || 'Clearing...' : t('history.clearAll') || 'Clear All'}
             </button>
@@ -285,7 +285,7 @@ export default function History() {
                   </span>
                 )}
                 {selectedDiff.removed.length > 0 && (
-                  <span className="px-2 py-0.5 rounded text-[12px] bg-[#ff3b30]/15 text-[#ff3b30]">
+                  <span className="px-2 py-0.5 rounded text-[12px] bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]">
                     -{selectedDiff.removed.length} {t('history.removed')}
                   </span>
                 )}
@@ -315,7 +315,7 @@ export default function History() {
                     </span>
                   )}
                   {(selectedDiff.skillsRemoved?.length || 0) > 0 && (
-                    <span className="px-2 py-0.5 rounded text-[12px] bg-[#ff3b30]/15 text-[#ff3b30]">
+                    <span className="px-2 py-0.5 rounded text-[12px] bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]">
                       -{selectedDiff.skillsRemoved.length} {t('history.removed')}
                     </span>
                   )}

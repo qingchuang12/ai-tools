@@ -163,7 +163,7 @@ export default function CloudSyncManager({runtimes, onChanged}: Props) {
                     )}
                     <button
                         onClick={() => setCfg({...cfg, enabled: !cfg.enabled})}
-                        className={`relative w-9 h-5 rounded-full transition-colors ${cfg.enabled ? 'bg-[#34c759]' : 'bg-[var(--color-surface-hover)]'}`}
+                        className={`relative w-9 h-5 rounded-full transition-colors ${cfg.enabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-surface-hover)]'}`}
                         title={cfg.enabled ? t('cloudSync.disableTitle') : t('cloudSync.enableTitle')}
                     >
                         <span
@@ -176,7 +176,7 @@ export default function CloudSyncManager({runtimes, onChanged}: Props) {
             </p>
 
             {!licensed && (
-                <div className="mb-3 px-3 py-3 rounded-md bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/30">
+                <div className="mb-3 px-3 py-3 rounded-md bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)]">
                     <p className="text-[12px] text-[var(--color-text)] mb-2">
                         {t('license.modal.needActivation')}
                     </p>
@@ -230,7 +230,7 @@ export default function CloudSyncManager({runtimes, onChanged}: Props) {
 
                     {gitMissing && (
                         <div
-                            className="mb-3 px-3 py-2 rounded-md bg-[#ff9f0a]/10 border border-[#ff9f0a]/30 text-[12px] text-[#ff9f0a]">
+                            className="mb-3 px-3 py-2 rounded-md bg-[color-mix(in_srgb,var(--color-warning)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] text-[12px] text-[var(--color-warning)]">
                             {t('cloudSync.gitMissing')}
                         </div>
                     )}
@@ -445,7 +445,7 @@ export default function CloudSyncManager({runtimes, onChanged}: Props) {
                             <button
                                 onClick={handleSave}
                                 disabled={saving || testing}
-                                className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 transition-colors disabled:opacity-50"
+                                className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_90%,transparent)] transition-colors disabled:opacity-50"
                             >
                                 {saving ? t('cloudSync.saving') : t('cloudSync.save')}
                             </button>
@@ -494,7 +494,7 @@ function SecretField({
                 <label className="text-[12px] text-[var(--color-muted2)]">{label}</label>
                 {saved && !editing && (
                     <button onClick={() => onChange('')}
-                            className="text-[12px] text-[#ff3b30] hover:underline">{t('cloudSync.clear')}</button>
+                            className="text-[12px] text-[var(--color-danger)] hover:underline">{t('cloudSync.clear')}</button>
                 )}
                 {editing && (
                     <button onClick={() => onChange(undefined)}

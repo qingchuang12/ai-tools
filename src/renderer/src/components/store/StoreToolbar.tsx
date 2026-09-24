@@ -99,7 +99,7 @@ export default function StoreToolbar({
               onMcpSourceChange(v);
               onPageReset();
             }}
-            className="px-2.5 py-1 rounded-full text-[12px] font-medium bg-[var(--color-accent)]/15 text-[var(--color-accent)] border border-[var(--color-accent)]/40 focus:outline-none whitespace-nowrap shrink-0"
+            className="px-2.5 py-1 rounded-full text-[12px] font-medium bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_40%,transparent)] focus:outline-none whitespace-nowrap shrink-0"
             title={t('store.selectMcpSource')}
             aria-label={t('store.mcpSourceSelectLabel', {defaultValue: 'Select MCP source'})}
           >
@@ -124,7 +124,7 @@ export default function StoreToolbar({
               onSkillSourceChange(v || null);
               onPageReset();
             }}
-            className="px-2.5 py-1 rounded-full text-[12px] font-medium bg-[var(--color-accent)]/15 text-[var(--color-accent)] border border-[var(--color-accent)]/40 focus:outline-none whitespace-nowrap shrink-0"
+            className="px-2.5 py-1 rounded-full text-[12px] font-medium bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)] border border-[color-mix(in_srgb,var(--color-accent)_40%,transparent)] focus:outline-none whitespace-nowrap shrink-0"
             title={t('store.selectSkillSource')}
             aria-label={t('store.skillSourceSelectLabel', {defaultValue: 'Select Skills source'})}
           >
@@ -163,7 +163,7 @@ export default function StoreToolbar({
             onChange={e => onCategoryChange(e.target.value)}
             aria-label={t('store.categoryLabel', {defaultValue: 'Category'})}
             title={t('store.categoryLabel', {defaultValue: 'Category'})}
-            className="px-2.5 py-1.5 rounded-lg text-[13px] bg-[var(--color-surface-hover)] text-[var(--color-text)] border border-[var(--color-border)] focus:outline-none focus:ring-1 focus:ring-[#0a84ff] max-w-[180px] truncate"
+            className="px-2.5 py-1.5 rounded-lg text-[13px] bg-[var(--color-surface-hover)] text-[var(--color-text)] border border-[var(--color-border)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] max-w-[180px] truncate"
           >
             <option value="all">{t('store.allCategories')}</option>
             {categories.map(c =>
@@ -201,7 +201,7 @@ export default function StoreToolbar({
             value={searchQuery}
             onChange={e => onSearchQueryChange(e.target.value)}
             placeholder={resourceType === 'mcp' ? t('store.search') : (t('store.searchSkills', {defaultValue: 'Search skills...'}))}
-            className={`w-full ps-9 ${searchQuery ? 'pe-8' : 'pe-3'} py-1.5 rounded-lg bg-[var(--color-surface-hover)] text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] border-none focus:ring-1 focus:ring-[#0a84ff] text-ellipsis`}
+            className={`w-full ps-9 ${searchQuery ? 'pe-8' : 'pe-3'} py-1.5 rounded-lg bg-[var(--color-surface-hover)] text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-muted)] border-none focus:ring-1 focus:ring-[var(--color-accent)] text-ellipsis`}
           />
           {searchQuery && (
             <button

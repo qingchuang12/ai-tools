@@ -564,6 +564,9 @@ export async function redeem(code: string, email: string, switchMode = false): P
     return applyWithSwitch(result.token, result.serverTimeMs ?? null, switchMode);
 }
 
+/** A9（plan-7.0）：登录后自动到账。实现见 `./claim`，此处仅作门面转发 */
+export {claimLicenses} from './claim';
+
 /** 导入 `.lic` 文本（裸 token 或 JSON 包装） */
 export async function importLicenseText(text: string, switchMode = false): Promise<RedeemResult> {
     const token = parseLicenseText(text);

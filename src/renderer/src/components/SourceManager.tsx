@@ -16,10 +16,10 @@ import Modal from './Modal';
 import {toast} from './Toast';
 
 const STATUS_META: Record<ApiConnection['status'], { dot: string; text: string }> = {
-    active: {dot: 'bg-[#34c759]', text: 'text-[#34c759]'},
+    active: {dot: 'bg-[var(--color-success)]', text: 'text-[var(--color-success)]'},
     unverified: {dot: 'bg-[#98989d]', text: 'text-[#98989d]'},
-    error: {dot: 'bg-[#ff3b30]', text: 'text-[#ff3b30]'},
-    token_revoked: {dot: 'bg-[#ff9f0a]', text: 'text-[#ff9f0a]'},
+    error: {dot: 'bg-[var(--color-danger)]', text: 'text-[var(--color-danger)]'},
+    token_revoked: {dot: 'bg-[var(--color-warning)]', text: 'text-[var(--color-warning)]'},
 };
 
 const STATUS_LABEL_KEY: Record<ApiConnection['status'], string> = {
@@ -227,7 +227,7 @@ export default function SourceManager({
                     )}
                     <button
                         onClick={openCreate}
-                        className="px-2.5 py-1 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 transition-colors"
+                        className="px-2.5 py-1 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_90%,transparent)] transition-colors"
                     >
                         {tk('newSource')}
                     </button>
@@ -264,11 +264,11 @@ export default function SourceManager({
                             <>
                                 {c.isDefault && (
                                     <span
-                                        className="text-[12px] px-1.5 py-0.5 rounded bg-[#ff9f0a]/15 text-[#ff9f0a] flex-shrink-0">{tk('default')}</span>
+                                        className="text-[12px] px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)] flex-shrink-0">{tk('default')}</span>
                                 )}
                                 {!enabled && (
                                     <span
-                                        className="text-[12px] px-1.5 py-0.5 rounded bg-[#ff9f0a]/15 text-[#ff9f0a] flex-shrink-0">{tk('disabledBadge')}</span>
+                                        className="text-[12px] px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)] flex-shrink-0">{tk('disabledBadge')}</span>
                                 )}
                             </>
                         );
@@ -283,7 +283,7 @@ export default function SourceManager({
                                                 <span
                                                     className="text-[12px] font-medium text-[var(--color-text)] truncate">{c.name}</span>
                                                 <span
-                                                    className="text-[12px] px-1.5 py-0.5 rounded bg-[var(--color-accent)]/15 text-[var(--color-accent)] flex-shrink-0">
+                                                    className="text-[12px] px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)] flex-shrink-0">
                           {platformLabel(t, c.platformType)}
                         </span>
                                                 {badges}
@@ -296,7 +296,7 @@ export default function SourceManager({
                                         <button
                                             title={enabled ? tk('disableTitle') : tk('enableTitle')}
                                             onClick={() => handleToggleEnabled(c)}
-                                            className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 me-1 ${enabled ? 'bg-[#34c759]' : 'bg-[var(--color-surface-hover)]'}`}
+                                            className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 me-1 ${enabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-surface-hover)]'}`}
                                         >
                       <span
                           className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-[var(--color-surface)] transition-all ${enabled ? 'start-[16px]' : 'start-[2px]'}`}
@@ -454,7 +454,7 @@ export default function SourceManager({
                             <label className="text-[12px] text-[var(--color-muted2)]">{tk('enableSource')}</label>
                             <button
                                 onClick={() => setEditing({...editing, enabled: !(editing.enabled ?? true)})}
-                                className={`relative w-9 h-5 rounded-full transition-colors ${(editing.enabled ?? true) ? 'bg-[#34c759]' : 'bg-[var(--color-surface-hover)]'}`}
+                                className={`relative w-9 h-5 rounded-full transition-colors ${(editing.enabled ?? true) ? 'bg-[var(--color-success)]' : 'bg-[var(--color-surface-hover)]'}`}
                             >
                 <span
                     className={`absolute top-[2px] w-4 h-4 rounded-full bg-[var(--color-surface)] transition-all ${(editing.enabled ?? true) ? 'start-[18px]' : 'start-[2px]'}`}
@@ -466,7 +466,7 @@ export default function SourceManager({
                                     className="px-3 py-1.5 rounded-md bg-[var(--color-surface-hover)] text-[var(--color-text)] text-[12px] hover:bg-[var(--color-surface-hover)]/80 transition-colors">{t('common.cancel')}
                             </button>
                             <button onClick={handleSave}
-                                    className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[var(--color-accent)]/90 transition-colors">{t('common.save')}
+                                    className="px-3 py-1.5 rounded-md bg-[var(--color-accent)] text-white text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--color-accent)_90%,transparent)] transition-colors">{t('common.save')}
                             </button>
                         </div>
                     </div>
@@ -489,7 +489,7 @@ function IconBtn({children, onClick, title, danger, disabled}: {
             onClick={disabled ? () => {
             } : onClick}
             disabled={disabled}
-            className={`p-1.5 rounded transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : danger ? 'text-[var(--color-muted2)] hover:text-[#ff3b30] hover:bg-[#ff3b30]/10' : 'text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}`}
+            className={`p-1.5 rounded transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : danger ? 'text-[var(--color-muted2)] hover:text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]' : 'text-[var(--color-muted2)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'}`}
         >
             {children}
         </button>

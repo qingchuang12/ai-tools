@@ -184,7 +184,7 @@ export default function ClientIcon({
     if (iconKey === 'cloud') {
         return (
             <div
-                className={`inline-flex items-center justify-center rounded bg-gradient-to-br from-[#0a84ff] to-[#5e5ce6] ${className}`}
+                className={`inline-flex items-center justify-center rounded bg-gradient-to-br from-[var(--color-accent)] to-[#5e5ce6] ${className}`}
                 style={{width: size, height: size}}
             >
                 <svg className="w-3/5 h-3/5 text-[var(--color-text)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -199,7 +199,7 @@ export default function ClientIcon({
     // 默认图标
     return (
         <div
-            className={`inline-flex items-center justify-center rounded bg-[#636366] ${className}`}
+            className={`inline-flex items-center justify-center rounded bg-[var(--color-muted)] ${className}`}
             style={{width: size, height: size}}
         >
             <svg className="w-1/2 h-1/2 text-[var(--color-text)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"

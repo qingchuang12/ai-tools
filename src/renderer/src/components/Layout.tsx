@@ -180,7 +180,7 @@ export default function Layout({children}: LayoutProps) {
                     onMouseDown={handleMouseDown}
                     className={`
             absolute top-0 end-0 w-1 h-full cursor-col-resize
-            hover:bg-[var(--color-accent)]/50 transition-colors
+            hover:bg-[color-mix(in_srgb,var(--color-accent)_50%,transparent)] transition-colors
             ${isResizing ? 'bg-[var(--color-accent)]' : ''}
           `}
                 />

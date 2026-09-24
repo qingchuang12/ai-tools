@@ -27,7 +27,7 @@ export default function StoreEmptyState({
 
   return (
     <div className="flex flex-col items-center justify-center h-full px-8">
-      <div className="w-14 h-14 rounded-full bg-[var(--color-accent)]/10 flex items-center justify-center mb-4">
+      <div className="w-14 h-14 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] flex items-center justify-center mb-4">
         <svg className="w-7 h-7 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round"
             d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75" />
@@ -44,21 +44,21 @@ export default function StoreEmptyState({
       {friendlyMessage && onRetry ? (
         <button
           onClick={onRetry}
-          className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/80 text-white text-[13px] font-medium rounded-lg transition-colors"
+          className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)] text-white text-[13px] font-medium rounded-lg transition-colors"
         >
           {t('store.retry', {defaultValue: '重试'})}
         </button>
       ) : ((resourceType === 'mcp') || (resourceType === 'skills' && connectionsCount === 0)) ? (
         <button
           onClick={() => navigate('/settings')}
-          className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/80 text-white text-[13px] font-medium rounded-lg transition-colors"
+          className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)] text-white text-[13px] font-medium rounded-lg transition-colors"
         >
           {t('store.goToSettings')}
         </button>
       ) : (
         <button
           onClick={() => navigate('/library')}
-          className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/80 text-white text-[13px] font-medium rounded-lg transition-colors"
+          className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_80%,transparent)] text-white text-[13px] font-medium rounded-lg transition-colors"
         >
           {t('store.goToLibrary', 'Go to Library')}
         </button>

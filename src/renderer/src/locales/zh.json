@@ -513,6 +513,7 @@
     "connect": "连接",
     "disconnect": "断开",
     "connecting": "连接中...",
+    "installing": "正在安装依赖，请稍候…",
     "connected": "已连接",
     "disconnected": "未连接",
     "error": "错误",

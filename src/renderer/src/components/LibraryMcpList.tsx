@@ -74,7 +74,7 @@ export default function LibraryMcpList({
                         ${serverSelectMode ? 'cursor-pointer' : server.isMcpDock ? 'cursor-pointer hover:bg-[var(--color-surface-hover)]/50' : ''}
                         transition-colors
                         ${index !== servers.length - 1 ? 'border-b border-[var(--color-border)]' : ''}
-                        ${serverSelectMode && isServerSelected ? 'bg-[var(--color-accent)]/10' : ''}
+                        ${serverSelectMode && isServerSelected ? 'bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]' : ''}
                       `}
                             onClick={() => serverSelectMode ? onToggleSelect(server.id) : onServerClick(server)}
                         >
@@ -134,7 +134,7 @@ export default function LibraryMcpList({
                                             const configStr = encodeURIComponent(JSON.stringify(config));
                                             navigate(`/inspector?config=${configStr}`);
                                         }}
-                                        className="p-1.5 rounded text-[var(--color-muted2)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                                        className="p-1.5 rounded text-[var(--color-muted2)] hover:text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors"
                                         title={t('installed.inspect') || 'Inspect'}
                                     >
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"
@@ -159,7 +159,7 @@ export default function LibraryMcpList({
                                     {/* 同步到其他客户端（多客户端复用） */}
                                     <button
                                         onClick={() => onOpenSync(server)}
-                                        className="p-1.5 rounded text-[var(--color-muted2)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                                        className="p-1.5 rounded text-[var(--color-muted2)] hover:text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors"
                                         title={t('installed.sync') || 'Sync'}
                                     >
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"
@@ -171,7 +171,7 @@ export default function LibraryMcpList({
 
                                     <button
                                         onClick={() => onUninstall('mcp', server.id, getDisplayName(server.id), server.clients as string[])}
-                                        className="p-1.5 rounded text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-colors"
+                                        className="p-1.5 rounded text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] transition-colors"
                                         title={t('installed.remove')}
                                     >
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"

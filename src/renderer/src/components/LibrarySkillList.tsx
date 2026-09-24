@@ -1,6 +1,6 @@
 import {useTranslation} from 'react-i18next';
 import {useNavigate} from 'react-router-dom';
-import type {InstalledSkill, SkillClientType, ClientInfo} from '../lib/electron';
+import type {ClientInfo, InstalledSkill, SkillClientType} from '../lib/electron';
 import SkillIcon from './SkillIcon';
 import ClientIcon from './ClientIcon';
 import LoadingSkeleton from './store/LoadingSkeleton';
@@ -74,7 +74,7 @@ export default function LibrarySkillList({
                       ${selectMode ? 'cursor-pointer' : 'cursor-pointer hover:bg-[var(--color-surface-hover)]/50'}
                       transition-colors
                       ${index !== skills.length - 1 ? 'border-b border-[var(--color-border)]' : ''}
-                      ${selectMode && isSelected ? 'bg-[var(--color-accent)]/10' : ''}
+                      ${selectMode && isSelected ? 'bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]' : ''}
                     `}
                             onClick={() => selectMode ? onToggleSelect(skill.name) : onSkillClick(skill)}
                         >
@@ -132,7 +132,7 @@ export default function LibrarySkillList({
                                         <button
                                             onClick={() => onUpdateSkill(skill.name)}
                                             disabled={refreshingSkill === skill.name}
-                                            className="p-1.5 rounded text-[var(--color-muted2)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors disabled:opacity-50"
+                                            className="p-1.5 rounded text-[var(--color-muted2)] hover:text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors disabled:opacity-50"
                                             title={t('library.update') || 'Update'}
                                         >
                                             <svg
@@ -165,7 +165,7 @@ export default function LibrarySkillList({
                                     {installedClients.length > 0 && (
                                         <button
                                             onClick={() => onOpenSkillSync(skill.name)}
-                                            className="p-1.5 rounded text-[var(--color-muted2)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
+                                            className="p-1.5 rounded text-[var(--color-muted2)] hover:text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors"
                                             title={t('library.sync') || 'Sync to clients'}
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"
@@ -179,7 +179,7 @@ export default function LibrarySkillList({
                                     {/* 删除按钮 */}
                                     <button
                                         onClick={() => onUninstall('skill', skill.name, skill.name, installedClients as string[])}
-                                        className="p-1.5 rounded text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-colors"
+                                        className="p-1.5 rounded text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] transition-colors"
                                         title={t('installed.remove')}
                                     >
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"

@@ -381,7 +381,7 @@ export default function Settings() {
                                                         {client.configExists ? (
                                                             <span
                                                                 title={t('settings.configured') || '已配置 MCP'}
-                                                                className="absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full bg-[#34c759] border-2 border-[var(--color-surface)]"
+                                                                className="absolute -bottom-0.5 -end-0.5 w-2.5 h-2.5 rounded-full bg-[var(--color-success)] border-2 border-[var(--color-surface)]"
                                                             />
                                                         ) : (
                                                             <span
@@ -397,7 +397,7 @@ export default function Settings() {
                                                             {client.supportsSkills && (
                                                                 <span
                                                                     title={t('settings.skillCapable') || 'Supports Skills'}
-                                                                    className="flex-shrink-0 px-1 py-0.5 rounded bg-[var(--color-accent)]/12 text-[var(--color-accent)] text-[9px] font-semibold leading-none"
+                                                                    className="flex-shrink-0 px-1 py-0.5 rounded bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] text-[var(--color-accent)] text-[9px] font-semibold leading-none"
                                                                 >✦</span>
                                                             )}
                                                         </div>
@@ -421,7 +421,7 @@ export default function Settings() {
                                                         {client.isCustom && (
                                                             <button
                                                                 onClick={() => handleRemoveClient(client.id)}
-                                                                className="p-1 rounded text-[var(--color-muted)] opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-[var(--color-surface-hover)] transition-all"
+                                                                className="p-1 rounded text-[var(--color-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--color-danger)] hover:bg-[var(--color-surface-hover)] transition-all"
                                                                 title={t('settings.removeClient') || 'Remove client'}
                                                             >
                                                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24"

@@ -509,6 +509,7 @@
     "connect": "接続",
     "disconnect": "切断",
     "connecting": "接続中…",
+    "installing": "Installing dependencies, please wait…",
     "connected": "接続済み",
     "disconnected": "切断済み",
     "error": "エラー",

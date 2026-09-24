@@ -45,7 +45,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* 背景遮罩 */}
       <div
-        className="absolute inset-0 bg-[var(--color-bg)]/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-[color-mix(in_srgb,var(--color-bg)_60%,transparent)] backdrop-blur-sm"
         onClick={onClose}
       />
 

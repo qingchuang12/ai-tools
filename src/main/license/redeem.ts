@@ -5,7 +5,7 @@
  * **验签 + 落盘 + 状态刷新一律由门面 `index.ts` 的 `applySignedToken()` 完成**——
  * 落盘前必须本地验签，否则等于无条件信任后端返回。
  *
- * 请求体与服务端 `RedeemCodeRequest` 对齐：`{code, customerEmail, machineId}`
+ * 请求体与服务端 `ActivateRequest` 对齐：`{credential, customerEmail, machineId}`（`credential` 必填，兑换码 `RC-` 前缀）
  * （服务端 E1 起 `customerEmail` 为**必填**语义，缺失/非法分别返回 `EMAIL_REQUIRED` / `INVALID_EMAIL`）。
  * 响应解析见 `RedeemEnvelope`：服务端所有端点经 `ApiResponseAdvice` 统一包壳，token 在 **`$.data`** 段。
  *
@@ -17,8 +17,10 @@ import {dialog} from 'electron';
 import type {RedeemResult} from '../../shared/activation-types';
 import {
     ACCOUNT_UNBIND_API_PATH,
+    ACTIVATE_API_PATH,
     CHECKOUT_PAGE_PATH,
-    REDEEM_API_PATH,
+    MY_LICENSES_API_PATH,
+    MY_LICENSES_TIMEOUT_MS,
     REPORT_BINDING_API_PATH,
     REPORT_BINDING_TIMEOUT_MS,
     UNBIND_API_TIMEOUT_MS,
@@ -52,6 +54,18 @@ export interface RedeemFetchResult {
     error?: string;
     token?: string;
     serverTimeMs?: number | null;
+}
+
+/**
+ * A9（plan-7.0）：本账号授权列表单条（字段对齐服务端 LicenseResponse，仅取客户端关心的）。
+ * `machineCode` 未绑定时服务端返回 null；`customerEmail` 授权归属邮箱，自动到账激活时作
+ * `ActivateRequest.customerEmail` 兜底（与登录态账号邮箱一致）。
+ */
+export interface LicenseListItem {
+    licenseKey: string;
+    status: string;
+    machineCode: string | null;
+    customerEmail: string | null;
 }
 
 /**
@@ -107,7 +121,7 @@ export function parseLicenseText(text: string): string | null {
 }
 
 /**
- * 兑换码 + 邮箱 → 后端 redeem。
+ * 兑换码 + 邮箱 → 后端 activate（统一激活端点 `/api/licenses/activate`）。
  * 网络失败/超时 → `category:'network'`（唯一对外可区分的一类，否则用户会把断网误判为激活码错误）；
  * 其它一律 `category:'license'` + 统一文案，不暴露原因。
  */
@@ -128,10 +142,10 @@ export async function fetchRedeem(code: string, email: string): Promise<RedeemFe
 
     let response: Response;
     try {
-        response = await fetch(`${cfg.serviceBaseUrl}${REDEEM_API_PATH}`, {
+        response = await fetch(`${cfg.serviceBaseUrl}${ACTIVATE_API_PATH}`, {
             method: 'POST',
             headers: {'content-type': 'application/json'},
-            body: JSON.stringify({code: trimmed, customerEmail, machineId}),
+            body: JSON.stringify({credential: trimmed, customerEmail, machineId}),
             signal: AbortSignal.timeout(Math.max(1000, cfg.redeemTimeoutMs)),
         });
     } catch (error) {
@@ -152,6 +166,57 @@ export async function fetchRedeem(code: string, email: string): Promise<RedeemFe
         logLicenseEvent('LIC_REDEEM_REJECTED', {event: 'redeem_rejected', status: response.status});
     }
     return result;
+}
+
+/**
+ * A9（plan-7.0）：拉取本账号名下授权列表（`GET /api/account/licenses`，Bearer）。
+ *
+ * 仅负责网络 + 解析：未登录/网络失败/非 2xx 一律返回 null（调用方按「下次登录重试」处理）；
+ * 服务端经 `ApiResponseAdvice` 包壳（业务数组在 `$.data`），无 `data` 段时兼容扁平数组。
+ * 字段归一：只取客户端关心的 `licenseKey/status/machineCode/customerEmail`，缺省安全兜底。
+ */
+export async function fetchMyLicenses(accessToken: string): Promise<LicenseListItem[] | null> {
+    if (!accessToken?.trim()) return null;
+    const cfg = getConfig();
+    let response: Response;
+    try {
+        response = await fetch(`${cfg.serviceBaseUrl}${MY_LICENSES_API_PATH}`, {
+            method: 'GET',
+            headers: {Authorization: `Bearer ${accessToken.trim()}`},
+            signal: AbortSignal.timeout(Math.max(1000, MY_LICENSES_TIMEOUT_MS)),
+        });
+    } catch (error) {
+        logLicenseEvent('LIC_ACCOUNT_NETWORK', {event: 'my_licenses_request_failed', reason: (error as Error).name});
+        return null;
+    }
+    if (!response.ok) {
+        logLicenseEvent('LIC_ACCOUNT_REJECTED', {event: 'my_licenses_rejected', status: response.status});
+        return null;
+    }
+    let body: unknown = null;
+    try {
+        body = await response.json();
+    } catch {
+        logLicenseEvent('LIC_ACCOUNT_BAD_RESPONSE', {event: 'my_licenses_json_invalid'});
+        return null;
+    }
+    // ApiResponseAdvice 包壳：业务数组在 $.data；扁平结构（数组直接为顶层）兼容
+    const b = body as Record<string, unknown> | null;
+    const data = b?.data !== undefined && Array.isArray(b.data)
+        ? (b.data as unknown[])
+        : Array.isArray(b) ? b : null;
+    if (!data) return [];
+    return data
+        .map((item) => {
+            const it = (item ?? {}) as Record<string, unknown>;
+            return {
+                licenseKey: typeof it.licenseKey === 'string' ? it.licenseKey : '',
+                status: typeof it.status === 'string' ? it.status : '',
+                machineCode: typeof it.machineCode === 'string' ? it.machineCode : null,
+                customerEmail: typeof it.customerEmail === 'string' ? it.customerEmail : null,
+            } as LicenseListItem;
+        })
+        .filter((l) => l.licenseKey.length > 0);
 }
 
 /**
