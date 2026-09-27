@@ -18,6 +18,7 @@ release_verify/
 *.iml
 .codebuddy
 .workbuddy
+.learnings
 # MCP 客户端（ZCode）本机运行时目录，防误入库
 .zcode/
 .tmp
