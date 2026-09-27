@@ -41,11 +41,33 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const LOG_FILE = path.join(PROJECT_ROOT, 'electron-dev.log');
 
 // ---- 1) 清理污染变量 ----
+// 这些变量若从宿主 IDE / 桌面应用继承到子进程，会导致 electron 退化为纯 Node，
+// 或把调试器 / 语言 shim 透传给所有子进程（含 MCP 服务器），造成启动挂起或行为异常。
 const env = {...process.env};
 const removedEnv = [];
+
+// 1a) electron 必须作为渲染运行时启动，不能是纯 Node
 if ('ELECTRON_RUN_AS_NODE' in env) {
     delete env.ELECTRON_RUN_AS_NODE;
     removedEnv.push('ELECTRON_RUN_AS_NODE');
+}
+
+// 1b) 清除 NODE_OPTIONS 中从宿主 IDE / 桌面应用继承、会透传给子进程的污染项：
+//     - --inspect / --inspect-brk / --inspect-port：调试器透传，会挂起 MCP 等子进程
+//     - WorkBuddy 注入的 --require=.../cli/vendor/shim/*.cjs：node 语言 shim，
+//       会 broker 子进程的 fs 写操作（实测导致 ow-epm 写 owpm.log 报 EPERM），
+//       且 ow-electron 内置 Node 本不需要它
+//     保留用户自定义的其它项（如 --max-old-space-size），做到通用修复而非个案补丁。
+if ('NODE_OPTIONS' in env && env.NODE_OPTIONS) {
+    const dropRe = /^(?:--inspect(?:-brk)?(?:\b|$)|--inspect-port\b|--require=.*[\\/]cli[\\/]vendor[\\/]shim[\\/][^ ]*\.cjs)/;
+    const kept = env.NODE_OPTIONS.split(/\s+/).filter((opt) => !dropRe.test(opt));
+    const keptStr = kept.join(' ').trim();
+    if (keptStr) {
+        env.NODE_OPTIONS = keptStr;
+    } else {
+        delete env.NODE_OPTIONS;
+    }
+    removedEnv.push('NODE_OPTIONS(inspect+workbuddy-shim)');
 }
 
 // 在普通 Node 下，require('electron') 返回 electron 可执行文件路径（官方包语义）。

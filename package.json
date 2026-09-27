@@ -79,7 +79,11 @@
   },
   "build": {
     "appId": "com.ai-tools.app",
+    "electronVersion": "42.7.1",
     "npmRebuild": false,
+    "overwolf": {
+      "requireSigning": false
+    },
     "asar": true,
     "productName": "AI-Tools",
     "publish": [
