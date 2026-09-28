@@ -234,6 +234,11 @@ app.whenReady().then(async () => {
 
     // 授权模块初始化（必须在 whenReady 之后：safeStorage 在 ready 之前调用会抛异常）。
     // 内部触发机器码预热（后台采集 + 2s 后惰性复核），不阻塞窗口显示。
+    // 状态变化广播（plan-1.0 / C5）：复核停用、支付后自动到账等「主进程单方面知道」的变更即时上屏。
+    // 必须在 license.init() 之前注册——init 会拉起复核循环，首查若判定停用就要走这条通知。
+    license.setStateChangeListener((state) => {
+        BrowserWindow.getAllWindows().forEach(w => w.webContents.send('activation:state-changed', state));
+    });
     void license.init().catch((e: unknown) => {
         console.error('[License] init failed:', (e as Error)?.message || e);
     });
@@ -493,6 +498,11 @@ ipcMain.handle('clients:remove-custom', async (_, id: string) => {
     return configManager.removeCustomClient(id);
 });
 
+// 删除客户端数据（清技能文件 + MCP 配置信息；deleteWholeDir=true 时连配置根目录一并删除，守卫在主进程）
+ipcMain.handle('clients:delete-data', async (_, id: string, deleteWholeDir: boolean) => {
+    return configManager.deleteClientData(id, deleteWholeDir);
+});
+
 // 打开配置文件所在目录
 ipcMain.handle('system:open-config-directory', async (_, client: ClientType) => {
     const configPath = configManager.getConfigPath(client);
@@ -621,6 +631,10 @@ ipcMain.handle('activation:get-machine-code', async () => getMachineCode());
 
 // 按配置模板拼出带 machineId 的收银台 URL（URL 来自包外配置，不在渲染层硬编码）
 ipcMain.handle('activation:get-purchase-url', async (): Promise<string> => license.getPurchaseUrl());
+
+// C6（U3）：账户管理页地址（绑机冲突时的自助解绑入口）。同理由主进程持有服务地址，
+// 渲染层拿到 URL 后走既有的 system:open-external（内含 http/https 白名单）打开。
+ipcMain.handle('activation:get-account-url', async () => license.getAccountPageUrl());
 
 // 兑换码 → 后端 redeem → 本地验签 → 落盘（switchMode 透传 R6 换绑语义）
 ipcMain.handle('activation:redeem', async (_e, code: string, email: string, switchMode?: boolean) =>

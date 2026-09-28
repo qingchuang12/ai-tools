@@ -10,7 +10,8 @@
       "unitDay": "d",
       "unitYear": "años",
       "unitHour": "h",
-      "unitMin": "min"
+      "unitMin": "min",
+      "needsOnlineVerify": "Se requiere verificación en línea"
     },
     "feature": {
       "cloudSync": "Sincronización en la nube",
@@ -50,12 +51,16 @@
       "upgrade": "Mejorar",
       "needActivation": "Se requiere activación para usar la sincronización en la nube",
       "openFeatures": "Funciones desbloqueadas con la prueba o la activación",
-      "featureLocked": "Bloqueado · disponible tras la prueba o la activación"
+      "featureLocked": "Bloqueado · disponible tras la prueba o la activación",
+      "openAccountPage": "Abrir gestión de licencias"
     },
     "errors": {
       "generic": "Error de activación. Comprueba el código de activación o contacta con el soporte.",
       "network": "Error de conexión de red. Comprueba la conexión e inténtalo de nuevo.",
-      "locked": "Esta función requiere una licencia válida"
+      "locked": "Esta función requiere una licencia válida",
+      "machineBound": "Esta licencia ya está vinculada a otro dispositivo",
+      "notActive": "Esta licencia no está disponible ahora. Contacta con el soporte.",
+      "loginRequired": "Inicia sesión antes de activar."
     }
   },
   "storeSource": {
@@ -647,6 +652,14 @@
     "supportsSkillsLabel": "Admite habilidades",
     "browse": "Examinar",
     "removeClient": "Eliminar cliente",
+    "removeClientConfirmTitle": "¿Eliminar el cliente \"{{name}}\"?",
+    "removeClientConfirmDesc": "Al confirmar se eliminarán la configuración MCP de este cliente y las skills instaladas por esta aplicación (el contenido que añadiste manualmente no se verá afectado). Asegúrate de que el cliente esté realmente desinstalado — si sigue en uso, esto podría afectar su funcionamiento normal.",
+    "removeClientConfirmDirOption": "Eliminar también todo el directorio de configuración",
+    "removeClientConfirmDirDanger": "⚠ Irreversible — se eliminará todo el directorio de datos locales del cliente",
+    "removeClientConfirmButton": "Eliminar",
+    "clientDataDeleted": "Configuración MCP y archivos de skills eliminados",
+    "clientDirDeleted": "Se ha eliminado todo el directorio de configuración del cliente",
+    "clientRemovedFailed": "No se pudo eliminar el cliente",
     "about": "Acerca de",
     "aboutDesc": "AI-Tools v1.0.0",
     "aboutTitle": "Acerca de AI-Tools",
@@ -1006,7 +1019,7 @@
     "collapse": "Contraer",
     "disabled": "Desactivada",
     "notSet": "no definido",
-    "desc": "Trata la nube como un cliente: se crea automáticamente un directorio {dir} en remoto para almacenar la configuración MCP y las habilidades. Tras configurarlo puedes subir/descargar manualmente en Biblioteca.",
+    "desc": "Trata la nube como un cliente: se crea automáticamente un directorio {{dir}} en remoto para almacenar la configuración MCP y las habilidades. Tras configurarlo puedes subir/descargar manualmente en Biblioteca.",
     "gitChannel": "Repositorio Git",
     "sftpChannel": "SFTP",
     "gitMissing": "No se detectó Git en el sistema; el canal Git no está disponible. Instala Git y actualiza en Entorno de ejecución.",

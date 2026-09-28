@@ -10,7 +10,8 @@
       "unitDay": "Tage",
       "unitYear": "Jahre",
       "unitHour": "Std.",
-      "unitMin": "Min."
+      "unitMin": "Min.",
+      "needsOnlineVerify": "Online-Prüfung erforderlich"
     },
     "feature": {
       "cloudSync": "Cloud-Sync",
@@ -50,12 +51,16 @@
       "upgrade": "Upgrade",
       "needActivation": "Für Cloud-Sync ist eine Aktivierung erforderlich",
       "openFeatures": "Durch Testversion oder Aktivierung freigeschaltete Funktionen",
-      "featureLocked": "Gesperrt · nach Testversion oder Aktivierung verfügbar"
+      "featureLocked": "Gesperrt · nach Testversion oder Aktivierung verfügbar",
+      "openAccountPage": "Lizenzverwaltung öffnen"
     },
     "errors": {
       "generic": "Aktivierung fehlgeschlagen. Prüfen Sie den Aktivierungscode oder wenden Sie sich an den Support.",
       "network": "Netzwerkverbindung fehlgeschlagen. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
-      "locked": "Diese Funktion erfordert eine gültige Lizenz"
+      "locked": "Diese Funktion erfordert eine gültige Lizenz",
+      "machineBound": "Diese Lizenz ist bereits mit einem anderen Gerät verknüpft",
+      "notActive": "Diese Lizenz ist derzeit nicht verfügbar. Bitte den Support kontaktieren.",
+      "loginRequired": "Bitte vor der Aktivierung anmelden."
     }
   },
   "storeSource": {
@@ -647,6 +652,14 @@
     "supportsSkillsLabel": "Unterstützt Skills",
     "browse": "Durchsuchen",
     "removeClient": "Client entfernen",
+    "removeClientConfirmTitle": "Client \"{{name}}\" löschen?",
+    "removeClientConfirmDesc": "Beim Bestätigen werden die MCP-Konfiguration dieses Clients und die von dieser App installierten Skills gelöscht (manuell hinzugefügte Inhalte bleiben unberührt). Bitte stellen Sie sicher, dass der Client tatsächlich deinstalliert ist – andernfalls kann dies den normalen Betrieb beeinträchtigen.",
+    "removeClientConfirmDirOption": "Komplettes Konfigurationsverzeichnis ebenfalls löschen",
+    "removeClientConfirmDirDanger": "⚠ Nicht umkehrbar – das gesamte lokale Datenverzeichnis des Clients wird entfernt",
+    "removeClientConfirmButton": "Löschen",
+    "clientDataDeleted": "MCP-Konfiguration und Skill-Dateien gelöscht",
+    "clientDirDeleted": "Das gesamte Konfigurationsverzeichnis des Clients wurde gelöscht",
+    "clientRemovedFailed": "Client konnte nicht gelöscht werden",
     "about": "Über",
     "aboutDesc": "AI-Tools v1.0.0",
     "aboutTitle": "Über AI-Tools",
@@ -1006,7 +1019,7 @@
     "collapse": "Einklappen",
     "disabled": "Deaktiviert",
     "notSet": "nicht festgelegt",
-    "desc": "Behandeln Sie die Cloud wie einen Client: ein {dir}-Verzeichnis wird remote automatisch erstellt, um die MCP-Konfiguration und Skills zu speichern. Nach dem Setup können Sie in der Bibliothek manuell hoch- und herunterladen.",
+    "desc": "Behandeln Sie die Cloud wie einen Client: ein {{dir}}-Verzeichnis wird remote automatisch erstellt, um die MCP-Konfiguration und Skills zu speichern. Nach dem Setup können Sie in der Bibliothek manuell hoch- und herunterladen.",
     "gitChannel": "Git-Repo",
     "sftpChannel": "SFTP",
     "gitMissing": "System-Git nicht gefunden; der Git-Kanal ist nicht verfügbar. Bitte installieren Sie Git und aktualisieren Sie es in der Laufzeitumgebung.",

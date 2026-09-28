@@ -57,6 +57,32 @@ export const PUBLIC_NETWORK_ERROR_KEY = 'license.errors.network';
 /** 功能被锁定的 i18n key（gate 拦截时用，属体验提示而非失败） */
 export const PUBLIC_LOCKED_KEY = 'license.errors.locked';
 
+/**
+ * C6（plan-1.0 / U3）：服务端业务码 → **专用文案**白名单。
+ *
+ * 这是对「绝不回传错误码」既有约定（`doc/plan-4.1.md`）的一次**有意收窄**，只放开三类：
+ * 判定依据是「用户能否据此自救」——这三类都有唯一的自助出口（去账户页解绑 / 联系支持 / 先登录），
+ * 报出来不给破解者定位信息，却能省掉一大类客诉。其余码（限流、兑换码不存在、金额不符等）
+ * 继续一律 `generic`，绝不放开。
+ */
+const SERVER_ERROR_KEYS: Record<string, string> = {
+    MACHINE_MISMATCH: 'license.errors.machineBound',
+    LICENSE_NOT_ACTIVE: 'license.errors.notActive',
+    LOGIN_REQUIRED: 'license.errors.loginRequired',
+};
+
+/**
+ * 把服务端业务码翻译成对外 i18n key；不在白名单内（含 null / 未知码）一律回落统一文案。
+ * 同时返回是否需要「打开授权管理页」动作（只有换机冲突这一类需要）。
+ */
+export function publicErrorFor(serverCode: string | null | undefined): {error: string; action?: 'openAccount'} {
+    const key = serverCode ? SERVER_ERROR_KEYS[serverCode] : undefined;
+    if (!key) return {error: PUBLIC_ERROR_KEY};
+    return key === SERVER_ERROR_KEYS.MACHINE_MISMATCH
+        ? {error: key, action: 'openAccount'}
+        : {error: key};
+}
+
 /** 机器码脱敏：AB12-****-****-CD34，日志不得出现完整机器码 */
 export function redactMid(mid: string | null | undefined): string {
     if (!mid) return '(none)';

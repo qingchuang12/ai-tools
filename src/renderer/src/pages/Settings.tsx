@@ -56,6 +56,10 @@ export default function Settings() {
     const [addSupportsSkills, setAddSupportsSkills] = useState(false);
     const [addSkillsPath, setAddSkillsPath] = useState('');
 
+    // 删除二次确认弹窗状态（deleteWholeDir：是否连同整个配置目录一并删除，默认不勾）
+    const [deletingClient, setDeletingClient] = useState<ClientInfo | null>(null);
+    const [deleteWholeDir, setDeleteWholeDir] = useState(false);
+
     // 关于弹窗
     const [showAbout, setShowAbout] = useState(false);
 
@@ -234,15 +238,40 @@ export default function Settings() {
         }
     };
 
-    // 删除自定义客户端
-    const handleRemoveClient = async (id: string) => {
+    // 打开删除二次确认弹窗
+    const openDeleteModal = (client: ClientInfo) => {
+        setDeletingClient(client);
+        setDeleteWholeDir(false);
+    };
+
+    // 确认删除：清除本应用写入的内容（技能文件 + MCP 配置信息），列表状态完全由探测驱动。
+    // - 勾选「删除整个配置目录」时连配置根目录一并删除（守卫在主进程）。
+    // - 内置客户端：删除后重新探测——若此前仅因残留配置被判「已安装」，现在自然落入「未安装」区；
+    //   若客户端本体仍在，则保持「已安装」（符合探测事实）。
+    // - 自定义客户端：同时移除其定义（否则探测恒为已安装，无法从列表消失）。
+    const confirmDeleteClient = async () => {
+        if (!deletingClient) return;
+        const client = deletingClient;
+        const id = client.id;
         try {
-            await api.clients.removeCustom(id);
-            // 双保险：立即从本地列表移除
-            setClients(prev => prev.filter(c => c.id !== id));
-            toast.success(t('settings.clientRemoved') || 'Client removed');
+            // 自定义客户端须先删数据再移除定义（定义移除后配置路径无法解析）
+            await api.clients.deleteClientData(id, deleteWholeDir);
+            if (client.isCustom) {
+                await api.clients.removeCustom(id);
+                setClients(prev => prev.filter(c => c.id !== id));
+                toast.success(t('settings.clientRemoved') || 'Client deleted');
+            } else {
+                // 重新探测并刷新列表（deleteClientData 已使客户端缓存失效）
+                const fresh = await api.clients.getAll(true);
+                setClients(fresh.filter(c => c.supportsMcp || c.id === 'agent-skills'));
+                toast.success(t(deleteWholeDir ? 'settings.clientDirDeleted' : 'settings.clientDataDeleted'));
+            }
         } catch (error) {
-            console.error('Failed to remove client:', error);
+            console.error('Failed to delete client data:', error);
+            toast.error(t('settings.clientRemovedFailed') || 'Failed to delete client');
+        } finally {
+            setDeletingClient(null);
+            setDeleteWholeDir(false);
         }
     };
 
@@ -418,11 +447,11 @@ export default function Settings() {
                                                                       d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
                                                             </svg>
                                                         </button>
-                                                        {client.isCustom && (
+                                                        {client.id !== 'cloud' && (
                                                             <button
-                                                                onClick={() => handleRemoveClient(client.id)}
-                                                                className="p-1 rounded text-[var(--color-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--color-danger)] hover:bg-[var(--color-surface-hover)] transition-all"
-                                                                title={t('settings.removeClient') || 'Remove client'}
+                                                                onClick={() => openDeleteModal(client)}
+                                                                className="p-1 rounded text-[var(--color-muted)] hover:text-[var(--color-danger)] hover:bg-[var(--color-surface-hover)] transition-all"
+                                                                title={t('settings.removeClient') || 'Delete client'}
                                                             >
                                                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24"
                                                                      stroke="currentColor" strokeWidth={2}>
@@ -473,17 +502,32 @@ export default function Settings() {
                                                                         className="opacity-40 flex-shrink-0"/>
                                                             <span
                                                                 className="text-[12px] text-[var(--color-muted)] truncate">{client.name}</span>
-                                                            <button
-                                                                onClick={() => openEditModal(client)}
-                                                                className="ms-auto p-1 rounded text-[var(--color-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
-                                                                title={t('settings.editPath') || 'Edit config path'}
-                                                            >
-                                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24"
-                                                                     stroke="currentColor" strokeWidth={2}>
-                                                                    <path strokeLinecap="round" strokeLinejoin="round"
-                                                                          d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
-                                                                </svg>
-                                                            </button>
+                                                            <div className="ms-auto flex items-center gap-0.5">
+                                                                <button
+                                                                    onClick={() => openEditModal(client)}
+                                                                    className="p-1 rounded text-[var(--color-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] transition-all"
+                                                                    title={t('settings.editPath') || 'Edit config path'}
+                                                                >
+                                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24"
+                                                                         stroke="currentColor" strokeWidth={2}>
+                                                                        <path strokeLinecap="round" strokeLinejoin="round"
+                                                                              d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
+                                                                    </svg>
+                                                                </button>
+                                                                {client.id !== 'cloud' && (
+                                                                    <button
+                                                                        onClick={() => openDeleteModal(client)}
+                                                                        className="p-1 rounded text-[var(--color-muted)] hover:text-[var(--color-danger)] hover:bg-[var(--color-surface-hover)] transition-all"
+                                                                        title={t('settings.removeClient') || 'Delete client'}
+                                                                    >
+                                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24"
+                                                                             stroke="currentColor" strokeWidth={2}>
+                                                                            <path strokeLinecap="round" strokeLinejoin="round"
+                                                                                  d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                                                                        </svg>
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -500,8 +544,7 @@ export default function Settings() {
                                             </div>
                                         )}
                                     </>
-                                </>
-                            )}
+                            </>)}
                     </div>
 
                     {/* 运行时环境 */}
@@ -723,6 +766,43 @@ export default function Settings() {
                         </button>
                         <button onClick={handleAddClient} className="btn btn-primary">
                             {t('common.add')}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* 删除客户端二次确认弹窗 */}
+            <Modal
+                isOpen={!!deletingClient}
+                onClose={() => setDeletingClient(null)}
+                title={t('settings.removeClientConfirmTitle', {name: deletingClient?.name || ''})}
+            >
+                <div className="space-y-4">
+                    <p className="text-[12px] text-[var(--color-muted2)]">
+                        {t('settings.removeClientConfirmDesc')}
+                    </p>
+
+                    <label className="flex items-start gap-2 cursor-pointer rounded-md bg-[var(--color-surface-hover)]/40 p-2.5">
+                        <input
+                            type="checkbox"
+                            checked={deleteWholeDir}
+                            onChange={(e) => setDeleteWholeDir(e.target.checked)}
+                            className="mt-0.5 accent-[var(--color-danger)]"
+                        />
+                        <span className="text-[12px] text-[var(--color-text)] leading-relaxed">
+                            {t('settings.removeClientConfirmDirOption')}
+                            <span className="block text-[11px] text-[var(--color-danger)] mt-1">
+                                {t('settings.removeClientConfirmDirDanger')}
+                            </span>
+                        </span>
+                    </label>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <button onClick={() => setDeletingClient(null)} className="btn btn-secondary">
+                            {t('common.cancel')}
+                        </button>
+                        <button onClick={confirmDeleteClient} className="btn btn-danger">
+                            {t('settings.removeClientConfirmButton')}
                         </button>
                     </div>
                 </div>

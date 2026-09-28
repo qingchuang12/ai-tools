@@ -10,7 +10,8 @@
       "unitDay": "d",
       "unitYear": "y",
       "unitHour": "h",
-      "unitMin": "m"
+      "unitMin": "m",
+      "needsOnlineVerify": "Needs online check"
     },
     "feature": {
       "cloudSync": "Cloud sync",
@@ -54,12 +55,16 @@
       "switch": "Switch license",
       "switchSuccess": "Switched. New license is active.",
       "unbindFailed": "Old license could not be released. New license still works; retry later from the Activated view.",
-      "cancelSwitch": "Cancel switch"
+      "cancelSwitch": "Cancel switch",
+      "openAccountPage": "Open license management"
     },
     "errors": {
       "generic": "Activation failed. Check your code or contact support.",
       "network": "Network connection failed. Check your connection and try again.",
-      "locked": "This feature requires an active license"
+      "locked": "This feature requires an active license",
+      "machineBound": "This license is already bound to another device",
+      "notActive": "This license is not currently usable. Please contact support.",
+      "loginRequired": "Please sign in before activating."
     }
   },
   "storeSource": {
@@ -642,7 +647,7 @@
     "addClientRequire": "Please enter both client name and config path",
     "addClientDuplicate": "A client with this name already exists. Please use a different name.",
     "clientAdded": "Client added",
-    "clientRemoved": "Client removed",
+    "clientRemoved": "Client deleted",
     "addClientFailed": "Failed to add client",
     "clientName": "Client Name",
     "enterClientName": "My Client",
@@ -650,7 +655,15 @@
     "enterSkillsPath": "Enter custom skills directory...",
     "supportsSkillsLabel": "Supports Skills",
     "browse": "Browse",
-    "removeClient": "Remove client",
+    "removeClient": "Delete client",
+    "removeClientConfirmTitle": "Delete client \"{{name}}\"?",
+    "removeClientConfirmDesc": "Confirming will clear this client's MCP configuration and the skills installed by this app (content you added manually is left untouched). Make sure the client is truly uninstalled — if it is still in use, this may affect its normal operation.",
+    "removeClientConfirmDirOption": "Also delete the entire config directory",
+    "removeClientConfirmDirDanger": "⚠ Irreversible — the client's entire local data directory will be removed",
+    "removeClientConfirmButton": "Delete",
+    "clientDataDeleted": "MCP configuration and skill files cleared",
+    "clientDirDeleted": "The client's entire config directory has been deleted",
+    "clientRemovedFailed": "Failed to delete client",
     "about": "About",
     "aboutDesc": "AI-Tools v1.0.0",
     "aboutTitle": "About AI-Tools",
@@ -1010,7 +1023,7 @@
     "collapse": "Collapse",
     "disabled": "Disabled",
     "notSet": "not set",
-    "desc": "Treat the cloud like a client: a {dir} directory is auto-created remotely to store the MCP config and Skills. After setup you can manually upload/download in Library.",
+    "desc": "Treat the cloud like a client: a {{dir}} directory is auto-created remotely to store the MCP config and Skills. After setup you can manually upload/download in Library.",
     "gitChannel": "Git Repo",
     "sftpChannel": "SFTP",
     "gitMissing": "System git not detected; the Git channel is unavailable. Please install Git and refresh in Runtime Environment.",

@@ -42,6 +42,8 @@ async function load(): Promise<ActivationState | null> {
         features: Array.isArray(raw.features) ? raw.features.filter((f): f is string => typeof f === 'string') : [],
         source: raw.source === 'trial' || raw.source === 'license' ? raw.source : 'none',
         degraded: raw.degraded ?? null,
+        // 明文镜像不参与提醒判定（权威值由 `license.getState()` 现算），此处只做结构补全
+        needsOnlineVerify: raw.needsOnlineVerify === true,
     };
 }
 

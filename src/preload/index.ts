@@ -237,6 +237,8 @@ const api = {
             ipcRenderer.invoke('clients:add-custom', input),
         removeCustom: (id: string): Promise<void> =>
             ipcRenderer.invoke('clients:remove-custom', id),
+        deleteClientData: (id: string, deleteWholeDir: boolean): Promise<void> =>
+            ipcRenderer.invoke('clients:delete-data', id, deleteWholeDir),
     },
 
     // 配置管理
@@ -643,6 +645,7 @@ const api = {
         getState: (): Promise<ActivationState> => ipcRenderer.invoke('activation:get-state'),
         getMachineCode: (): Promise<string> => ipcRenderer.invoke('activation:get-machine-code'),
         getPurchaseUrl: (): Promise<string> => ipcRenderer.invoke('activation:get-purchase-url'),
+        getAccountPageUrl: (): Promise<string> => ipcRenderer.invoke('activation:get-account-url'),
         redeem: (code: string, email: string, switchMode?: boolean): Promise<RedeemResult> =>
             ipcRenderer.invoke('activation:redeem', code, email, switchMode),
         importLicenseFile: (switchMode?: boolean): Promise<RedeemResult> =>
@@ -651,6 +654,12 @@ const api = {
             ipcRenderer.invoke('activation:import-license-text', text, switchMode),
         deactivate: (): Promise<ActivationState> => ipcRenderer.invoke('activation:deactivate'),
         hasFeature: (feature: string): Promise<boolean> => ipcRenderer.invoke('license:has-feature', feature),
+        // 主进程授权状态跃迁（复核停用 / 支付后自动到账）即时推送；返回退订函数
+        onStateChanged: (callback: (state: ActivationState) => void): (() => void) => {
+            const listener = (_e: unknown, state: ActivationState) => callback(state);
+            ipcRenderer.on('activation:state-changed', listener);
+            return () => ipcRenderer.removeListener('activation:state-changed', listener);
+        },
     } as ActivationApi,
 
     // 账号会话（登录态）：持有 accessToken 持久化 + 登录 / 第二因子校验 / 登出 / 当前用户

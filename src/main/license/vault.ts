@@ -183,6 +183,12 @@ function sanitizeLicense(raw: unknown): LicenseVault | null {
         offline_grace_used_ms: Math.max(0, Math.floor(numOr(raw.offline_grace_used_ms, 0))),
         /** 服务端明确回答吊销/过期 → 本地停用；只有复核成功才清 false */
         revoked_by_server: raw.revoked_by_server === true ? true : null,
+        /**
+         * 下次复核排期时刻（plan-1.0 / C1）。**必须在此白名单里列出**，否则 `runRecheck` 写入的排期
+         * 会在下一次读取时被 sanitize 掉 → 「15 天节奏 / 失败后 2 小时重试跨重启存活」静默失效。
+         */
+        next_check_at:
+            typeof raw.next_check_at === 'number' && Number.isFinite(raw.next_check_at) ? raw.next_check_at : null,
     };
 }
 

@@ -117,7 +117,7 @@ export default function ActivationModal() {
     const [email, setEmail] = useState('');
     const [showText, setShowText] = useState(false);
     const [text, setText] = useState('');
-    const [msg, setMsg] = useState<{ type: 'err' | 'ok'; text: string } | null>(null);
+    const [msg, setMsg] = useState<{ type: 'err' | 'ok'; text: string; action?: 'openAccount' } | null>(null);
     const [busy, setBusy] = useState(false);
     // 试用用户点「立即激活」后进入激活流程（复用未激活的选择页/子页；返回时退回试用视图）
     const [activating, setActivating] = useState(false);
@@ -238,10 +238,20 @@ export default function ActivationModal() {
             if (!r.unbindWarning) setTimeout(() => closeModal(), 800);
         } else if (r.error) {
             setUnbindWarn(false);
-            setMsg({ type: 'err', text: t(r.error) });
+            setMsg({type: 'err', text: t(r.error), action: r.action});
         } else {
             setUnbindWarn(false);
-            setMsg({ type: 'err', text: t('license.errors.generic') });
+            setMsg({type: 'err', text: t('license.errors.generic')});
+        }
+    };
+
+    /** C6（U3）：绑机冲突时的自助出口——打开服务端账户管理页解绑（地址由主进程持有） */
+    const openAccountPage = async () => {
+        try {
+            const url = await api.activation.getAccountPageUrl();
+            if (url) await api.system.openExternal(url);
+        } catch {
+            setMsg({type: 'err', text: t('license.errors.generic')});
         }
     };
 
@@ -507,9 +517,19 @@ export default function ActivationModal() {
                 </div>
             )}
             {msg && (
-                <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
-                    {msg.text}
-                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <p className={`text-[12px] ${msg.type === 'ok' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}>
+                        {msg.text}
+                    </p>
+                    {msg.action === 'openAccount' && (
+                        <button
+                            onClick={() => void openAccountPage()}
+                            className="text-[12px] underline text-[var(--color-text)] hover:opacity-80"
+                        >
+                            {t('license.modal.openAccountPage')}
+                        </button>
+                    )}
+                </div>
             )}
             {unbindWarn && (
                 <p className="text-[12px] text-[var(--color-warning)]">{t('license.modal.unbindFailed')}</p>

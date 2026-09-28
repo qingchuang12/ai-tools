@@ -15,18 +15,22 @@
 
 import {dialog} from 'electron';
 import type {RedeemResult} from '../../shared/activation-types';
+import {PRODUCT_SKU} from '../../shared/license-constants';
 import {
+    ACCOUNT_PAGE_PATH,
     ACCOUNT_UNBIND_API_PATH,
     ACTIVATE_API_PATH,
     CHECKOUT_PAGE_PATH,
     MY_LICENSES_API_PATH,
     MY_LICENSES_TIMEOUT_MS,
+    PENDING_LICENSES_API_PATH,
+    PENDING_LICENSES_TIMEOUT_MS,
     REPORT_BINDING_API_PATH,
     REPORT_BINDING_TIMEOUT_MS,
     UNBIND_API_TIMEOUT_MS,
 } from './constants';
 import {getConfig} from './config';
-import {logLicenseEvent, PUBLIC_ERROR_KEY, PUBLIC_NETWORK_ERROR_KEY} from './errors';
+import {logLicenseEvent, PUBLIC_ERROR_KEY, PUBLIC_NETWORK_ERROR_KEY, publicErrorFor} from './errors';
 import {getMachineCode} from './machine-code';
 
 /** 兑换响应数据体（字段全部可选：后端可能省略，客户端一律按可选消费） */
@@ -46,12 +50,16 @@ interface RedeemData {
  */
 interface RedeemEnvelope extends RedeemData {
     data?: RedeemData;
+    /** 失败段的业务码（`ApiResponse.fail(code,...)`）；仅白名单内三类会被翻译成专用文案 */
+    code?: string;
 }
 
 export interface RedeemFetchResult {
     ok: boolean;
     category?: 'network' | 'license';
     error?: string;
+    /** C6（U3）：随错误一起给出的自助动作（渲染层据此显示按钮），目前只有「打开授权管理页」 */
+    action?: 'openAccount';
     token?: string;
     serverTimeMs?: number | null;
 }
@@ -85,7 +93,10 @@ function parseActivateResponse(body: unknown, status: number): RedeemFetchResult
         typeof data.signedToken !== 'string' ||
         !data.signedToken.trim()
     ) {
-        return {ok: false, category: 'license', error: PUBLIC_ERROR_KEY};
+        // C6（U3）：只对「用户能自救」的三类业务码给专用文案（换机冲突 / 授权不可用 / 需先登录），
+        // 其余（含解析失败、限流、未知码）继续回落统一文案——错误码整体不外泄的既有约定不动。
+        const mapped = publicErrorFor(env?.code);
+        return {ok: false, category: 'license', ...mapped};
     }
     return {
         ok: true,
@@ -94,11 +105,27 @@ function parseActivateResponse(body: unknown, status: number): RedeemFetchResult
     };
 }
 
-/** 按服务地址拼出带 machineId 的收银台 URL（页面与 API 同源，均由 billing-license-service 托管） */
+/**
+ * 按服务地址拼出收银台 URL（页面与 API 同源，均由 billing-license-service 托管）。
+ *
+ * 查询参数即 plan-1.0 第 5 条要求的「机器码 + 待激活产品」两要素：
+ * - `machineId`：支付完成后服务端据此**直签并绑定本机**，也用于付款后按机器码领取待激活授权；
+ * - `productId`：产品级标识（本产品 `AI-TOOLS-PRO`）。收银台静态页的预选逻辑按**可售档位 SKU**
+ *   （`pro-buyout` 等）匹配，故本参数当前在页面侧不参与预选，仅作为「从哪个产品跳来」的来源标识透传；
+ *   真正的产品归属判定仍在离线验签（token `sku` ∈ `acceptedSkus`），不依赖此处自报参数。
+ */
 export async function buildCheckoutUrl(): Promise<string> {
     const base = getConfig().serviceBaseUrl;
     const machineId = await getMachineCode();
-    return `${base}${CHECKOUT_PAGE_PATH}?machineId=${encodeURIComponent(machineId)}`;
+    return `${base}${CHECKOUT_PAGE_PATH}?machineId=${encodeURIComponent(machineId)}&productId=${encodeURIComponent(PRODUCT_SKU)}`;
+}
+
+/**
+ * C6（U3）：账户管理页地址（服务端同源静态页）。绑机冲突时唯一的自助出口——
+ * 用户在此解绑旧设备后回软件重新激活。地址由主进程拼装，渲染层只拿到 URL 走既有 openExternal。
+ */
+export function buildAccountPageUrl(): string {
+    return `${getConfig().serviceBaseUrl}${ACCOUNT_PAGE_PATH}`;
 }
 
 /**
@@ -258,6 +285,71 @@ export async function reportBinding(signedToken: string, machineId: string): Pro
     return result;
 }
 
+/**
+ * S1（plan-1.0）：按机器码领取「支付已完成、尚未领取/未绑机」的授权。
+ * 服务端 `GET /api/licenses/pending?machineId=`（公开、双维度限流、不回显邮箱）。
+ */
+export interface PendingLicenseItem {
+    licenseKey: string;
+    signedToken: string;
+    productSku: string | null;
+    /** ISO-8601；仅展示用，判定以 token 内 `exp` 验签结果为准 */
+    expiresAt: string | null;
+}
+
+/**
+ * 拉取本机待领取授权（**只读**，领取仍走 `reportBinding` + 本地验签落盘）。
+ *
+ * 任何异常/非 2xx/畸形一律返回空数组——本函数在支付后的轮询循环里调用，
+ * 「问不到」是常态（用户还没付完款），绝不能让它变成错误提示。
+ */
+export async function fetchPendingLicenses(machineId: string): Promise<PendingLicenseItem[]> {
+    const trimmed = (machineId || '').trim();
+    if (!trimmed) return [];
+    const cfg = getConfig();
+    let response: Response;
+    try {
+        response = await fetch(
+            `${cfg.serviceBaseUrl}${PENDING_LICENSES_API_PATH}?machineId=${encodeURIComponent(trimmed)}`,
+            {
+                method: 'GET',
+                headers: {accept: 'application/json'},
+                signal: AbortSignal.timeout(Math.max(1000, PENDING_LICENSES_TIMEOUT_MS)),
+            },
+        );
+    } catch (error) {
+        logLicenseEvent('LIC_REDEEM_NETWORK', {event: 'pending_request_failed', reason: (error as Error).name});
+        return [];
+    }
+    if (!response.ok) {
+        // 429（限流）与 4xx/5xx 同口径静默处理：轮询下一轮自然退避，不打扰用户
+        logLicenseEvent('LIC_REDEEM_REJECTED', {event: 'pending_rejected', status: response.status});
+        return [];
+    }
+    let body: unknown = null;
+    try {
+        body = await response.json();
+    } catch {
+        logLicenseEvent('LIC_REDEEM_BAD_RESPONSE', {event: 'pending_json_invalid'});
+        return [];
+    }
+    // ApiResponseAdvice 包壳：业务对象在 $.data，列表在 data.licenses；扁平结构兼容
+    const b = (body ?? {}) as Record<string, unknown>;
+    const data = (b.data ?? b) as Record<string, unknown>;
+    const list = Array.isArray(data.licenses) ? (data.licenses as unknown[]) : [];
+    return list
+        .map((item) => {
+            const it = (item ?? {}) as Record<string, unknown>;
+            return {
+                licenseKey: typeof it.licenseKey === 'string' ? it.licenseKey : '',
+                signedToken: typeof it.signedToken === 'string' ? it.signedToken : '',
+                productSku: typeof it.productSku === 'string' ? it.productSku : null,
+                expiresAt: typeof it.expiresAt === 'string' ? it.expiresAt : null,
+            } as PendingLicenseItem;
+        })
+        .filter((l) => l.licenseKey.length > 0 && l.signedToken.trim().length > 0);
+}
+
 /** 主进程弹文件选择器导入 `license.lic`；用户取消时返回空结果（不算失败） */
 export async function readLicenseFileViaDialog(): Promise<string | null> {
     const result = await dialog.showOpenDialog({
@@ -275,9 +367,15 @@ export async function readLicenseFileViaDialog(): Promise<string | null> {
     }
 }
 
-/** 兑换失败结果的统一构造（避免各处手写字面量导致文案不一致） */
-export function redeemFailure(category: 'network' | 'license'): RedeemResult {
-    return {success: false, category, error: category === 'network' ? PUBLIC_NETWORK_ERROR_KEY : PUBLIC_ERROR_KEY};
+/**
+ * 兑换失败结果的统一构造（避免各处手写字面量导致文案不一致）。
+ * `from` 传入服务端解析结果时，沿用其**白名单内**的专用文案与自助动作（C6 / U3）。
+ */
+export function redeemFailure(category: 'network' | 'license', from?: RedeemFetchResult): RedeemResult {
+    const fallback = category === 'network' ? PUBLIC_NETWORK_ERROR_KEY : PUBLIC_ERROR_KEY;
+    const result: RedeemResult = {success: false, category, error: from?.error ?? fallback};
+    if (from?.action) result.action = from.action;
+    return result;
 }
 
 /**

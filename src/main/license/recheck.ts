@@ -1,11 +1,19 @@
 /**
- * 定期联网复核（main 进程，plan-7.0）
+ * 定期联网复核（main 进程，plan-7.0 → plan-1.0 节奏改造）
  *
- * 一句话职责：**问服务端一句「这张授权现在还认吗」**，把答案落到 vault 的 4 个复核字段上。
+ * 一句话职责：**问服务端一句「这张授权现在还认吗」**，把答案落到 vault 的复核字段上。
  * 本模块**不做任何停用动作**——停用判定统一由 `isDisabledByRecheck()` 表达，
  * 由 `index.ts#getState()` 与 `feature-gate.ts#assertFeature()` 各自在本地闸门里消费。
  *
- * 三条设计红线（改动前请读完）：
+ * 节奏（plan-1.0 第 1~3 条）：正常 **15 天**一次；**拿不到明确结论**（网络/超时/5xx/畸形）时
+ * **2 小时**后重试，直到拿到明确答案；429 走 `rateLimitedRetryMs` + 抖动退避。
+ * 排期时刻落盘在 `LicenseVault.next_check_at`，跨重启存活。
+ *
+ * 停用分两段（plan-1.0 / U1）：距最近一次「服务端明确回答 ACTIVE」
+ * `offlineGraceDays`（默认 30 天）之内无感 → 之上进入**提醒段**（`needsOnlineVerify`，功能不减）→
+ * `hardStopDays`（默认 60 天）之上才自动失效。
+ *
+ * 四条设计红线（改动前请读完）：
  * 1. **对外绝不抛**：全流程 try/catch，任何异常都退化成 `unknown`。复核是旁路逻辑，
  *    它崩了不能影响主进程，更不能影响用户既有权益。
  * 2. **宁可放过也不误杀**：只有服务端明确回答 `LICENSE_INVALID` / `LICENSE_EXPIRED` 才立即停用；
@@ -13,9 +21,13 @@
  *    误判停用是资损级事故，漏判只是少收一天钱。
  * 3. **429 照常累加宽限**：绝不能因为「服务端在限流」就免扣——否则攻击者只要打满
  *    verify 限流（60/min/IP），客户端就永远只能拿到 429 → 永不停用，限流本身变成永久续命后门。
+ * 4. **本次进程尚未复核过时，不因「超阈值」停用**（plan-1.0 新增）：15 天间隔下「闲置 40 天回来
+ *    第一次启动」会成为常态，此时距上次成功复核早已超阈值，但一次复核几秒就能翻案。
+ *    若照停不误，用户一打开软件就是未激活、且断网时无法自救——属改造引入的**新误杀面**。
+ *    故停用判定要求「本次进程已发起过至少一次复核尝试」。见 `hasPendingRecheckAttempt()`。
  *
  * 时间口径：入参 `nowMs` 由调用方给（单测可注入）；`last_checked_at` 单调只增（防改系统时间倒拨宽限）。
- * 停用判定走方案 A（自然日）：`now - last_verified_ok_at >= 7天`；该差值直接取真实经过时长，
+ * 阈值判定取真实经过时长（`now - last_verified_ok_at`，缺失回落 `activated_at`），
  * 改系统时间既不能让 `last_verified_ok_at` 倒退，也不影响既有的付费态水印/服务器时间下界。
  */
 
@@ -90,17 +102,69 @@ interface VerifyResponse {
  *
  * 开关关闭时一律返回 false —— 这是资损事故的秒级回滚手段（改包外配置重启即恢复，不需发版），
  * 故开关判断放在**这里**而不是两个调用点，保证任何新增调用点都不会漏掉。
+ *
+ * @param attemptPending 本次进程是否「还没发起过复核尝试」（默认读模块状态；单测显式传入以获得确定性）。
+ *                       为 true 时**不因超阈值停用**（红线 4），但服务端已明确答过吊销（`revoked_by_server`）
+ *                       不受此保护——那条是权威结论，不需要再问一次才生效。
  */
-export function isDisabledByRecheck(license: LicenseVault | null, cfg: LicenseConfig, nowMs: number = Date.now()): boolean {
+export function isDisabledByRecheck(
+    license: LicenseVault | null,
+    cfg: LicenseConfig,
+    nowMs: number = Date.now(),
+    attemptPending: boolean = hasPendingRecheckAttempt(),
+): boolean {
     if (!license || !cfg.recheck.enabled) return false;
     if (license.revoked_by_server === true) return true;
-    // 方案 A（自然日，川哥 2026-09-24 拍板）：自「最近一次服务端明确回答 ACTIVE」起算真实经过天数，
-    // 超过宽限天数即停用。last_verified_ok_at 为 null（从未成功复核）则回落 activated_at；
-    // 两者皆无（理论不可能，新授权落盘即带 activated_at）则不误杀。
-    const since = license.last_verified_ok_at ?? license.activated_at;
-    if (typeof since !== 'number') return false;
-    return (nowMs - since) >= cfg.recheck.offlineGraceDays * DAY_MS;
+    if (attemptPending) return false;
+    const elapsed = elapsedSinceLastOkMs(license, nowMs);
+    // 时间基准缺失（老 vault 连 activated_at 都没有）→ 不误杀（红线 2）
+    if (elapsed === null) return false;
+    return elapsed >= cfg.recheck.hardStopDays * DAY_MS;
 }
+
+/**
+ * 是否处于「需联网验证」提醒段：超过 `offlineGraceDays` 但还没到 `hardStopDays`。
+ * 只影响 UI 提示，**不减任何功能**（plan-1.0 / U1 的分段口径）。
+ */
+export function isRecheckAttentionNeeded(
+    license: LicenseVault | null,
+    cfg: LicenseConfig,
+    nowMs: number = Date.now(),
+): boolean {
+    if (!license || !cfg.recheck.enabled) return false;
+    const elapsed = elapsedSinceLastOkMs(license, nowMs);
+    if (elapsed === null) return false;
+    return elapsed >= cfg.recheck.offlineGraceDays * DAY_MS;
+}
+
+/**
+ * 距「最近一次服务端明确回答 ACTIVE」的真实经过毫秒数。
+ * `last_verified_ok_at` 为 null（从未成功复核）则回落 `activated_at`；两者皆无（理论不可能，
+ * 新授权落盘即带 `activated_at`）返回 null，调用方按「不误杀」处理。
+ */
+function elapsedSinceLastOkMs(license: LicenseVault, nowMs: number): number | null {
+    const since = license.last_verified_ok_at ?? license.activated_at;
+    if (typeof since !== 'number') return null;
+    // last_checked_at 单调只增，这里同样防「系统时间被倒拨」把已耗时长算少
+    return Math.max(0, nowMs - since);
+}
+
+/**
+ * 本次进程是否还没有发起过任何一次复核尝试（红线 4 的判据）。
+ *
+ * 初值为 `true`：进程刚起来、还没问过服务端，此时「距上次成功复核很久」只可能是「软件一直没运行」，
+ * 而不是「网络一直连不上」——后者才是我们要停用授权的场景。
+ */
+export function hasPendingRecheckAttempt(): boolean {
+    return attemptPending;
+}
+
+/** 标记「本次进程已完成一次复核尝试」；`startRecheckLoop()` 会重新置回 pending。 */
+function markAttemptDone(): void {
+    attemptPending = false;
+}
+
+let attemptPending = true;
 
 /** 读 HTTP `Date` 响应头作为服务端时间基准（GMT，无时区歧义）；拿不到返回 null */
 function parseServerDate(response: Response): number | null {
@@ -234,42 +298,80 @@ export function setRecheckDisableHook(fn: DisableHook | null): void {
     disableHook = fn;
 }
 
-/** 按上次结果决定下次间隔：429 走 1h + 抖动退避，其余一律 24h */
+/**
+ * 下一次排期间隔（plan-1.0 / C1）：
+ * - 429 → `rateLimitedRetryMs` + 抖动（服务端明确说「别再来这么密」，退避要更长）；
+ * - `unknown`（网络/超时/5xx/畸形=**没拿到结论**）→ `retryMs`（默认 2 小时），持续到拿到明确答案；
+ * - 其余（active / revoked / skipped 终态）→ `intervalMs`（默认 15 天）。
+ *
+ * 注意 unknown 分支不能合并进「终态」用 15 天：那等于把「失败后 2 小时重试」这条需求丢掉。
+ */
 function nextDelay(outcome: RecheckOutcome): number {
     const cfg = getConfig();
     if (outcome.httpStatus === 429) {
         return cfg.recheck.rateLimitedRetryMs + Math.floor(Math.random() * RATE_LIMIT_JITTER_MS);
     }
+    if (outcome.verdict === 'unknown') return cfg.recheck.retryMs;
     return cfg.recheck.intervalMs;
 }
 
 /**
  * 递归 setTimeout 调度（不用 setInterval：不同 verdict 的下次间隔不同）。
  * timer 一律 unref()，后台任务不阻止进程退出（与 `machine-code.ts#warmupMachineCode` 同口径）。
+ *
+ * ⚠️ 超过 2^31-1 ms（≈24.8 天）的 delay 会被 Node/浏览器**静默截断成 1ms**（并抛 TimeoutOverflowWarning），
+ * 于是「下一次在 30 天后」变成「立刻再问一次」→ 打满服务端 verify 限流。15 天节奏本身在限内，
+ * 但 `next_check_at` 会被系统时间倒拨或服务端下发的较大值放大，故这里按 24 天分段挂定时器。
  */
+const MAX_TIMER_MS = 24 * 60 * 60 * 1000;
+
 function scheduleNext(delayMs: number): void {
     if (loopTimer) {
         clearTimeout(loopTimer);
         loopTimer = null;
     }
     if (loopStopped) return;
+    const target = Math.max(0, delayMs);
+    const wait = Math.min(target, MAX_TIMER_MS);
     const timer = setTimeout(() => {
+        // 只是分段挂载、还没到点：继续等剩余量，不发请求
+        if (wait < target) {
+            scheduleNext(target - wait);
+            return;
+        }
         void runRecheck().then((outcome) => {
             scheduleNext(nextDelay(outcome));
         });
-    }, Math.max(0, delayMs));
+    }, wait);
     if (typeof timer.unref === 'function') timer.unref();
     loopTimer = timer;
 }
 
 /**
  * 启动后台复核循环（进程内单例，重复调用先清旧 timer）。
- * **会立即发起首次复核**（delay 0）——退款时效优先，启动即查，不加抖动；
- * 抖动只用在 429 退避上。故门面 `init()` 只需调本函数，不要再额外 `void runRecheck()`，否则启动会并发两请求。
+ *
+ * 首次延迟取 vault 里的 `next_check_at`（plan-1.0 / C1：节奏要**跨重启存活**，
+ * 否则「失败后 2 小时重试」只在进程活着时成立，用户重启一次就重置回 15 天）；
+ * 缺失或已过期 → delay 0，即「启动即查」（退款时效优先，与既有行为一致）。
  */
 export function startRecheckLoop(): void {
     loopStopped = false;
-    scheduleNext(0);
+    // 新一轮循环 = 新的「本次进程复核尝试」，红线 4 的启动保护重新生效
+    attemptPending = true;
+    void initialDelay().then(scheduleNext);
+}
+
+/** 启动延迟：读持久化排期，拿不到就当「立即查」——旁路逻辑，异常绝不影响启动 */
+async function initialDelay(): Promise<number> {
+    try {
+        const vault = await readVault();
+        const scheduled = vault.license?.next_check_at;
+        if (typeof scheduled !== 'number' || !Number.isFinite(scheduled)) return 0;
+        return Math.max(0, scheduled - Date.now());
+    } catch (error) {
+        logLicenseEvent('LIC_INTERNAL', {event: 'recheck_initial_delay_failed', reason: (error as Error).name});
+        return 0;
+    }
 }
 
 /** 停止循环（测试/退出用） */
@@ -320,6 +422,9 @@ export async function runRecheck(nowMs: number = Date.now()): Promise<RecheckOut
         }
 
         const res = await fetchLicenseStatus(licenseKey);
+        // 本次进程已实际问过服务端：解除红线 4 的启动保护，此后超阈值停用判定才生效。
+        // 必须在 applyVerdict 之前——否则本次 unknown 永远不会触发停用判定。
+        markAttemptDone();
         const verdict = classify(res);
 
         if (verdict === 'skipped') {
@@ -334,7 +439,19 @@ export async function runRecheck(nowMs: number = Date.now()): Promise<RecheckOut
 
         const applied = applyVerdict(license, verdict, nowMs, res.serverTimeMs);
         const trial: TrialVault | null = vault.trial;
-        await writeVault({trial, license: applied.license});
+        const result = outcome(
+            verdict,
+            res.httpStatus,
+            res.code,
+            applied.disabled,
+            applied.license.offline_grace_used_ms ?? 0,
+        );
+        // C1：排期与本次结论**同一次落盘**——`next_check_at` 是跨重启的下次发起时刻
+        const scheduled: LicenseVault = {
+            ...applied.license,
+            next_check_at: nowMs + nextDelay(result),
+        };
+        await writeVault({trial, license: scheduled});
 
         if (applied.disabled) {
             if (verdict === 'revoked') {
@@ -354,13 +471,7 @@ export async function runRecheck(nowMs: number = Date.now()): Promise<RecheckOut
             }
         }
 
-        return outcome(
-            verdict,
-            res.httpStatus,
-            res.code,
-            applied.disabled,
-            applied.license.offline_grace_used_ms ?? 0,
-        );
+        return result;
     } catch (error) {
         // 兜底：复核的任何异常都不允许影响主进程与既有判定
         logLicenseEvent('LIC_INTERNAL', {event: 'recheck_unexpected', reason: (error as Error).name});

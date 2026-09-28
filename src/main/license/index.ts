@@ -12,13 +12,14 @@
 import type {ActivationDegradedReason, ActivationState, RedeemResult} from '../../shared/activation-types';
 import {getConfig} from './config';
 import type {LicenseErrorCode} from './errors';
-import {logLicenseEvent, PUBLIC_ERROR_KEY, redactLicenseKey} from './errors';
+import {logLicenseEvent, PUBLIC_ERROR_KEY, publicErrorFor, redactLicenseKey} from './errors';
 import {assertFeature as gateAssertFeature} from './feature-gate';
 import {readFirstRunAt, writeFirstRun} from './first-run';
 import {getHardwareFactors, getMachineCodePair, warmupMachineCode} from './machine-code';
 import {probeMachineFirstSeen} from './machine-probe';
 import {getPersistedAccessToken} from '../account';
 import {
+    buildAccountPageUrl,
     buildCheckoutUrl,
     fetchRedeem,
     parseLicenseText,
@@ -42,7 +43,8 @@ import {
     touchTrial,
 } from './trial';
 import {raiseAnchorFloor, readAnchorFloor} from './anchor';
-import {isDisabledByRecheck, setRecheckDisableHook, startRecheckLoop} from './recheck';
+import {isDisabledByRecheck, isRecheckAttentionNeeded, setRecheckDisableHook, startRecheckLoop} from './recheck';
+import {setPurchaseClaimHandler, startPurchasePolling} from './purchase-poll';
 import type {VaultData} from './vault';
 import {readVault, writeVault} from './vault';
 import {expToMs, extractLicenseKeyFromToken, resolveFeatures, verifyToken} from './verifier';
@@ -97,6 +99,7 @@ function baseState(): ActivationState {
         features: [],
         source: 'none',
         degraded: null,
+        needsOnlineVerify: false,
     };
 }
 
@@ -137,6 +140,8 @@ function activatedState(
         features: [FEATURE_PRO, ...resolveFeatures(payload, cfg)],
         source: 'license',
         degraded,
+        // C2（U1 分段）：超过提醒阈值但未到失效阈值 → 只是「需联网验证」提示，功能一律照常放行
+        needsOnlineVerify: isRecheckAttentionNeeded(license, cfg),
     };
 }
 
@@ -427,12 +432,49 @@ export async function grantTrialOnFirstInstall(): Promise<void> {
 /** 门面初始化：必须在 `app.whenReady()` 之后调用（safeStorage 在 ready 前会抛） */
 export async function init(): Promise<ActivationState> {
     warmupMachineCode();
-    // 复核循环内部会**立即**发起首次复核（退款时效优先，启动即查），
-    // 故此处只调 startRecheckLoop()，不再额外 runRecheck()——否则启动会并发两个请求，白白消耗限流额度。
+    // 只调 startRecheckLoop()，不再额外 runRecheck()——否则启动会并发两个请求，白白消耗限流额度。
+    // 首次延迟改由 vault 的 `next_check_at` 决定（plan-1.0 / C1：15 天节奏与 2 小时失败重试都要跨重启存活）。
+    // 代价（须知情）：已激活且排期在未来的用户，启动瞬间不再问服务端——吊销/退款的本地生效时点
+    // 由「排期 + 提醒段（默认 30 天）+ 硬停（默认 60 天）」三段决定，而非旧的「启动即查」。
+    // 若要回滚到旧口径，把 `startRecheckLoop()` 内 initialDelay() 改成常量 0 即可（一行），
+    // `next_check_at` 字段保留不影响任何既有判定，仅退化为不被消费。
     // 循环 timer 已 unref()，不阻塞窗口显示也不阻止进程退出。
     setRecheckDisableHook(notifyStateChanged);
     startRecheckLoop();
+    // C4：支付后自动到账——领取动作要落盘，故由门面注入（purchase-poll 不反向依赖本模块）
+    setPurchaseClaimHandler(claimPendingToken);
     return getState(null);
+}
+
+/**
+ * C4（plan-1.0）：领取一条「本机已付款、尚未绑机」的授权。
+ *
+ * 顺序是硬性的：**先向服务端补绑本机再落盘**。服务端 pending 返回的原始 token 可能不带 `mid`
+ * （收银台直签或未绑机签发），而 `verifier` 要求 `mid == 本机强机器码`，直接落盘会被判
+ * `LIC_MACHINE_MISMATCH`；`report-binding` 成功后服务端返回**重签件**（含本机 mid），
+ * 才是可落盘的权威件（与启动期补报 `reportBindingOnStartup` 同口径）。
+ *
+ * 失败一律返回 false 不抛：轮询按「下轮再问」处理，绝不把支付后的等待变成错误提示。
+ */
+async function claimPendingToken(signedToken: string): Promise<boolean> {
+    try {
+        const pair = await getMachineCodePair();
+        const bound = await reportBinding(signedToken, pair.strong);
+        if (!bound.ok || !bound.token) return false;
+        const applied = await applySignedToken(bound.token, bound.serverTimeMs ?? null);
+        if (!applied.success) return false;
+        // 付完款即时上屏：不依赖渲染层轮询周期
+        notifyStateChanged();
+        return true;
+    } catch (error) {
+        logLicenseEvent('LIC_INTERNAL', {event: 'purchase_claim_unexpected', reason: (error as Error).name});
+        return false;
+    }
+}
+
+/** C6（U3）：账户管理页地址（绑机冲突时的自助解绑入口） */
+export function getAccountPageUrl(): string {
+    return buildAccountPageUrl();
 }
 
 /** 当前会话已验签的载荷；没有则为 null */
@@ -449,7 +491,7 @@ export async function deactivate(): Promise<ActivationState> {
         // 否则「停用 → 去激活 → 重新激活」可能继承旧的 revoked_by_server 标记。
         // 川哥拍板（2026-09-24）：watermark / server_time_floor 两个防改系统时间的单调水位必须保留——
         // 它们是反回拨下界，去激活后保留才能防止「改系统时间 + 重新激活」回拨续命；
-        // 只把该清的（token / 激活时间 / mid / 复核四字段）置空，binding_reported 也清（换 token 需重新上报）。
+        // 只把该清的（token / 激活时间 / mid / 复核字段）置空，binding_reported 也清（换 token 需重新上报）。
         license: {
             ...vault.license,
             signed_token: null,
@@ -460,6 +502,8 @@ export async function deactivate(): Promise<ActivationState> {
             offline_grace_used_ms: 0,
             last_checked_at: null,
             last_verified_ok_at: null,
+            // 复核排期也一并清掉：去激活后不该让下一次启动沿用「上一张授权的 15 天节奏」
+            next_check_at: null,
             binding_reported: null,
         },
     });
@@ -467,8 +511,14 @@ export async function deactivate(): Promise<ActivationState> {
     return getState(null);
 }
 
-/** 按配置模板拼出带 machineId 的收银台 URL */
+/**
+ * 按配置模板拼出收银台 URL（机器码 + 产品标识），并**顺带启动支付后自动到账轮询**（plan-1.0 / C4）。
+ *
+ * 为什么挂在这里而不是渲染层：本函数是「用户点了在线激活」的唯一主进程入口，
+ * 渲染层只负责 `openExternal`，主进程无法感知浏览器里的支付何时完成，只能靠问服务端。
+ */
 export async function getPurchaseUrl(): Promise<string> {
+    startPurchasePolling();
     return buildCheckoutUrl();
 }
 
@@ -482,6 +532,11 @@ async function applySignedToken(token: string, serverTimeMs: number | null): Pro
     });
     if (!outcome.ok || !outcome.payload) {
         logLicenseEvent(outcome.code, {event: 'apply_signed_token_rejected'});
+        // C6：本地验签出的「机器码不属于本机」与服务端同名业务码等价——都是「这张授权绑在别的机器」，
+        // 自助出口同样只有账户页解绑，故给同一套文案与动作，不额外暴露其他信息。
+        if (outcome.code === 'LIC_MACHINE_MISMATCH') {
+            return {success: false, category: 'license', ...publicErrorFor('MACHINE_MISMATCH')};
+        }
         return redeemFailure('license');
     }
     const pair = await getMachineCodePair();
@@ -559,7 +614,7 @@ async function applyWithSwitch(
 export async function redeem(code: string, email: string, switchMode = false): Promise<RedeemResult> {
     const result = await fetchRedeem(code, email);
     if (!result.ok || !result.token) {
-        return redeemFailure(result.category ?? 'license');
+        return redeemFailure(result.category ?? 'license', result);
     }
     return applyWithSwitch(result.token, result.serverTimeMs ?? null, switchMode);
 }

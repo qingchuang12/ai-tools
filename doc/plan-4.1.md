@@ -57,6 +57,19 @@ MCP Inspector（调试器）点「连接」走 stdio：`mcp-client.ts` `connectS
 - [ ] **【外部】** 360联盟商务对接：确认 PC 桌面 SDK 是否存在并取文档 → 补齐 `AdProvider` 实现（官网三次超时，公开渠道无桌面文档）。
 - [ ] **【外部】** Overwolf Console 注册 App UID + 申请广告开通（发布另需开发者代码签名证书）。
 
+### 客户端删除（设置-支持的客户端：删数据 + 可选删整目录，列表完全由探测驱动）
+- **最终设计（2026-09-28 第四轮定稿）**：
+  - **不做任何手动隐藏**，`hiddenClients` 已全链路拆除。列表 100% 由探测驱动。
+  - **删除按钮对所有客户端可见**（唯一排除 cloud 虚拟客户端）——不再按"专属配置文件"白名单过滤，消除"有的有删除有的没有"的不一致。
+  - 确认弹窗勾选项（默认不勾）：**「同时删除整个配置目录」**。
+  - **默认动作（不勾选）**：只清本应用写入的内容——① 技能文件：仅删带 `.source.json` 标记的 skill 目录（用户手动放入的不动，与 scanSkillsDir 同口径）；② MCP 配置信息：专属 MCP 配置文件（basename ∈ mcp.json/.mcp.json/mcp_config.json/opencode.json）整文件删除；共享配置文件（~/.claude.json、settings.json、config.toml、openclaw.json 等）**就地只清 MCP 键**（zed→context_servers、opencode/openclaw/zcode→mcp、其余→mcpServers；codex-cli 走 TOML mcp_servers），保留登录态等其他内容。不走 writeConfig（其默认 stringify 分支会丢无分支客户端的其他键，如 gemini-cli/marscode）。
+  - **勾选后**：连配置根目录一并递归删除。根目录按客户端映射（不能一刀切 dirname）：claude-code→~/.claude（配置在 ~/.claude.json，dirname 是主目录）；`<root>/User/mcp.json`（vscode/trae 系）→剥 User；kiro 剥 settings；zcode 剥 cli；agent-skills 的 configPath 本身是目录。守卫：必须位于主目录内、不得是主目录本身、不得是 ~/.ai-tools。
+  - 自定义客户端：确认删除时移除定义（探测恒为已安装）；先 deleteClientData 再 removeCustom（定义移除后路径无法解析）。
+  - 内置客户端删除后 getAll(true) 重探测刷新；残留配置清除后，误判「已安装」的自然落回「未安装」区。
+- 落地：settings-store / config-manager / IPC / preload / electron.ts 移除 hiddenClients 全链路并新增 `deleteClientData(id, deleteWholeDir)`（deleteAppInstalledSkills + stripMcpConfigFromFile + getClientConfigRootDir 守卫删除，替换原 deleteClientConfig）；Settings.tsx 全客户端常驻删除按钮 + 「删除整个配置目录」勾选；话术定稿（removeClientConfirmDirOption/DirDanger、clientDataDeleted/clientDirDeleted，clientRemoved→客户端已删除），**9 个语言包（en/zh/ar/de/es/fr/it/ja/ru）全部补齐**——本仓语言包是完整维护的，新增/改名 key 不能只加 zh/en 靠 fallbackLng='en' 兜底（会让日/俄界面冒出英文）。
+- 验证：`tsc -p tsconfig.main.json` + `tsc -p tsconfig.json` 全绿（TYPECHECK_OK）；9 个语言包 JSON 语法逐个 `JSON.parse` 校验通过。此前 recheck.ts 的两处报错系并行 license 改动所致，已由该工作流自行修复（markAttemptDone 已接入调用），本任务未改 license 域代码。GUI 冒烟待用户本机 pnpm dev 验证。
+- **i18n 插值口径（踩坑根治）**：i18next 默认分隔符是**双花括号 `{{var}}`**，单花括号 `{var}` 不插值会原样显示。本功能 `removeClientConfirmTitle` 误用 `{name}` → 弹窗显示「删除客户端「{name}」？」；顺带发现既有同类 bug `cloudSync.desc`（`CloudSyncManager.tsx:175` 传 `{dir: CLOUD_ROOT_DIR}` 但文案为单花括号）。已把 11 处（zh/en 的 `{name}` + 9 个语言包的 `{dir}`）统一改为双花括号，并复查全库单花括号插值为 0。
+
 ## 登记表（外部阻塞，非编码项）
 
 - 真实后端端到端冒烟：`fetchRedeem` / `unbind` / `activate` / 登录+MFA 走真实私钥/账号链路（**阻塞**：需真实后端实例 + 可登录账号；activate 另需先具备客户端激活端点接入与登录 UI）。

@@ -15,14 +15,25 @@ import type {LicenseErrorCode} from './errors';
  * 复核只回答一个问题：服务端现在还认这张授权吗？
  * `enabled=false` 是资损事故的第一处置手段——改包外配置重启即恢复，不需发版，
  * 故 `getState` / `assertFeature` 在开关关闭时必须**完全忽略**停用标记。
+ *
+ * 两段时间口径（plan-1.0 / U1，取代此前单一 `offlineGraceDays` 硬停）：
+ * 自「最近一次服务端明确回答 ACTIVE」起算的真实经过天数——
+ * `offlineGraceDays` 之内无感 → 之上进入「需联网验证」提醒段（**功能不减**）→
+ * `hardStopDays` 之上才自动失效。
+ * ⚠️ 两个阈值必须 **> 复核间隔 `intervalMs`**：否则正常用户只要一个周期没运行软件，
+ * 下次启动就会立刻落到停用判定（结构性误杀）。
  */
 export interface RecheckConfig {
     /** 总开关；关掉后完全忽略停用标记（资损事故回滚手段） */
     enabled: boolean;
-    /** 复核间隔（ms），默认 24h */
+    /** 复核间隔（ms），默认 15 天；服务端 verify 响应下发 `nextCheckAfterMs` 时优先采用下发值 */
     intervalMs: number;
-    /** 离线宽限天数：服务端「答不上来」时最多可继续使用的天数 */
+    /** 复核「拿不到明确结论」后的重试间隔（ms），默认 2 小时（持续到成功为止） */
+    retryMs: number;
+    /** 进入「需联网验证」提醒段的天数阈值（提醒但不减功能），默认 30 天 */
     offlineGraceDays: number;
+    /** 自动失效（未激活）的天数阈值，默认 60 天 */
+    hardStopDays: number;
     /** 单次请求超时（ms），默认 8s（短于兑换 15s：这是启动路径上的旁路请求） */
     timeoutMs: number;
     /** 命中 429 后的退避间隔（ms），默认 1h */
@@ -180,6 +191,15 @@ export interface LicenseVault {
      * 可选：老 vault 没有它，按「从未复核过」处理，无需迁移。
      */
     last_checked_at?: number | null;
+    /**
+     * 下一次复核的排期时刻（ms，绝对时间）；plan-1.0 / C1。
+     *
+     * 落盘的意义：15 天间隔 + 2 小时失败重试这套节奏要**跨应用重启存活**——
+     * 否则「失败后 2 小时重试」只在进程活着时成立，用户重启一次就等于重置回 15 天。
+     * 启动时若该值已过期（或从未排期）则立即发起一次复核。
+     * 可选字段：老 vault 缺失按「立即复核」处理，无需迁移。
+     */
+    next_check_at?: number | null;
     /** 上次服务端**明确回答 ACTIVE** 的时刻，ms；只进日志与自愈观测 */
     last_verified_ok_at?: number | null;
     /**

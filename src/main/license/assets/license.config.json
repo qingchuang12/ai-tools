@@ -30,8 +30,10 @@
   },
   "recheck": {
     "enabled": true,
-    "intervalMs": 86400000,
-    "offlineGraceDays": 7,
+    "intervalMs": 1296000000,
+    "retryMs": 7200000,
+    "offlineGraceDays": 30,
+    "hardStopDays": 60,
     "timeoutMs": 8000,
     "rateLimitedRetryMs": 3600000
   },

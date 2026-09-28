@@ -5,6 +5,11 @@
  * 请求体字段（`credential` 必填、`customerEmail` 客户端仍必填；不再发已废弃的 `customerId`/`sku`）、
  * 网络失败与拒绝路径的分类（network vs license）。
  *
+ * plan-1.0 追加：
+ * - `fetchPendingLicenses`（C4）：按机器码领取待激活授权的请求拼装、壳解析、脏数据剔除与**全静默兜底**；
+ * - `buildCheckoutUrl` / `buildAccountPageUrl`（C3）：收银台 URL 同时带 machineId 与 productId；
+ * - `publicErrorFor`（C6）：服务端业务码 → 对外文案白名单，白名单外一律回落统一文案。
+ *
  * 说明：服务端所有端点经 `ApiResponseAdvice` 包壳（`{success, code, data, traceId, timestamp}`），
  * 直读 `$.signedToken` 会取不到 token —— 这里用真实壳结构锁住该契约。
  */
@@ -33,8 +38,11 @@ vi.mock('../main/license/machine-code', () => ({
     getMachineCode: async (): Promise<string> => hoisted.mid,
 }));
 
-const {fetchRedeem, reportBinding} = await import('../main/license/redeem');
-
+const {fetchRedeem, reportBinding, fetchPendingLicenses, buildCheckoutUrl, buildAccountPageUrl} = await import(
+    '../main/license/redeem'
+);
+const {publicErrorFor, PUBLIC_ERROR_KEY} = await import('../main/license/errors');
+const {PRODUCT_SKU} = await import('../shared/license-constants');
 /** 服务端成功响应（统一壳） */
 function envelope(data: Record<string, unknown>): Record<string, unknown> {
     return {success: true, code: 'SUCCESS', data, traceId: 'abc123', timestamp: '2026-09-18T12:00:00.123'};
@@ -124,15 +132,32 @@ describe('fetchRedeem 响应解析', () => {
     it('HTTP 400（统一错误体）→ 拒绝且归为 license 类', async () => {
         stubFetch(() => ({
             status: 400,
-            json: {timestamp: '2026-09-18T12:00:00', errorCode: 'EMAIL_REQUIRED', message: '邮箱必填', success: false},
+            // 服务端真实错误体字段是 `code`（ApiResponse record），不是 errorCode
+            json: {success: false, code: 'EMAIL_REQUIRED', message: '邮箱必填', timestamp: '2026-09-18T12:00:00'},
         }));
         const r = await fetchRedeem('RC-1', 'buyer@example.com');
         expect(r.ok).toBe(false);
         expect(r.category).toBe('license');
     });
 
-    it('响应体非 JSON → 归为 license 类（不误报网络问题）', async () => {
-        vi.stubGlobal('fetch', async () => ({
+    it('C6：换机冲突（MACHINE_MISMATCH）→ 专属文案 + 打开授权管理页动作', async () => {
+        stubFetch(() => ({status: 400, json: {success: false, code: 'MACHINE_MISMATCH', message: 'bound'}}));
+        const r = await fetchRedeem('LIC-BOUND-ELSEWHERE', 'buyer@example.com');
+        expect(r.ok).toBe(false);
+        expect(r.category).toBe('license');
+        expect(r.error).toBe('license.errors.machineBound');
+        expect(r.action).toBe('openAccount');
+    });
+
+    it('C6：白名单外的业务码仍回落统一文案（不给破解者定位信息）', async () => {
+        stubFetch(() => ({status: 400, json: {success: false, code: 'LICENSE_NOT_FOUND', message: 'nope'}}));
+        const r = await fetchRedeem('RC-1', 'buyer@example.com');
+        expect(r.ok).toBe(false);
+        expect(r.error).toBe('license.errors.generic');
+        expect(r.action).toBeUndefined();
+    });
+
+    it('响应体非 JSON → 归为 license 类（不误报网络问题）', async () => {        vi.stubGlobal('fetch', async () => ({
             ok: true,
             status: 200,
             json: async () => {
@@ -175,7 +200,7 @@ describe('reportBinding（D2 启动旁路补绑）', () => {
     });
 
     it('HTTP 400 → 归为 license 类（不误报 network）', async () => {
-        stubFetch(() => ({status: 400, json: {success: false, errorCode: 'CREDENTIAL_NOT_FOUND'}}));
+        stubFetch(() => ({status: 400, json: {success: false, code: 'CREDENTIAL_NOT_FOUND'}}));
         const r = await reportBinding('old.token.sig', hoisted.mid);
         expect(r.ok).toBe(false);
         expect(r.category).toBe('license');
@@ -187,5 +212,110 @@ describe('reportBinding（D2 启动旁路补绑）', () => {
         expect(r.ok).toBe(false);
         expect(r.category).toBe('network');
         expect(r.error).toBe('license.errors.network');
+    });
+});
+
+describe('fetchPendingLicenses（plan-1.0 / C4：按机器码领取待激活授权）', () => {
+    it('GET /api/licenses/pending?machineId=…，从统一壳取 data.licenses 并保留 signedToken', async () => {
+        stubFetch(() => ({
+            json: envelope({
+                licenses: [
+                    {
+                        licenseKey: 'LIC-P-1',
+                        signedToken: 'h.p.s',
+                        productSku: 'pro-buyout',
+                        expiresAt: '2027-01-01T00:00:00',
+                        issuedAt: '2026-09-28T00:00:00',
+                    },
+                ],
+                serverTime: '2026-09-28T12:00:00',
+            }),
+        }));
+
+        const list = await fetchPendingLicenses('AAAA-BBBB-CCCC-DDDD');
+
+        expect(captured.url).toBe(
+            'https://billing.example.test/api/licenses/pending?machineId=AAAA-BBBB-CCCC-DDDD',
+        );
+        expect(list).toHaveLength(1);
+        expect(list[0]).toMatchObject({licenseKey: 'LIC-P-1', signedToken: 'h.p.s', productSku: 'pro-buyout'});
+    });
+
+    it('机器码含特殊字符时按 URL 编码上送', async () => {
+        stubFetch(() => ({json: envelope({licenses: []})}));
+        await fetchPendingLicenses('a b/c');
+        expect(captured.url).toContain('machineId=a%20b%2Fc');
+    });
+
+    it('剔除缺 licenseKey 或缺 signedToken 的半成品条目', async () => {
+        stubFetch(() => ({
+            json: envelope({
+                licenses: [
+                    {licenseKey: 'LIC-OK', signedToken: 'h.p.s'},
+                    {licenseKey: 'LIC-NO-TOKEN', signedToken: '   '},
+                    {licenseKey: '', signedToken: 'h.p.s'},
+                    null,
+                ],
+            }),
+        }));
+        const list = await fetchPendingLicenses('MID');
+        expect(list.map((l) => l.licenseKey)).toEqual(['LIC-OK']);
+    });
+
+    it('429 / 5xx / 畸形 JSON / 网络异常 / 空机器码 → 一律静默空数组（绝不影响授权状态）', async () => {
+        for (const status of [429, 500, 404]) {
+            stubFetch(() => ({status, json: {}}));
+            expect(await fetchPendingLicenses('MID')).toEqual([]);
+        }
+        vi.stubGlobal('fetch', async () => ({
+            ok: true,
+            status: 200,
+            json: async () => {
+                throw new SyntaxError('not json');
+            },
+        }));
+        expect(await fetchPendingLicenses('MID')).toEqual([]);
+
+        stubFetch(() => ({json: {}, throws: true}));
+        expect(await fetchPendingLicenses('MID')).toEqual([]);
+
+        captured = {};
+        expect(await fetchPendingLicenses('   ')).toEqual([]);
+        expect(captured.url).toBeUndefined();
+    });
+});
+
+describe('收银台与账号页 URL（plan-1.0 / C3）', () => {
+    it('收银台 URL 同时带 machineId 与 productId（无深链回调，靠 productId 预选档位）', async () => {
+        const url = await buildCheckoutUrl();
+        expect(url).toBe(
+            `https://billing.example.test/checkout/index.html?machineId=${encodeURIComponent(
+                hoisted.mid,
+            )}&productId=${encodeURIComponent(PRODUCT_SKU)}`,
+        );
+    });
+
+    it('账号页 URL 指向 billing 的无密码授权管理入口', () => {
+        expect(buildAccountPageUrl()).toBe('https://billing.example.test/account/');
+    });
+});
+
+describe('publicErrorFor（plan-1.0 / C6：服务端业务码白名单）', () => {
+    it('换机冲突 → 专属文案 + 打开授权管理页动作', () => {
+        expect(publicErrorFor('MACHINE_MISMATCH')).toEqual({
+            error: 'license.errors.machineBound',
+            action: 'openAccount',
+        });
+    });
+
+    it('已知的非冲突码 → 专属文案但无动作', () => {
+        expect(publicErrorFor('LICENSE_NOT_ACTIVE')).toEqual({error: 'license.errors.notActive'});
+        expect(publicErrorFor('LOGIN_REQUIRED')).toEqual({error: 'license.errors.loginRequired'});
+    });
+
+    it('未知码 / null / 空串 → 回落统一文案，不给破解者定位信息', () => {
+        for (const code of ['LICENSE_NOT_FOUND', 'INTERNAL_ERROR', null, undefined, '']) {
+            expect(publicErrorFor(code)).toEqual({error: PUBLIC_ERROR_KEY});
+        }
     });
 });

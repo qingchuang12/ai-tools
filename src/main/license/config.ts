@@ -15,6 +15,15 @@ import {ASSETS_DIR_NAME, CONFIG_FILE_NAME, DEFAULT_LICENSE_CONFIG, EXTERNAL_LICE
 import type {LicenseConfig} from './types';
 import {logLicenseEvent} from './errors';
 
+/** 一天的毫秒数（复核阈值天数换算用） */
+const DAY_MS = 86_400_000;
+
+/**
+ * 复核阈值相对「一个复核周期」的额外缓冲天数：覆盖「周期边界 + 若干天没开机」的正常波动，
+ * 使提醒段/停用段只可能由**真的连不上服务端**触发，而不是由「没恰好在那天开机」触发。
+ */
+const RECHECK_THRESHOLD_BUFFER_DAYS = 5;
+
 /** main 产物是 CommonJS，`__dirname` 可用；单测运行在 ESM 下时回退到 cwd（此时配置由测试注入） */
 function currentDir(): string {
     return typeof __dirname === 'string' ? __dirname : process.cwd();
@@ -151,12 +160,33 @@ export function mergeConfig(raw: unknown): LicenseConfig {
         base.recheck.enabled = bool(recheck.enabled, base.recheck.enabled);
         // 间隔与超时都设 1s 下限：配置写错不该变成「疯狂打服务端」或「永远超时」
         base.recheck.intervalMs = Math.max(1000, Math.floor(num(recheck.intervalMs, base.recheck.intervalMs)));
+        base.recheck.retryMs = Math.max(1000, Math.floor(num(recheck.retryMs, base.recheck.retryMs)));
         base.recheck.offlineGraceDays = Math.max(0, Math.floor(num(recheck.offlineGraceDays, base.recheck.offlineGraceDays)));
+        base.recheck.hardStopDays = Math.max(0, Math.floor(num(recheck.hardStopDays, base.recheck.hardStopDays)));
         base.recheck.timeoutMs = Math.max(1000, Math.floor(num(recheck.timeoutMs, base.recheck.timeoutMs)));
         base.recheck.rateLimitedRetryMs = Math.max(
             1000,
             Math.floor(num(recheck.rateLimitedRetryMs, base.recheck.rateLimitedRetryMs)),
         );
+
+        // 两段时间阈值必须**盖过一个完整复核周期**，否则「用户一个周期没运行软件」就会在下次启动
+        // 立刻落到提醒/停用判定（结构性误杀，与网络好坏无关）。包外配置写小了就取下限并记日志——
+        // 宁可静默纠正口径，也不让一次配置笔误变成全体用户的资损客诉。
+        const minDays = Math.ceil(base.recheck.intervalMs / DAY_MS) + RECHECK_THRESHOLD_BUFFER_DAYS;
+        if (base.recheck.offlineGraceDays < minDays) {
+            logLicenseEvent('LIC_RECHECK_UNKNOWN', {
+                event: 'recheck_warn_days_clamped', configured: base.recheck.offlineGraceDays, applied: minDays,
+            });
+            base.recheck.offlineGraceDays = minDays;
+        }
+        if (base.recheck.hardStopDays < base.recheck.offlineGraceDays) {
+            logLicenseEvent('LIC_RECHECK_UNKNOWN', {
+                event: 'recheck_hard_stop_days_clamped',
+                configured: base.recheck.hardStopDays,
+                applied: base.recheck.offlineGraceDays,
+            });
+            base.recheck.hardStopDays = base.recheck.offlineGraceDays;
+        }
     }
 
     const features = asRecord(src.features);

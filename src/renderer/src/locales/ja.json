@@ -10,7 +10,8 @@
       "unitDay": "日",
       "unitYear": "年",
       "unitHour": "時間",
-      "unitMin": "分"
+      "unitMin": "分",
+      "needsOnlineVerify": "オンライン確認が必要です"
     },
     "feature": {
       "cloudSync": "クラウド同期",
@@ -50,12 +51,16 @@
       "upgrade": "アップグレード",
       "needActivation": "クラウド同期を利用するにはアクティベーションが必要です",
       "openFeatures": "トライアル／アクティベートで開放される機能",
-      "featureLocked": "未開放 · トライアルまたはアクティベート後に利用可能"
+      "featureLocked": "未開放 · トライアルまたはアクティベート後に利用可能",
+      "openAccountPage": "ライセンス管理を開く"
     },
     "errors": {
       "generic": "アクティベーションに失敗しました。コードを確認するか、サポートにお問い合わせください。",
       "network": "ネットワーク接続に失敗しました。接続を確認して再試行してください。",
-      "locked": "この機能には有効なライセンスが必要です"
+      "locked": "この機能には有効なライセンスが必要です",
+      "machineBound": "このライセンスはすでに他のデバイスに紐付けられています",
+      "notActive": "このライセンスは現在使用できません。サポートにお問い合わせください。",
+      "loginRequired": "有効化する前にログインしてください。"
     }
   },
   "storeSource": {
@@ -647,6 +652,14 @@
     "supportsSkillsLabel": "スキル対応",
     "browse": "参照",
     "removeClient": "クライアントを削除",
+    "removeClientConfirmTitle": "クライアント「{{name}}」を削除しますか？",
+    "removeClientConfirmDesc": "実行すると、このクライアントの MCP 設定と本アプリがインストールしたスキルファイルが削除されます（手動で追加した内容は影響を受けません）。クライアントが既にアンインストール済みであることを確認してください——まだ使用中の場合、正常な動作に影響する可能性があります。",
+    "removeClientConfirmDirOption": "設定ディレクトリ全体も削除する",
+    "removeClientConfirmDirDanger": "⚠ ディレクトリ全体の削除は取り消せません。このクライアントのローカルデータがすべて削除されます",
+    "removeClientConfirmButton": "削除",
+    "clientDataDeleted": "MCP 設定とスキルファイルを削除しました",
+    "clientDirDeleted": "クライアントの設定ディレクトリ全体を削除しました",
+    "clientRemovedFailed": "クライアントの削除に失敗しました",
     "about": "情報",
     "aboutDesc": "AI-Tools v1.0.0",
     "aboutTitle": "AI-Tools について",
@@ -1006,7 +1019,7 @@
     "collapse": "折りたたむ",
     "disabled": "無効",
     "notSet": "未設定",
-    "desc": "クラウドをクライアントのように扱います。リモートに {dir} ディレクトリが自動作成され、MCP 設定とスキルを格納します。設定後、ライブラリで手動でアップロード／ダウンロードできます。",
+    "desc": "クラウドをクライアントのように扱います。リモートに {{dir}} ディレクトリが自動作成され、MCP 設定とスキルを格納します。設定後、ライブラリで手動でアップロード／ダウンロードできます。",
     "gitChannel": "Git リポジトリ",
     "sftpChannel": "SFTP",
     "gitMissing": "システムの git が検出されませんでした。Git チャネルは利用できません。Git をインストールし、ランタイム環境で更新してください。",

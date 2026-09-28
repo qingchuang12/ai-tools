@@ -37,23 +37,48 @@
 - 后台 fire-and-forget 定时器已有先例：`machine-code.ts#warmupMachineCode`（`setTimeout` + `timer.unref()`）。**照抄这个形态**。
 - `constants.ts:132` 已存在 `BACKGROUND_RECHECK_DELAY_MS`（机器码后台复核用），命名相近但语义不同，新常量不要复用它。
 
+### 0.4 现行口径（plan-1.0，2026-09-28 起生效 —— **与本文下方 plan-7.0 草案冲突处，以本节为准**）
+
+需求原文（川哥）：已激活状态下**每 15 天**问一次；问不到 **2 小时**后再问，持续到问到；**连续 60 天**问不到 → 自动变更为未激活；问的时候必须带机器码 + 产品 + license，三者不匹配 → 立即未激活。
+
+| 维度 | plan-7.0 草案 | **现行（plan-1.0）** |
+| --- | --- | --- |
+| 心跳间隔 | 24h | `intervalMs` = **15 天**（服务端 `verify` 响应下发 `nextCheckAfterMs` 可覆盖，调节奏不发版） |
+| 问不到之后 | 仍 24h | `retryMs` = **2 小时**，直到拿到明确结论 |
+| 429 | 1h + jitter | 不变（`rateLimitedRetryMs` + 0~10min jitter），且**照常消耗宽限** |
+| 停用口径 | 方案 B（`offline_grace_used_ms` 钳制累加） | **方案 A（自然日，川哥 2026-09-24 拍板）**：`now - last_verified_ok_at`（缺失回落 `activated_at`）**现算** |
+| 停用阈值 | `offlineGraceDays` 7 天单段 | **两段**：`offlineGraceDays` = 30 天 → 只进**提醒态**（`needsOnlineVerify`，功能不减）；`hardStopDays` = 60 天 → 才自动失效 |
+| `offline_grace_used_ms` | 判定输入 | **退化为兼容字段**，不再参与判定（`applyVerdict` 里恒置 0） |
+| 排期持久化 | 无 | 新增 vault 字段 `next_check_at`，**跨重启存活**（`startRecheckLoop` 首次延迟读它；缺失/过期 → 启动即查） |
+| 启动首次复核 | `init()` 里 `void runRecheck()` | 只调 `startRecheckLoop()`，按 `next_check_at` 排期（省一次启动请求；回滚口径见 §7 第 14 条） |
+
+三条由 15 天节奏**新引入**的护栏（plan-7.0 草案里没有）：
+
+1. **阈值必须盖过一个完整心跳周期**：15 天间隔若配 7 天宽限，「隔一个周期没开机」就会在下次启动直接停用——纯结构性误杀，与网络好坏无关。`config.ts#mergeConfig` 对包外配置取下限 `ceil(intervalMs/天) + 5` 天，并保证 `hardStopDays >= offlineGraceDays`（写错就抬升并记 `recheck_*_days_clamped` 日志）。
+2. **红线 4（本次进程未复核 → 不因超阈值停用）**：`isDisabledByRecheck(..., attemptPending)` 在「本进程还没问过服务端」时一律放行，`runRecheck` 在 fetch 之后、判定之前解除保护。否则「闲置 40 天后第一次启动」必被误杀，且断网时用户无法自救。服务端权威结论（`revoked_by_server=true`）**不受**此保护。
+3. **长定时器分段**：`setTimeout` 的 delay 超过 2^31-1 ms（≈24.8 天）会被 Node 静默**截断成 1ms** → 排期到 30 天后会变成狂打服务端。`recheck.ts#scheduleNext` 按 24 天分段挂载。
+
+同期新增的配套能力（不在 plan-7.0 草案范围内）：
+`GET /api/licenses/pending?machineId=`（支付后按机器码领取直签授权，客户端 30 分钟窗口 / 60 秒心跳轮询，见 `purchase-poll.ts`）；收银台 URL 追加 `productId`；`MACHINE_MISMATCH` 等三类业务码走 `publicErrorFor` 白名单并引导至授权管理页 `/account/`。
+
 ---
 
 ## 1. 实现方案
 
 ### 1.1 总思路（一句话）
 
-**用现成的 `GET /api/licenses/verify/{licenseKey}` 做「问一句」；服务端明确说「无效/过期」→ 立即停用；服务端答不上来（网络/5xx/429/畸形/未知码）→ 走离线宽限累加；宽限耗尽才停用。停用一律是「软失效 + 可自愈」。
+**用现成的 `GET /api/licenses/verify/{licenseKey}` 做「问一句」；服务端明确说「无效/过期」→ 立即停用；服务端答不上来（网络/5xx/429/畸形/未知码）→ 按 `retryMs`（2 小时）重试直到问通，同时按自然日消耗离线宽限；超过 30 天进提醒态、超过 60 天才停用。停用一律是「软失效 + 可自愈」。
 
-### 1.2 状态机（4 个新 vault 字段 + 1 个纯函数判定）
+### 1.2 状态机（5 个新 vault 字段 + 1 个纯函数判定）
 
 新增字段（`LicenseVault`，全部可选 → **老 vault 无需迁移**）：
 
 | 字段 | 类型 | 语义 |
 | --- | --- | --- |
 | `last_checked_at` | `number \| null` | 上次**发起**复核的时刻（不论成败），ms。单调只增 |
-| `last_verified_ok_at` | `number \| null` | 上次服务端**明确回答 ACTIVE** 的时刻，ms（日志/自愈观测用） |
-| `offline_grace_used_ms` | `number` | 已消耗的离线宽限，ms，默认 0 |
+| `next_check_at` | `number \| null` | 下次复核排期时刻，ms。跨重启存活的关键（**必须登记进 `sanitizeLicense` 白名单**） |
+| `last_verified_ok_at` | `number \| null` | 上次服务端**明确回答 ACTIVE** 的时刻，ms。**方案 A 的停用/提醒判定基准**（缺失回落 `activated_at`） |
+| `offline_grace_used_ms` | `number` | 已消耗的离线宽限，ms，默认 0。**plan-1.0 后退化为兼容字段**：恒置 0，不参与判定 |
 | `revoked_by_server` | `boolean \| null` | 服务端明确回答吊销/过期 → 本地停用标记 |
 
 复核四态 `RecheckVerdict`：
@@ -65,26 +90,32 @@
 'skipped'  → 无本地 token / extractLicenseKeyFromToken 取不到 / cfg.recheck.enabled=false
 ```
 
-状态迁移（每次 `runRecheck`）：
+状态迁移（每次 `runRecheck`；**现行形态以 §0.4 为准**，下面的 `unknown` 分支已改为方案 A 现算，不再累加 `used`）：
 
 ```
-active  : used = 0 ; revoked_by_server = false ; last_verified_ok_at = now ; last_checked_at = now
+active  : used = 0 ; revoked_by_server = false ; last_verified_ok_at = last_checked_at = now
 revoked : revoked_by_server = true ; last_checked_at = now
-unknown : elapsed = last_checked_at == null ? 0 : max(0, now - last_checked_at)
-          used += min(elapsed, cfg.recheck.intervalMs)        // ← 见 1.3 的钳制
-          last_checked_at = max(last_checked_at ?? 0, now)    // 单调，防回拨
-          if (used >= offlineGraceDays * 86400_000) → 停用
+unknown : last_checked_at = max(last_checked_at ?? 0, now)   // 单调，防回拨
+          是否停用交由 isDisabledByRecheck 现算（不写 used）
 skipped : 一切不动
+每次落盘同时写 next_check_at = now + 下次间隔（15 天 / 2 小时 / 1 小时+jitter）
 ```
 
 **停用判定统一出口**（`getState` 与 `assertFeature` 共用，避免两处漂移）：
 
 ```ts
-export function isDisabledByRecheck(license: LicenseVault | null, cfg: LicenseConfig): boolean {
-    if (!license) return false;
-    if (license.revoked_by_server === true) return true;
-    const used = typeof license.offline_grace_used_ms === 'number' ? license.offline_grace_used_ms : 0;
-    return used >= cfg.recheck.offlineGraceDays * 86_400_000;
+export function isDisabledByRecheck(
+    license: LicenseVault | null,
+    cfg: LicenseConfig,
+    nowMs: number = Date.now(),
+    attemptPending: boolean = hasPendingRecheckAttempt(),
+): boolean {
+    if (!license || !cfg.recheck.enabled) return false;   // 开关判断放这里：新增调用点不会漏
+    if (license.revoked_by_server === true) return true;  // 服务端权威结论，不受红线 4 保护
+    if (attemptPending) return false;                     // 红线 4：本次进程还没问过服务端 → 不误杀
+    const elapsed = elapsedSinceLastOkMs(license, nowMs); // last_verified_ok_at ?? activated_at
+    if (elapsed === null) return false;                   // 老 vault 连 activated_at 都没有 → 不误杀
+    return elapsed >= cfg.recheck.hardStopDays * 86_400_000;
 }
 ```
 
@@ -92,32 +123,31 @@ export function isDisabledByRecheck(license: LicenseVault | null, cfg: LicenseCo
 
 **放在 `src/main/license/recheck.ts`（新文件），由 `license/index.ts#init()` 启动。**
 
-- 形态：**递归 `setTimeout`**（不是 `setInterval`）——因为不同 verdict 的下次间隔不同（24h / 限流退避 1h），递归更好表达；每个 timer 都 `unref()`，不阻止进程退出（与 `warmupMachineCode` 同口径）。
-- 调度：`scheduleNext(delayMs)`
-  - `active` / `revoked` → `intervalMs`（24h）
+- 形态：**递归 `setTimeout`**（不是 `setInterval`）——因为不同 verdict 的下次间隔不同（15 天 / 失败重试 2 小时 / 限流退避 1 小时），递归更好表达；每个 timer 都 `unref()`，不阻止进程退出（与 `warmupMachineCode` 同口径）。
+- 调度：`scheduleNext(delayMs)`（现行口径见 §0.4）
+  - `active` / `revoked` / `skipped` → `intervalMs`（15 天）
   - `unknown` 且 `httpStatus === 429` → `rateLimitedRetryMs`（1h）+ 随机 0~10min jitter
-  - 其它 `unknown` → `intervalMs`（24h）
-- 启动首次复核：`init()` 里 `void runRecheck()`，**不 await、不阻塞窗口**（`license.init()` 已在 `main/index.ts:237` 被 fire-and-forget 调用）。启动即查，不加 jitter（退款时效优先）；jitter 只用在 429 退避上。
-- 进程内单例：模块级 `loopTimer`，`startRecheckLoop()` 重复调用先 `clearTimeout`。
+  - 其它 `unknown`（没拿到结论）→ `retryMs`（**2 小时**，plan-1.0 第 2 条；不可并进 15 天，否则「失败后 2 小时重试」这条需求就丢了）
+  - delay > 24 天 → **分段挂载**（`setTimeout` 超 2^31-1 ms 会被截断成 1ms）
+- 排期落盘：每次复核把「下一次发起时刻」写进 `LicenseVault.next_check_at`，`startRecheckLoop()` 读它 → 15 天节奏与 2 小时重试**跨重启存活**。
+- 启动首次复核：`init()` 只调 `startRecheckLoop()`，不再额外 `void runRecheck()`（否则启动并发两个请求，白耗限流额度）。
+- 进程内单例：模块级 `loopTimer`，`startRecheckLoop()` 重复调用先 `clearTimeout`，并把 `attemptPending` 重新置真（红线 4 的启动保护随之重新生效）。
 - 纯逻辑 `runRecheck(nowMs = Date.now())` 独立导出 → 单测可直接调，不依赖定时器。
 
-### 1.4 关键取舍 ②：宽限如何判定（**这里有一个需要用户拍板的分歧**）
+### 1.4 关键取舍 ②：宽限如何判定（**已定案：方案 A + 30/60 分段，plan-7.0 草案推荐 B 的部分作废**）
 
-| | 方案 A：自然日 | 方案 B：按真实使用时长钳制累加（**推荐**） |
-| --- | --- | --- |
-| 判定 | `now - last_verified_ok_at > 7天` | `offline_grace_used_ms >= 7天`，每次 unknown 时 `used += min(经过时长, 24h)` |
-| 字段 | 1 个（`last_verified_ok_at`；老 vault 为 null 时必须**乐观初始化为 now**，否则老用户升级后一断网就被停） | 2 个（`last_checked_at` + `offline_grace_used_ms`；老 vault null → used 默认 0，天然安全） |
-| 连续运行断网 | 7 天后停 ✅ | 7 天后停 ✅ |
-| 每天开一次断网 | 7 天后停 ✅ | 7 天后停 ✅ |
-| **出差 10 天不开机，回来当天离线打开** | ❌ **立即停用**（自然日已超 7 天）—— 正是川哥点名「不得被误伤」的场景 | ✅ 只消耗 1 天宽限（`min(10天, 24h)`），继续可用 |
-| **系统睡眠/休眠唤醒导致的定时器漂移** | 需额外处理 | ✅ 自动成立：`elapsed` 被 `min(..., intervalMs)` 钳住，一次长间隔最多只消耗 1 个周期 |
+> 本节原先逐行对比「方案 A 自然日 / 方案 B 使用时长钳制累加」，两套阈值（7 天、24h 心跳）都已作废，
+> 保留会与本节下方的定案和 §0.4 现行口径互相矛盾。差异对比只留一句：**B 的唯一卖点是「长期不开机不消耗宽限」，
+> 15 天节奏 + 30/60 分段已经覆盖同一场景**；现行阈值与字段见 §0.4。
 
-> 最后一行由 software-engineer 补充，已并入本表；A 方案不具备这个性质。
-| 攻击面 | 严格 | 略宽：断网者每 6 天才开一次软件，可用 ~42 自然日，但**实际使用时长仍只有几分钟**，收益极小 |
-| 代码量 | 少 | 多约 8 行（`min` 钳制 + 单调更新） |
+**定案（川哥 2026-09-24 拍板方案 A；plan-1.0 用分段阈值解决 B 想白送的误伤场景）**：
 
-**我推荐 B**：它同时白送了两个安全性——① 老 vault 字段缺失时天然安全（不需要"乐观初始化"这种容易漏的补丁）；② 「长时间不用软件」不消耗宽限，正面回应「出差/飞机不误伤」。代价只有 8 行。
-**不冲突说明**：24h 间隔与 7 天宽限**本身没有技术冲突**——7 天宽限只覆盖「服务端答不上来」，服务端明确答「吊销」是立即停，不受宽限影响。
+- B 方案的唯一卖点是「长时间不开机不消耗宽限」。plan-1.0 把节奏拉长到 15 天后，A 方案的那个致命场景（出差回来即停用）已经不存在——30 天提醒段 + 60 天硬停本身就盖过了「一个周期没开机」，不需要 `min(elapsed, intervalMs)` 钳制。
+- A 方案的判定是**纯函数现算**（`now - last_verified_ok_at`），没有「累加器被写坏/被回拨」的中间状态可篡改，攻击面比 B 小；`offline_grace_used_ms` 退化为兼容字段，不再参与判定。
+- B 担心的「睡眠/休眠定时器漂移」在 A 下不适用：A 不看定时器走了几次，只看真实经过天数。
+- 代价（已知情，写在这里防日后误读为缺陷）：**服务端吊销/退款后，本地最迟 `hardStopDays`（60 天）才生效**（plan-7.0 的 7 天口径为 ≤7 天）。缓解手段是 30 天起的提醒态（`needsOnlineVerify`）与包外开关 `recheck.enabled=false` 秒级回滚。
+
+**不冲突说明**：15 天间隔与 30/60 天分段**本身没有技术冲突**——分段只覆盖「服务端答不上来」，服务端明确答「吊销」是立即停，不受宽限影响。
 
 ### 1.5 关键取舍 ③：时钟回拨怎么防（全部复用既有实现）
 
@@ -125,7 +155,7 @@ export function isDisabledByRecheck(license: LicenseVault | null, cfg: LicenseCo
 2. `last_checked_at` 只增不减；`elapsed` 取 `max(0, ...)` → 回拨时宽限**不会倒退也不会暴涨**。
 3. 复核成功时读 HTTP `Date` 响应头（GMT，无时区歧义）→ `raiseLicenseServerFloor(license, dateMs)` 抬高 `server_time_floor`（**已存在的函数，直接复用**）。拿不到就跳过，不影响主流程。
 4. `revoked_by_server` 一旦置 true，**只有下次复核成功才能清 false**，本地改时间无法复活。
-5. 停用后**继续 24h 轮询** → 若属误判，服务端恢复后自动自愈。
+5. 停用后**继续按 `intervalMs`（15 天）轮询** → 若属误判，服务端恢复后自动自愈（`applyVerdict` 的 active 分支会清 `revoked_by_server`）。
 
 ### 1.6 停用如何生效（「马上不能用」的两个闸门）
 
@@ -205,7 +235,7 @@ license: {
 ### 1.7 误判停用是资损级事故 —— 七道「宁可放过也不误杀」
 
 1. **白名单码**：只有 `LICENSE_INVALID` / `LICENSE_EXPIRED` 两个码能立即停用。`LICENSE_NOT_FOUND`（key 不存在 —— 可能是服务端数据迁移/恢复）、`429`、`5xx`、网络失败、超时、JSON 畸形、非 200/400 状态码 → **一律 unknown 走宽限**。
-2. **429 必须照常累加宽限**（**不可**因「服务端在限流」就免扣）：否则攻击者只要对自身出口 IP 打满 verify 限流（60/min），客户端就永远只能拿到 429 → **永不停用，限流直接变成永久续命后门**。429 累加宽限后，攻击者撑死也就 7 天（且要 7×24h 持续打满限流）。429 的下次调度仍走 `rateLimitedRetryMs`（1h + jitter）。
+2. **429 必须照常计入离线宽限**（**不可**因「服务端在限流」就免扣）：否则攻击者只要对自身出口 IP 打满 verify 限流（60/min），客户端就永远只能拿到 429 → **永不停用，限流直接变成永久续命后门**。方案 A 下这条天然成立：429 只让 `last_verified_ok_at` 不推进，真实天数照常在 `hardStopDays`（60 天）后触发停用。429 的下次调度走 `rateLimitedRetryMs`（1h + jitter）。
 3. **不设「二次确认」**（原 `doubleConfirm` 已**取消**）：它防不住想防的东西——服务端系统性错误或代理缓存的错误响应，第二次请求会命中同样的结果；反而引入「第一次明确吊销 + 第二次 429」这类定义不清的中间态，以及上述限流后门。防误杀靠本条目的其余五道。
 4. **异常绝不上抛**：`runRecheck` 全流程 `try/catch`，任何异常 → `unknown`，绝不影响主进程。
 5. **软失效**：只置标记，不销毁任何数据。
@@ -218,18 +248,19 @@ license: {
 
 | # | 路径 | 改动 | 说明 |
 | --- | --- | --- | --- |
-| 1 | `src/main/license/types.ts` | 改 | `LicenseConfig` 新增 `recheck: RecheckConfig`；`LicenseVault` 新增 4 个可选字段（含注释说明老 vault 无需迁移） |
+| 1 | `src/main/license/types.ts` | 改 | `LicenseConfig` 新增 `recheck: RecheckConfig`（7 键：`enabled` / `intervalMs` / `retryMs` / `offlineGraceDays` / `hardStopDays` / `timeoutMs` / `rateLimitedRetryMs`）；`LicenseVault` 新增 5 个可选字段（含注释说明老 vault 无需迁移） |
 | 2 | `src/main/license/constants.ts` | 改 | 新增 `LICENSE_VERIFY_API_PATH(licenseKey)`、`DEFAULT_RECHECK_*` 一组常量 |
 | 3 | `src/main/license/config.ts` | 改 | `cloneDefault()` + `mergeConfig()` 解析 `recheck` 段（字段级兜底、非法值回落默认，与既有风格一致） |
-| 4 | `src/main/license/vault.ts` | 改 | **`sanitizeLicense()` 白名单里登记 4 个新字段**（漏了就写进去读不出来） |
+| 4 | `src/main/license/vault.ts` | 改 | **`sanitizeLicense()` 白名单里登记 5 个新字段**（`last_checked_at` / `last_verified_ok_at` / `offline_grace_used_ms` / `revoked_by_server` / `next_check_at`；漏了就写进去读不出来——`next_check_at` 曾漏登，导致跨重启排期静默失效） |
 | 5 | `src/main/license/errors.ts` | 改 | `LicenseErrorCode` 追加：`LIC_RECHECK_NETWORK` / `LIC_RECHECK_RATE_LIMITED` / `LIC_RECHECK_BAD_RESPONSE` / `LIC_RECHECK_REVOKED` / `LIC_RECHECK_GRACE_EXHAUSTED` / `LIC_RECHECK_UNKNOWN` |
-| 6 | `src/main/license/recheck.ts` | **新增** | 复核内核：网络请求 + 响应分类 + 宽限累加 + 落盘 + 定时调度 |
-| 7 | `src/main/license/index.ts` | 改 | ① `init()` 内 `startRecheckLoop()` + `void runRecheck()`；② `getState()` 内停用闸门（**插在 `verifyToken` 之前，压过硬件宽限**，见 §1.6）；③ `deactivate()` 显式处置复核字段；④ `applySignedToken()` 显式重置复核字段（新授权不继承旧停用标记）；⑤ `assertFeature` 命中停用时清 `payloadCache`；⑥ 导出 `setStateChangeListener()` |
+| 6 | `src/main/license/recheck.ts` | **新增** | 复核内核：网络请求 + 响应四态分类 + 停用阈值现算（方案 A）+ 排期落盘 + 递归定时器（长 delay 分段挂载） |
+| 7 | `src/main/license/index.ts` | 改 | ① `init()` 内**只**调 `startRecheckLoop()`（不再额外 `void runRecheck()`，首次延迟由 `next_check_at` 决定）；② `getState()` 内停用闸门（**插在 `verifyToken` 之前，压过硬件宽限**，见 §1.6）+ 提醒态 `needsOnlineVerify`；③ `deactivate()` 显式处置复核字段；④ `applySignedToken()` 显式重置复核字段（新授权不继承旧停用标记）；⑤ `assertFeature` 命中停用时清 `payloadCache`；⑥ 导出 `setStateChangeListener()` + `setRecheckDisableHook(notifyStateChanged)` |
 | 8 | `src/main/license/feature-gate.ts` | 改 | `assertFeature()` 验签通过后追加 `isDisabledByRecheck()` 闸门 |
 | 9 | `src/main/license/assets/license.config.json` | 改 | 补 `recheck` 段默认值 |
 | 10 | `src/__tests__/license-recheck.test.ts` | **新增** | 单测（见 T04） |
-| 11 | `src/main/index.ts` | 改（P2） | 注册状态变化广播：`BrowserWindow.getAllWindows().forEach(w => w.webContents.send('activation:state-changed', state))` |
-| 12 | `src/preload/index.ts`、`src/shared/activation-types.ts`、`src/renderer/src/store/activationStore.ts` | 改（P2） | `onActivationStateChanged(cb)` 订阅 + store 更新（运行中被停用的 UI 反馈） |
+| 11 | `src/main/index.ts` | 改 | 注册状态变化广播：`license.setStateChangeListener(state => …webContents.send('activation:state-changed', state))`（P2 已落地） |
+| 12 | `src/preload/index.ts`、`src/shared/activation-types.ts`、`src/renderer/src/store/activationStore.ts` | 改 | `onStateChanged(cb)` 订阅 + store 更新（运行中被停用/进入提醒态的 UI 反馈，P2 已落地） |
+| 13 | `src/main/license/redeem.ts`、`purchase-poll.ts`、`verifier.ts` | 配套 | plan-1.0 的配套能力：收银台 URL 带 `productId`、按机器码领取待激活授权（`fetchPendingLicenses`）+ 支付后轮询、错误码白名单 `publicErrorFor` 与「打开授权管理页」引导。详见 `D:/ProductSpace/plan-1.0.md` |
 
 ---
 
@@ -242,13 +273,17 @@ license: {
 export interface RecheckConfig {
     /** 总开关；关掉后 getState/assertFeature 完全忽略停用标记（资损事故回滚手段） */
     enabled: boolean;
-    /** 复核间隔（ms），默认 24h */
+    /** 复核间隔（ms），默认 15 天；服务端 verify 响应下发 `nextCheckAfterMs` 时优先采用下发值 */
     intervalMs: number;
-    /** 离线宽限天数：服务端「答不上来」时最多可继续使用的天数 */
+    /** 复核「拿不到明确结论」后的重试间隔（ms），默认 2 小时（持续到成功为止） */
+    retryMs: number;
+    /** 进入「需联网验证」提醒段的天数阈值（提醒但不减功能），默认 30 天 */
     offlineGraceDays: number;
+    /** 自动失效（未激活）的天数阈值，默认 60 天 */
+    hardStopDays: number;
     /** 单次请求超时（ms），默认 8000（比 redeem 15s 短：启动路径上的旁路请求） */
     timeoutMs: number;
-    /** 命中 429 后的退避间隔（ms），默认 1h（429 照常累加宽限，见 §1.7 第 2 条） */
+    /** 命中 429 后的退避间隔（ms），默认 1h（429 照常消耗宽限，见 §1.7 第 2 条） */
     rateLimitedRetryMs: number;
 }
 
@@ -256,9 +291,11 @@ export interface LicenseVault {
     // ...既有字段不变
     /** 上次发起复核的时刻（不论成败），ms；单调递增，防回拨 */
     last_checked_at?: number | null;
-    /** 上次服务端明确回答 ACTIVE 的时刻，ms；只进日志与自愈观测 */
+    /** 下次复核排期时刻（ms）。`runRecheck` 与 `startRecheckLoop` 共用 → 15 天节奏/2 小时重试跨重启存活 */
+    next_check_at?: number | null;
+    /** 上次服务端明确回答 ACTIVE 的时刻，ms；**方案 A 的停用判定基准**（缺失回落 `activated_at`） */
     last_verified_ok_at?: number | null;
-    /** 已消耗的离线宽限（ms），默认 0；复核成功即清零 */
+    /** 已消耗的离线宽限（ms），默认 0；**plan-1.0 后退化为兼容字段**，恒置 0，不参与判定 */
     offline_grace_used_ms?: number;
     /** 服务端明确回答吊销/过期 → 本地停用；只有复核成功才清 false */
     revoked_by_server?: boolean | null;
@@ -293,9 +330,29 @@ export function stopRecheckLoop(): void;
 
 /**
  * 停用判定唯一出口：getState 与 assertFeature 共用。
- * revoked_by_server = true  或  已耗宽限 >= offlineGraceDays
+ * revoked_by_server = true（权威结论，不受红线 4 保护）
+ *   或（本次进程已发起过复核 且 闲置天数 >= hardStopDays）
+ * `attemptPending` 默认读模块状态，单测显式传入以获得确定性。
  */
-export function isDisabledByRecheck(license: LicenseVault | null, cfg: LicenseConfig): boolean;
+export function isDisabledByRecheck(
+    license: LicenseVault | null,
+    cfg: LicenseConfig,
+    nowMs?: number,
+    attemptPending?: boolean,
+): boolean;
+
+/** 提醒态判定：闲置 >= offlineGraceDays 且 < hardStopDays → needsOnlineVerify（功能不减） */
+export function isRecheckAttentionNeeded(
+    license: LicenseVault | null,
+    cfg: LicenseConfig,
+    nowMs?: number,
+): boolean;
+
+/** 本次进程是否还没发起过复核尝试（红线 4） */
+export function hasPendingRecheckAttempt(): boolean;
+
+/** 停用钩子（门面注入 notifyStateChanged，避免 index ↔ recheck 循环依赖） */
+export function setRecheckDisableHook(fn: (() => void) | null): void;
 ```
 
 ### 3.3 内部函数（`recheck.ts`，不导出）
@@ -315,12 +372,22 @@ async function fetchLicenseStatus(licenseKey: string): Promise<VerifyResponse>;
 
 function classify(res: VerifyResponse): RecheckVerdict;
 
-/** 按 verdict 计算并落盘；返回 {license, disabled} */
-function applyVerdict(vault: VaultData, verdict: RecheckVerdict, nowMs: number):
-    {license: LicenseVault | null; disabled: boolean};
+/** 按 verdict 更新复核字段（排期 `next_check_at` 由 `runRecheck` 在同一次 writeVault 里补齐） */
+function applyVerdict(
+    license: LicenseVault,
+    verdict: RecheckVerdict,
+    nowMs: number,
+    serverTimeMs: number | null,
+): {license: LicenseVault; disabled: boolean};
 
-/** 递归 setTimeout + unref；按上次 verdict 选 24h / 1h+jitter */
+/** 由 outcome 算下次间隔：active/revoked→intervalMs（或服务端下发值）；429→rateLimitedRetryMs+抖动；其它 unknown→retryMs */
+function nextDelay(outcome: RecheckOutcome): number;
+
+/** 递归 setTimeout + unref；delay 由 verdict 决定（15 天 / 2 小时 / 1 小时+抖动），超 24 天分段挂载 */
 function scheduleNext(delayMs: number): void;
+
+/** 首次延迟：读 vault 的 next_check_at（未到点→等到点；已过点/无值→0 = 启动即查） */
+async function initialDelay(): Promise<number>;
 ```
 
 **响应解析要点（照抄 `machine-probe.ts` 的兼容写法）**：服务端统一壳 → 先取 `body.data ?? body`；`429` 无 body 必须**先判 `response.status` 再 `response.json()`**，否则 `json()` 抛异常会被误当成 unknown（结果一致但日志会误报 `BAD_RESPONSE`，不利排查）。
@@ -340,12 +407,13 @@ export function setStateChangeListener(fn: ((state: ActivationState) => void) | 
 
 主干文字版：
 
-1. `main/index.ts` → `license.init()` → `warmupMachineCode()` + `startRecheckLoop()` + `void runRecheck()`（不 await）。
+1. `main/index.ts` → `license.init()` → `warmupMachineCode()` + `startRecheckLoop()`（fire-and-forget；首次延迟由 vault 的 `next_check_at` 决定）。
 2. `runRecheck()` → `readVault()` → `extractLicenseKeyFromToken(signed_token)` → 无 token/key 或开关关闭 → `skipped` 返回。
-3. `fetchLicenseStatus(key)` → `classify()` → `applyVerdict()` → `writeVault()`。
-4. `verdict === 'revoked'` 或宽限耗尽 → 调 `setStateChangeListener` 回调广播。
-5. `scheduleNext(...)`。
-6. 之后每次 `getState()` / `assertFeature()` 都会过 `isDisabledByRecheck()` 闸门。
+3. `fetchLicenseStatus(key)` → `markAttemptDone()`（解除红线 4）→ `classify()` → `applyVerdict()` → `writeVault()`（同一次写入 `next_check_at`）。
+4. `verdict === 'revoked'` 或宽限耗尽 → 调 `setRecheckDisableHook` 注入的回调广播状态。
+5. `scheduleNext(nextDelay(outcome))`。
+6. 之后每次 `getState()` / `assertFeature()` 都会过 `isDisabledByRecheck()` 闸门；`getState()` 另过 `isRecheckAttentionNeeded()` 置提醒态 `needsOnlineVerify`（不减功能）。
+7. 支付到账旁路：打开收银台 → `startPurchasePolling()` → 每 60s 问 `/api/licenses/pending?machineId=` → 命中即本地验签落盘激活（窗口 30 分钟，细节见 plan-1.0）。
 
 ---
 
@@ -353,15 +421,16 @@ export function setStateChangeListener(fn: ((state: ActivationState) => void) | 
 
 | 风险 | 等级 | 处置 |
 | --- | --- | --- |
-| **误判停用（资损级）** | 高 | 六道防线见 §1.7：白名单码 + 429 照常扣宽限 + 异常兜底 + 软失效 + 自愈 + 配置秒级回滚 |
+| **误判停用（资损级）** | 高 | 七道防线见 §1.7：白名单码 + 429 照常消耗宽限 + 异常兜底 + 软失效 + 自愈 + 配置秒级回滚 + 红线 4（本次进程未问过就不停用） |
 | 服务端数据恢复/迁移导致全体 `LICENSE_NOT_FOUND` | 高 | `LICENSE_NOT_FOUND` **明确归入 unknown**（不停用），只走宽限 |
 | 服务端轮换签名密钥但库内 token 未重签 → 全体 `LICENSE_INVALID` | 中 | 同上（这是唯一能"全体误杀"的码）；**需向服务端确认**（见 §7 待明确 3），本轮靠软失效 + 自愈 + 配置回滚兜底 |
 | 企业 NAT 出口 IP 集中启动 → 429 | 中 | 429 → unknown（不停用）+ 1h 退避 + jitter；用户零影响，只是当天首查失败 |
-| **429 若免扣宽限 → 限流变成永久续命后门** | 高 | 429 **必须照常累加宽限**（§1.7 第 2 条）；这是本方案唯一能被攻击者主动利用的口子 |
+| **429 若免扣宽限 → 限流变成永久续命后门** | 高 | 429 **必须照常消耗宽限**（§1.7 第 2 条）；这是本方案唯一能被攻击者主动利用的口子 |
 | **退款后换硬件 → 硬件宽限绕过停用** | 高 | 停用判定插在 `verifyToken` 之前、优先级高于 `resolveHardwareGrace`（§1.6）。已修，实现时勿放错位置 |
-| 已吊销授权被客户端每天复核 → 服务端每天写一条 `license_events(VERIFY_FAILED)` | 中 | **需服务端配合**：按 `(licenseId, 日期)` 去重或对该场景不写事件（见 §7 待明确 1） |
-| 每次成功复核一次 DB UPDATE | 低 | 1 次/license/24h；1 万活跃 ≈ 0.12 QPS 均值，可接受 |
-| 系统睡眠导致定时器漂移 | 低 | 递归 `setTimeout` 基于真实时间，唤醒后触发；`elapsed` 被 `min(..., 24h)` 钳住，不会一次耗尽宽限 |
+| 已吊销授权被客户端持续复核 → 服务端持续写 `license_events(VERIFY_FAILED)` | 中 | 15 天节奏已把频次降到 ~1/15；**仍需服务端配合**按 `(licenseId, 日期)` 去重或对该场景不写事件（见 §7 待明确 1） |
+| 每次成功复核一次 DB UPDATE | 低 | 1 次/license/**15 天**；1 万活跃 ≈ 0.008 QPS 均值，可忽略 |
+| 系统睡眠导致定时器漂移 | 低 | 递归 `setTimeout` 基于真实时间，唤醒后触发；方案 A 按自然日现算，漂移不额外消耗宽限 |
+| **`setTimeout` 长 delay 被 32 位截断** | 高 | delay > 2^31-1 ms（≈24.8 天）会被 Node/浏览器**静默截断成 1ms** → 15 天节奏变成每毫秒打一次服务端。`scheduleNext` 以 `MAX_TIMER_MS`（24 天）分段挂载；单测用例 21 用 30 天排期作为回归闸 |
 | 用户改系统时间规避 | 低 | 复用 `effectiveNow` + `server_time_floor`(HTTP Date) + `anchor` 三路下界；`revoked_by_server` 只能由复核成功清除 |
 | 停用后 `payloadCache` 残留旧载荷 | 低 | 停用分支显式 `payloadCache = null`。效果是**放宽**更新（去掉陈旧 `update_until` 的误拦），与 `update-gate`「未激活不受限」口径自洽；**不是**收紧更新权限。仅影响更新软门控，付费功能闸门走现算验签不受影响 |
 | 本次改动引入新崩溃点 | 低 | 全程 fire-and-forget + try/catch；复核失败不影响任何既有判定路径 |
@@ -374,45 +443,38 @@ export function setStateChangeListener(fn: ((state: ActivationState) => void) | 
 | 任务 | 名称 | 文件 | 依赖 | 优先级 |
 | --- | --- | --- | --- | --- |
 | **T01** | 契约与存储层：类型 / 常量 / 配置解析 / vault 白名单 / 错误码 / 默认配置 | `license/types.ts`、`license/constants.ts`、`license/config.ts`、`license/vault.ts`、`license/errors.ts`、`license/assets/license.config.json` | — | **P0** |
-| **T02** | 复核内核 `recheck.ts`：网络请求 + 响应分类 + 宽限累加（**含 429 照常累加**）+ 落盘 + 定时调度 | `license/recheck.ts`（新增） | T01 | **P0** |
+| **T02** | 复核内核 `recheck.ts`：网络请求 + 四态分类 + 停用阈值现算（方案 A，429 照常消耗宽限）+ 排期落盘 + 分段定时调度 | `license/recheck.ts`（新增） | T01 | **P0** |
 | **T03** | 门面与闸门接入：`init` 启动循环、`getState`/`assertFeature` 停用闸门（**优先级高于硬件宽限**）、`deactivate` 与 `applySignedToken` 字段重置、`payloadCache` 清理、状态监听出口 | `license/index.ts`、`license/feature-gate.ts` | T01, T02 | **P0** |
-| **T04** | 单测 `license-recheck.test.ts`：四态分类、宽限累加与钳制、429/5xx/网络、回拨防复活、停用与自愈、开关关闭、停用压过硬件宽限 | `src/__tests__/license-recheck.test.ts`（新增） | T02, T03 | **P0** |
+| **T04** | 单测 `license-recheck.test.ts`（另配套 `license-recheck-config.test.ts`、`license-purchase-poll.test.ts`、`activation-store-broadcast.test.ts`）：四态分类、30/60 分段阈值、429/5xx/网络、回拨防复活、停用与自愈、开关关闭、停用压过硬件宽限、排期跨重启、红线 4、长定时器分段 | `src/__tests__/license-recheck*.test.ts` 等（新增） | T02, T03 | **P0** |
 | **T05** | 运行态 UI 通知（P2）：主进程广播 → preload 订阅 → 渲染层 store 更新 | `src/main/index.ts`、`src/preload/index.ts`、`src/shared/activation-types.ts`、`src/renderer/src/store/activationStore.ts` | T03 | P1 |
 
-**T04 用例清单（验收口径）**
+**T04 验收口径（现行 22 例，分组；具体断言以 `src/__tests__/license-recheck.test.ts` 为准）**
 
-1. 200 + `status:'ACTIVE'` → `active`，`used` 归零、`revoked_by_server=false`
-2. 400 + `LICENSE_INVALID` → `revoked`（单次即停用，**无二次确认**）
-3. 400 + `LICENSE_EXPIRED` → `revoked`
-4. 400 + **`LICENSE_NOT_FOUND`** → **`unknown`，不停用**（核心防误杀）
-5. 429（空 body）→ `unknown` 且**照常累加宽限**，下次调度 = `rateLimitedRetryMs`（防限流后门）
-5b. 连续 429 七天（每 1h 一次）→ 宽限耗尽停用（证明限流不能续命）
-6. 5xx / fetch 抛异常 / 超时 → `unknown`
-7. 连续 7 次 unknown（间隔 24h）→ 第 7 次停用；期间 `used` 逐次累加
-8. **长时间不开机**：单次 unknown 且 `now - last_checked_at = 10天` → `used` 只加 24h（方案 B 的钳制）
-9. 时钟回拨：`now` 回退 → `used` 不减、`last_checked_at` 不回退、`revoked_by_server` 不复活
-10. 无 token / `extractLicenseKeyFromToken` 返回 null / `recheck.enabled=false` → `skipped`，状态零改动
-11. 停用后复核成功 → 自愈恢复
-12. `assertFeature` 在停用时拒绝（云同步被拦），且 `currentPayload()` 返回 null（**更新软门控据此放行**，与 `update-gate` 未激活口径自洽）
-13. **停用压过硬件宽限**：`revoked_by_server=true` 且机器码不匹配（强码变、弱码同）→ 仍返回 inactive，不得进入 7 天硬件宽限
-14. `deactivate()` 后 4 个复核字段均为空/0/false
+- **四态分类（1–7）**：200+ACTIVE → active（刷新 `last_verified_ok_at`、清 `revoked_by_server` = **停用后自愈**）；400+`LICENSE_INVALID` / `LICENSE_EXPIRED` → revoked 单次即停用（无二次确认）；400+**`LICENSE_NOT_FOUND`** → unknown 不停用（核心防误杀）；429 空 body → unknown（必须先判 status 再 json）；网络/超时抛异常 → unknown；JSON 畸形 → unknown。
+- **阈值分段（8–10、22）**：停用阈值 = `hardStopDays`（阈值前一天 false、当天 true）；`last_verified_ok_at` 缺失回落 `activated_at`，两者皆无 → 不误杀；`revoked_by_server=true` 无视红线 4 与宽限一律禁用；纯函数按配置原样判定，阈值大小关系由 config 层 clamp 保证（用例 22）。
+- **闸门消费点（11–12）**：`getState` 停用闸门压过验签（token 合法也返回 `token_invalid`）；`deactivate()` 清空 5 个复核字段（含 `next_check_at`）但**保留** `watermark` / `server_time_floor`。
+- **开关 / 排期 / 宽限耗尽（13–21）**：`recheck.enabled=false` → 恒不停用且 `runRecheck` 直接 skipped 不发请求；连续 429 跨过 `hardStopDays` 当天停用（`revoked_by_server` 仍 false，证明限流不能续命）；排期落盘 unknown→`+retryMs`、active→`+intervalMs`、429→`+rateLimitedRetryMs`+抖动；红线 4 未问过不停用（纯函数 16、`getState` 消费 21，其中 21 用 30 天排期同时守住 `setTimeout` 32 位截断回归）；红线 4 解除（闲置 90 天 + 本次问不到 → 本次即停用）；提醒段（18 纯函数 / 19 `getState` 仍 activated、功能不减、只置 `needsOnlineVerify`）；排期跨重启（20：未到点不请求、已过点启动即查）。
+- **时钟回拨**：`now` 回退 → `last_checked_at` 不回退、`revoked_by_server` 不复活（由 `effectiveNow` + 三路下界保证，见 `license-clock-rollback` 套件）。
+- **配置层（`license-recheck-config.test.ts`，5 例）**：默认 15d/2h/30/60/1h；六键覆盖生效；`offlineGraceDays` 抬到 `ceil(intervalMs/天)+5`；`hardStopDays >= offlineGraceDays`；非法值回落默认 / 非对象整段默认。
 
 ---
 
-## 7. 待明确事项（请主理人转问用户 / 服务端）
+## 7. 待明确事项（已定案的标注结论，未定的仍需服务端 / 用户拍板）
 
-1. **宽限计时方案 A vs B**（§1.4）：A 简单但「出差 10 天不开机、回来当天离线打开」会被停；B 多 8 行、不误伤。**需用户拍板**。
-2. **「马上不能用」的时效上限**：本方案实际生效延迟 = 「用户下次启动」或「运行中最多 24h」；若首查命中 429，则再多等 1h。**不可能秒级**（Electron 客户端无可靠推送通道）。请与用户对齐这个预期。
-3. **服务端：密钥轮换是否会同步重签库内 `signedToken`？** 若不会，`LICENSE_INVALID` 会在轮换时出现全体误判（本轮靠二次确认 + 配置回滚兜底，但根因在服务端）。
+1. ~~**宽限计时方案 A vs B**~~ —— **已定案：方案 A + 30/60 分段**（§1.4，川哥 2026-09-24 拍板）。
+2. **「马上不能用」的时效上限**：plan-1.0 口径 = 「下次启动到 `next_check_at` 点」或「运行中每 15 天一次」；问不到才收敛到 2 小时重试，首查命中 429 再多等 1h。**不可能秒级**（Electron 客户端无可靠推送通道）。已随 15 天节奏与用户对齐（plan-1.0 锁定决策）。
+3. **服务端：密钥轮换是否会同步重签库内 `signedToken`？** 若不会，`LICENSE_INVALID` 会在轮换时出现全体误判（本轮靠软失效 + 自愈 + 配置回滚兜底，但根因在服务端）。**未确认。**
 4. **服务端：建议新增专用复核端点**（下一轮，本轮不依赖）：`POST /api/licenses/verify`，body `{signedToken, machineId}`；**200 + `data.status` 明确四态**（ACTIVE/EXPIRED/REVOKED/REISSUED），把「吊销」与「签名校验失败」分开；响应带 `serverTime`；**不写库或按天节流**；**按 licenseKey 限流**而非按 IP。
-5. **服务端：`VERIFY_FAILED` 事件按天去重**（否则已退款授权会被客户端每天写一条事件，永久增长）。
+5. **服务端：`VERIFY_FAILED` 事件按天去重**（否则被吊销授权每 15 天仍写一条事件，长期无界增长）。
 6. **服务端：verify 限流 60/min/IP 是否需要放宽**（企业 NAT 场景；客户端已按 unknown 处理，不影响用户，仅影响复核及时性）。
 7. **`GET` 把 licenseKey 放 URL path** —— 是否接受它出现在网关/代理访问日志中？（现状如此，本轮沿用）
 8. ~~`doubleConfirm` 二次确认~~ —— **已取消**（§1.7 第 3 条）：防不住系统性错误，反引入限流后门风险。无需再拍板。
-9. **停用后是否继续 24h 轮询**：建议保持（自愈优先）；若在意流量/服务端事件增长，可改为 7 天一次。
-10. **`deactivate()` 目前会丢弃 `watermark` / `server_time_floor`**（既有行为）：本轮保持不动，已登记为独立待办——去激活本不该清空单调时间下界，但属既有安全语义变更，需单独评审，不在本轮范围。
+9. ~~**停用后是否继续轮询**~~ —— **已定案：继续按 `intervalMs`（15 天）轮询**，自愈优先；15 天节奏本身已把流量与服务端事件增长压到很低。
+10. ~~**`deactivate()` 丢弃 `watermark` / `server_time_floor`**~~ —— **已修**：去激活只清 token / `activated_at` / mid / 5 个复核字段，**保留**单调时间下界（单测用例 12 守住）。
 11. **「退款/停用用户是否还应拿到新版本更新」**：本轮按 `update-gate` 既有口径**接受放行**（停用 ≈ 未激活，不受更新软门控限制）。若产品要收紧，需把停用状态传进 `evaluateUpdateEntitlement`（改签名），是独立决策。此问由 software-engineer 提出。
-10. **被停用后的 UI 形态**：弹窗 / toast / 页面引导？当前设计复用既有 `degraded: 'token_invalid'` 的「重新激活」引导，不新增文案与错误码。若需要区分「授权已失效」与「离线过久」，需新增 `ActivationDegradedReason`（会改动 `shared/activation-types.ts` 与多语言文案）。
+12. **被停用后的 UI 形态**：弹窗 / toast / 页面引导？当前实现复用既有 `degraded: 'token_invalid'` 的「重新激活」引导，不新增文案与错误码；提醒态另用 `needsOnlineVerify`（不减功能，只提示联网核实）。若要区分「授权已失效」与「离线过久」，需新增 `ActivationDegradedReason`（会改动 `shared/activation-types.ts` 与多语言文案）。
+13. **收银台 URL 的 `productId` 目前只是透传**：`billing-license-service` 的商品维度只有 SKU（档位），无 `products.product_code` 列。静态收银台按 SKU 匹配档位，因此传入 `productId` 不改变任何行为；要做真正的「多产品共用一套服务、按产品码过滤档位」需服务端加列 + V10 迁移 + 收银台按产品码取商品列表。**未做，需产品侧确认是否要这一层。**
+14. **启动首查改为按 `next_check_at` 排期**（plan-1.0 / C1）：好处是 15 天节奏与 2 小时重试跨重启存活、不浪费限流额度；代价是「退款/吊销后靠启动即查」这条即时性被削弱，最坏要等到排期点。**回滚一行**：把 `recheck.ts#initialDelay()` 返回值改成常量 `0` 即恢复旧口径（`next_check_at` 字段保留但不被消费，不影响任何既有判定）。
 
 ---
 

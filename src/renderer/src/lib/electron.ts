@@ -288,6 +288,11 @@ interface ElectronAPI {
         addCustom: (input: { name: string; configPath: string; supportsSkills?: boolean; skillsPath?: string }) => Promise<CustomClientDef>;
         /** 删除用户手动客户端 */
         removeCustom: (id: string) => Promise<void>;
+        /**
+         * 删除客户端数据：清本应用安装的技能文件 + MCP 配置信息（共享配置文件仅就地清 MCP 键）；
+         * deleteWholeDir=true 时连配置根目录一并删除（守卫在主进程）
+         */
+        deleteClientData: (id: string, deleteWholeDir: boolean) => Promise<void>;
     };
     config: {
         read: (client?: AnyClientId) => Promise<any>;
@@ -737,6 +742,8 @@ const mockAPI: ElectronAPI = {
         }),
         removeCustom: async () => {
         },
+        deleteClientData: async () => {
+        },
     },
     config: {
         read: async () => ({mcpServers: {}}),
@@ -975,9 +982,11 @@ const mockAPI: ElectronAPI = {
             features: [],
             source: 'trial',
             degraded: null,
+            needsOnlineVerify: false,
         }),
         getMachineCode: async (): Promise<string> => 'AI-MOCK-MACHINE-CODE-0001',
         getPurchaseUrl: async (): Promise<string> => '',
+        getAccountPageUrl: async (): Promise<string> => '',
         redeem: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),
         importLicenseFile: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),
         importLicenseText: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),
@@ -994,8 +1003,12 @@ const mockAPI: ElectronAPI = {
             features: [],
             source: 'none',
             degraded: null,
+            needsOnlineVerify: false,
         }),
         hasFeature: async (): Promise<boolean> => false,
+        // 浏览器预览态没有主进程推送，返回空的退订函数即可
+        onStateChanged: () => () => {
+        },
     },
     account: {
         login: async (): Promise<AccountAuthResult> => ({ok: false, category: 'auth', error: 'Not available in browser'}),

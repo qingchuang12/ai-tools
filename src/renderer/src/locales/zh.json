@@ -10,7 +10,8 @@
       "unitDay": "天",
       "unitYear": "年",
       "unitHour": "小时",
-      "unitMin": "分"
+      "unitMin": "分",
+      "needsOnlineVerify": "需联网验证"
     },
     "feature": {
       "cloudSync": "云同步",
@@ -54,12 +55,16 @@
       "switch": "换绑新授权",
       "switchSuccess": "已换绑，新授权生效",
       "unbindFailed": "旧授权解绑未成功（不影响新授权使用，可稍后在已激活页重试）",
-      "cancelSwitch": "取消换绑"
+      "cancelSwitch": "取消换绑",
+      "openAccountPage": "打开授权管理页面"
     },
     "errors": {
       "generic": "激活失败，请检查激活码或联系支持",
       "network": "网络连接失败，请检查网络后重试",
-      "locked": "该功能需要有效的授权"
+      "locked": "该功能需要有效的授权",
+      "machineBound": "该授权已绑定其他设备",
+      "notActive": "该授权当前不可用，请联系支持",
+      "loginRequired": "请先登录后再激活"
     }
   },
   "storeSource": {
@@ -642,7 +647,7 @@
     "addClientRequire": "请填写客户端名称和配置路径",
     "addClientDuplicate": "已存在同名客户端，请使用其他名称",
     "clientAdded": "客户端已添加",
-    "clientRemoved": "客户端已移除",
+    "clientRemoved": "客户端已删除",
     "addClientFailed": "添加客户端失败",
     "clientName": "客户端名称",
     "enterClientName": "我的客户端",
@@ -650,7 +655,15 @@
     "enterSkillsPath": "输入自定义 Skills 目录...",
     "supportsSkillsLabel": "支持 Skills",
     "browse": "浏览",
-    "removeClient": "移除客户端",
+    "removeClient": "删除客户端",
+    "removeClientConfirmTitle": "删除客户端「{{name}}」？",
+    "removeClientConfirmDesc": "确认后将清除该客户端的 MCP 配置与本应用安装的技能文件（你手动放入的内容不受影响）。请先确认该客户端已从本机卸载——若客户端仍在使用，可能影响其正常使用。",
+    "removeClientConfirmDirOption": "同时删除整个配置目录",
+    "removeClientConfirmDirDanger": "⚠ 整目录删除不可恢复，将连同该客户端的全部本地数据一并清除",
+    "removeClientConfirmButton": "确认删除",
+    "clientDataDeleted": "已清除该客户端的 MCP 配置与技能文件",
+    "clientDirDeleted": "已删除该客户端的整个配置目录",
+    "clientRemovedFailed": "删除客户端失败",
     "about": "关于",
     "aboutDesc": "AI-Tools v1.0.0",
     "aboutTitle": "关于 AI-Tools",
@@ -1010,7 +1023,7 @@
     "collapse": "收起",
     "disabled": "已关闭",
     "notSet": "未设置",
-    "desc": "把云端当作一个客户端：会在远端自动创建 {dir} 目录存放 MCP 配置与 Skill。配置完成后可在「我的库」手动上传 / 下载。",
+    "desc": "把云端当作一个客户端：会在远端自动创建 {{dir}} 目录存放 MCP 配置与 Skill。配置完成后可在「我的库」手动上传 / 下载。",
     "gitChannel": "Git 仓库",
     "sftpChannel": "SFTP",
     "gitMissing": "未检测到系统 git，Git 通道无法使用。请先安装 Git 并在「运行时环境」中刷新。",

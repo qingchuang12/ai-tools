@@ -32,6 +32,13 @@ export const useActivationStore = create<ActivationStore>((set, get) => ({
         if (started) return;
         started = true;
         void get().refresh();
+        // 主进程状态跃迁即时上屏（plan-1.0 / C5）：支付后自动到账、复核停用都发生在这里，
+        // 下面的 ticker 只负责倒计时重渲染，不会主动拉取状态。
+        try {
+            useElectronAPI().activation.onStateChanged((st) => set({state: st}));
+        } catch {
+            /* 浏览器预览态无该通道：靠 ticker 兜底 */
+        }
         // 单例 ticker：每秒刷新倒计时；到期则触发主进程降级并落盘
         setInterval(() => {
             const s = get().state;

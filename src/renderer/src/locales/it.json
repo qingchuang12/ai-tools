@@ -10,7 +10,8 @@
       "unitDay": "g",
       "unitYear": "anni",
       "unitHour": "h",
-      "unitMin": "min"
+      "unitMin": "min",
+      "needsOnlineVerify": "È richiesta la verifica online"
     },
     "feature": {
       "cloudSync": "Sincronizzazione cloud",
@@ -50,12 +51,16 @@
       "upgrade": "Aggiorna",
       "needActivation": "Per usare la sincronizzazione cloud è necessaria l'attivazione",
       "openFeatures": "Funzioni sbloccate con la prova o l'attivazione",
-      "featureLocked": "Bloccato · disponibile dopo la prova o l'attivazione"
+      "featureLocked": "Bloccato · disponibile dopo la prova o l'attivazione",
+      "openAccountPage": "Apri la gestione delle licenze"
     },
     "errors": {
       "generic": "Attivazione non riuscita. Controlla il codice di attivazione o contatta l'assistenza.",
       "network": "Connessione di rete non riuscita. Controlla la connessione e riprova.",
-      "locked": "Questa funzione richiede una licenza attiva"
+      "locked": "Questa funzione richiede una licenza attiva",
+      "machineBound": "Questa licenza è già associata a un altro dispositivo",
+      "notActive": "Questa licenza non è attualmente disponibile. Contatta l’assistenza.",
+      "loginRequired": "Effettua l’accesso prima di attivare."
     }
   },
   "storeSource": {
@@ -638,7 +643,7 @@
     "addClientRequire": "Inserisci sia il nome del client che il percorso config",
     "addClientDuplicate": "Esiste già un client con questo nome. Usa un nome diverso.",
     "clientAdded": "Client aggiunto",
-    "clientRemoved": "Client rimosso",
+    "clientRemoved": "Client eliminato",
     "addClientFailed": "Aggiunta client fallita",
     "clientName": "Nome client",
     "enterClientName": "Il mio client",
@@ -646,7 +651,15 @@
     "enterSkillsPath": "Inserisci directory skill personalizzata...",
     "supportsSkillsLabel": "Supporta skill",
     "browse": "Sfoglia",
-    "removeClient": "Rimuovi client",
+    "removeClient": "Elimina client",
+    "removeClientConfirmTitle": "Eliminare il client \"{{name}}\"?",
+    "removeClientConfirmDesc": "Confermando verranno cancellati la configurazione MCP di questo client e le skill installate da questa app (i contenuti aggiunti manualmente non verranno toccati). Assicurati che il client sia stato davvero disinstallato — se è ancora in uso, questo potrebbe comprometterne il normale funzionamento.",
+    "removeClientConfirmDirOption": "Elimina anche l'intera directory di configurazione",
+    "removeClientConfirmDirDanger": "⚠ Irreversibile — verrà rimossa l'intera directory di dati locali del client",
+    "removeClientConfirmButton": "Elimina",
+    "clientDataDeleted": "Configurazione MCP e file delle skill eliminati",
+    "clientDirDeleted": "L'intera directory di configurazione del client è stata eliminata",
+    "clientRemovedFailed": "Eliminazione del client non riuscita",
     "about": "Informazioni",
     "aboutDesc": "AI-Tools v1.0.0",
     "aboutTitle": "Informazioni su AI-Tools",
@@ -1006,7 +1019,7 @@
     "collapse": "Comprimi",
     "disabled": "Disabilitato",
     "notSet": "non impostato",
-    "desc": "Tratta il cloud come un client: una directory {dir} viene creata automaticamente da remoto per archiviare la config MCP e le skill. Dopo la configurazione puoi caricare/scaricare manualmente nella Libreria.",
+    "desc": "Tratta il cloud come un client: una directory {{dir}} viene creata automaticamente da remoto per archiviare la config MCP e le skill. Dopo la configurazione puoi caricare/scaricare manualmente nella Libreria.",
     "gitChannel": "Repo Git",
     "sftpChannel": "SFTP",
     "gitMissing": "Git di sistema non rilevato; il canale Git non è disponibile. Installa Git e aggiorna nell'Ambiente runtime.",

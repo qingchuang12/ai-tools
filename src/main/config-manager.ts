@@ -14,6 +14,8 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import os from 'os';
+import * as jsonc from 'jsonc-parser';
+import * as TOML from 'smol-toml';
 import {getCloudSyncStore} from './cloud-sync-store';
 import {resolveSkillsPath} from './client-paths';
 
@@ -110,6 +112,22 @@ async function removeInstalledLicense(serverId: string): Promise<void> {
 }
 
 export class ConfigManager {
+    /**
+     * 专属 MCP 配置文件白名单（basename）：这些文件仅承载 MCP 配置，删除不影响客户端其他设置/鉴权。
+     * 共享型配置文件（如 ~/.claude.json、settings.json、config.toml）刻意排除，避免误删客户端数据。
+     */
+    private static readonly DEDICATED_MCP_CONFIG_FILES = new Set([
+        'mcp.json',
+        '.mcp.json',
+        'mcp_config.json',
+        'opencode.json',
+    ]);
+
+    /** 判断路径是否为仅承载 MCP 的专属配置文件（删除安全闸门） */
+    private static isDedicatedMcpConfigFile(p: string): boolean {
+        return ConfigManager.DEDICATED_MCP_CONFIG_FILES.has(path.basename(p));
+    }
+
     private userSettingsPath: string;
     private userSettings: UserSettings = {};
     // 客户端列表缓存：安装状态在会话内很少变化，重复进入「我的库」时直接返回，避免每次重跑检测（含 CLI 的 where/which）。
@@ -250,6 +268,143 @@ export class ConfigManager {
         if (!this.userSettings.customClients) return;
         this.userSettings.customClients = this.userSettings.customClients.filter(c => c.id !== id);
         await this.saveUserSettings();
+        this.invalidateClientsCache();
+    }
+
+    /**
+     * 各客户端 MCP 配置在配置文件中的键名（用于共享文件的就地清除，保留其余内容）。
+     * openclaw / zcode 的 servers 挂在 mcp.servers 下 → 清整个 mcp 键；
+     * zed 用 context_servers；opencode 用 mcp；其余用 mcpServers。
+     */
+    private static mcpStripKeys(client: AnyClientId): string[] {
+        if (client === 'zed') return ['context_servers'];
+        if (client === 'opencode' || client === 'openclaw' || client === 'zcode') return ['mcp'];
+        return ['mcpServers'];
+    }
+
+    /**
+     * 解析「整个配置目录」的根路径（供勾选后整目录删除）。
+     * 不能一刀切取 dirname(configPath)：claude-code 的配置在 ~/.claude.json，dirname 是用户主目录。
+     */
+    private getClientConfigRootDir(id: string): string {
+        const configPath = this.getClientConfigPath(id);
+        // agent-skills 的 configPath 本身就是目录（~/.agents）
+        if (id === 'agent-skills') return configPath;
+        if (id === 'claude-code') return path.join(os.homedir(), '.claude');
+        let dir = path.dirname(configPath);
+        const base = path.basename(dir).toLowerCase();
+        // VS Code / Trae 系：<root>/User/mcp.json → 整目录应删 <root>
+        if (base === 'user') dir = path.dirname(dir);
+        // kiro：<root>/settings/mcp.json → <root>
+        if (id === 'kiro' && base === 'settings') dir = path.dirname(dir);
+        // zcode：<root>/cli/config.json → <root>
+        if (id === 'zcode' && base === 'cli') dir = path.dirname(dir);
+        return dir;
+    }
+
+    /**
+     * 删除本应用安装的技能文件（带 .source.json 标记，与 scanSkillsDir 同口径）。
+     * 用户手动放入的 skill（无 .source.json）不动。
+     */
+    private async deleteAppInstalledSkills(id: string): Promise<void> {
+        let skillsPath = '';
+        try {
+            skillsPath = this.getSkillsPath(id as SkillClientType);
+        } catch {
+            return; // 无技能目录概念的客户端
+        }
+        if (!skillsPath) return;
+        let entries: import('fs').Dirent[];
+        try {
+            entries = await fs.readdir(skillsPath, {withFileTypes: true});
+        } catch {
+            return; // 目录不存在
+        }
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const skillPath = path.join(skillsPath, entry.name);
+            try {
+                await fs.access(path.join(skillPath, 'SKILL.md'));
+                await fs.access(path.join(skillPath, '.source.json'));
+                await fs.rm(skillPath, {recursive: true, force: true});
+            } catch {
+                // 无 SKILL.md / 无 .source.json（手动安装）或已不存在：跳过
+            }
+        }
+    }
+
+    /**
+     * 就地清除共享配置文件中的 MCP 配置键，保留文件其余内容（登录态、设置等）。
+     * 统一走此处而非 writeConfig：后者对无保留分支的客户端（gemini-cli/marscode 等
+     * 落入默认 stringify 分支）会丢掉文件里 MCP 之外的全部内容。
+     */
+    private async stripMcpConfigFromFile(client: AnyClientId, filePath: string): Promise<void> {
+        let content: string;
+        try {
+            content = await fs.readFile(filePath, 'utf-8');
+        } catch (e: any) {
+            if (e.code === 'ENOENT') return; // 文件不存在，无事可清
+            throw e;
+        }
+        let output: string;
+        if (client === 'codex-cli') {
+            const parsed = TOML.parse(content) as Record<string, any>;
+            delete parsed.mcp_servers;
+            output = TOML.stringify(parsed);
+        } else {
+            const parsed = jsonc.parse(content) as Record<string, any> | undefined;
+            if (!parsed || typeof parsed !== 'object') return; // 解析失败：不动文件，避免损坏
+            for (const key of ConfigManager.mcpStripKeys(client)) delete parsed[key];
+            output = JSON.stringify(parsed, null, 2);
+        }
+        await writeFileAtomic(filePath, output);
+    }
+
+    /**
+     * 删除客户端数据（「删除客户端」的落地动作）：
+     * 1. 清除本应用安装的技能文件（带 .source.json 标记者；用户手动放入的不动）；
+     * 2. 清除 MCP 配置信息——专属 MCP 配置文件（白名单 basename）整文件删除；
+     *    共享配置文件（~/.claude.json、settings.json、config.toml 等）仅就地清除 MCP 键，
+     *    保留登录态等其他内容；
+     * 3. 勾选整目录删除时，递归删除该客户端的配置根目录（带防误删守卫：
+     *    必须位于用户主目录内、不得是主目录本身、不得是本应用数据目录）。
+     * 列表状态完全由探测驱动：清除残留配置后，误判「已安装」的客户端自然落回「未安装」区。
+     */
+    async deleteClientData(id: string, deleteWholeDir: boolean): Promise<void> {
+        await this.ready;
+        if (id === 'cloud') throw new Error('UNSAFE_CONFIG_DELETE: cloud 为虚拟客户端，不支持删除');
+
+        // 1) 技能文件
+        await this.deleteAppInstalledSkills(id);
+
+        // 2) MCP 配置信息
+        const configPath = this.getClientConfigPath(id);
+        if (configPath) {
+            if (ConfigManager.isDedicatedMcpConfigFile(configPath)) {
+                try {
+                    await fs.unlink(configPath);
+                } catch (e: any) {
+                    if (e.code !== 'ENOENT') throw e;
+                }
+            } else {
+                await this.stripMcpConfigFromFile(id as AnyClientId, configPath);
+            }
+        }
+
+        // 3) 整目录删除（需用户勾选）
+        if (deleteWholeDir) {
+            const root = this.getClientConfigRootDir(id);
+            const home = os.homedir();
+            const rel = path.relative(home, path.resolve(root));
+            if (!root || rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+                throw new Error('UNSAFE_CONFIG_DELETE: 配置目录不在用户主目录内，拒绝删除');
+            }
+            if (path.resolve(root) === path.join(home, '.ai-tools')) {
+                throw new Error('UNSAFE_CONFIG_DELETE: 拒绝删除本应用数据目录');
+            }
+            await fs.rm(root, {recursive: true, force: true});
+        }
+
         this.invalidateClientsCache();
     }
 

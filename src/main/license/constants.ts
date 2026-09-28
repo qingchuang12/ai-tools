@@ -34,6 +34,12 @@ export const CONFIG_FILE_NAME = 'license.config.json';
 export const CHECKOUT_PAGE_PATH = '/checkout/index.html';
 
 /**
+ * 账户页路径（服务端 static/account）：登录即用（无密码，凭「邮箱收码」重置/登录），
+ * 是 C6 绑机冲突的唯一自助出口（解绑后回软件重新激活）。
+ */
+export const ACCOUNT_PAGE_PATH = '/account/';
+
+/**
  * 统一激活端点路径：服务端 LicenseController 的 `POST /api/licenses/activate`（plan-7.0 方案 A）。
  * 取代旧的 `/api/redeem/redeem`；`credential` 传兑换码（RC- 前缀）或许可证密钥，由服务端自动识别。
  */
@@ -85,6 +91,23 @@ export const REPORT_BINDING_API_PATH = '/api/licenses/report-binding';
 export const REPORT_BINDING_TIMEOUT_MS = 10000;
 
 /**
+ * S1（plan-1.0）：支付后按机器码领取「待激活授权」端点（服务端 LicenseController，公开）。
+ * 解决「付款完成桌面软件无从得知」——收银台轮询要 `checkoutId`，客户端跳转时只带了机器码拿不到它。
+ * 命中即返回 `signedToken`，客户端本地验签后落盘激活。
+ */
+export const PENDING_LICENSES_API_PATH = '/api/licenses/pending';
+
+/** 领取请求超时：与上报绑定同档（旁路请求，短于兑换 15s） */
+export const PENDING_LICENSES_TIMEOUT_MS = 10000;
+
+/**
+ * 打开收银台后的自动领取窗口（30 分钟）与轮询间隔（60 秒）。
+ * 窗口按「用户付完款回到软件」的真实时长定；间隔与档位对齐——30 次请求对应服务端 45 次/30min 的限流档。
+ */
+export const PURCHASE_POLL_WINDOW_MS = 30 * 60 * 1000;
+export const PURCHASE_POLL_INTERVAL_MS = 60 * 1000;
+
+/**
  * A9（plan-7.0）：本账号名下授权列表端点（服务端 AccountAssetController，Bearer）。
  * 返回 `List<LicenseResponse>`（业务数组在 `$.data`，兼容扁平结构），字段见 `LicenseResponse.java`：
  * `licenseKey` / `status`(ACTIVE|EXPIRED|REVOKED|REISSUED) / `machineCode`(未绑定为 null) / `customerEmail` 等。
@@ -117,11 +140,30 @@ export const LICENSE_VERIFY_API_PATH = (licenseKey: string): string =>
 /** 复核总开关默认值（包外可关，用于资损事故秒级回滚） */
 export const DEFAULT_RECHECK_ENABLED = true;
 
-/** 复核间隔默认 24h */
-export const DEFAULT_RECHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/**
+ * 复核间隔默认 **15 天**（plan-1.0 口径，原 24h）。
+ * 服务端 verify 成功响应会下发 `nextCheckAfterMs`，客户端优先采用下发值——调节奏不必发版。
+ */
+export const DEFAULT_RECHECK_INTERVAL_MS = 15 * 24 * 60 * 60 * 1000;
 
-/** 离线宽限默认 7 天：只覆盖「服务端答不上来」，服务端明确答吊销是立即停，不受宽限影响 */
-export const DEFAULT_RECHECK_OFFLINE_GRACE_DAYS = 7;
+/**
+ * 「拿不到明确结论」（网络/超时/5xx/畸形）后的重试间隔，默认 **2 小时**，持续到拿到明确答案
+ * （plan-1.0 第 2 条）。429 不走这里，走 `rateLimitedRetryMs` 退避。
+ */
+export const DEFAULT_RECHECK_RETRY_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * 提醒段起点（天）：距最近一次成功复核超过它即进入「需联网验证」提醒态，**功能不减**。
+ * 默认 30 天 ≈ 2 个复核周期 + 缓冲；必须 > `DEFAULT_RECHECK_INTERVAL_MS`，
+ * 否则用户只是隔了一个周期没开机就会被误判（`config.ts` 有兜底 clamp，但默认值本身也要自洽）。
+ */
+export const DEFAULT_RECHECK_WARN_AFTER_DAYS = 30;
+
+/**
+ * 失效阈值（天）：距最近一次成功复核超过它才自动变更为**未激活**（plan-1.0 第 3 条）。
+ * 代价（已知情）：服务端吊销后，本地最迟 60 天才生效（原 7 天口径为 ≤7 天）。
+ */
+export const DEFAULT_RECHECK_HARD_STOP_DAYS = 60;
 
 /** 单次复核超时 8s：启动路径上的旁路请求，短于兑换（15s） */
 export const DEFAULT_RECHECK_TIMEOUT_MS = 8000;
@@ -201,7 +243,9 @@ export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
     recheck: {
         enabled: DEFAULT_RECHECK_ENABLED,
         intervalMs: DEFAULT_RECHECK_INTERVAL_MS,
-        offlineGraceDays: DEFAULT_RECHECK_OFFLINE_GRACE_DAYS,
+        retryMs: DEFAULT_RECHECK_RETRY_MS,
+        offlineGraceDays: DEFAULT_RECHECK_WARN_AFTER_DAYS,
+        hardStopDays: DEFAULT_RECHECK_HARD_STOP_DAYS,
         timeoutMs: DEFAULT_RECHECK_TIMEOUT_MS,
         rateLimitedRetryMs: DEFAULT_RECHECK_RATE_LIMITED_RETRY_MS,
     },

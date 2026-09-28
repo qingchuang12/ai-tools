@@ -45,16 +45,21 @@ export default function ActivationBadge() {
             : status === 'activated' ? (state?.activatedExpiresAt ?? null)
                 : null;
     const time = formatCompactDuration(t, expiresAt);
+    // C2（plan-1.0 / U1 分段）：已激活但长时间没联上服务端 → 橙色提醒「需联网验证」。
+    // 只改配色与文案，**不减任何功能**；到失效阈值才由主进程降级为未激活。
+    const needsOnline = status === 'activated' && state?.needsOnlineVerify === true;
+    const shown = needsOnline ? STYLE.trial : st;
 
     return (
         <button
             onClick={openModal}
-            title={t('license.badge.tooltip')}
+            title={needsOnline ? t('license.badge.needsOnlineVerify') : t('license.badge.tooltip')}
             className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-medium no-drag whitespace-nowrap shrink-0 transition-colors"
-            style={{ background: st.bg, color: st.color }}
+            style={{ background: shown.bg, color: shown.color }}
         >
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: st.dot }} />
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: shown.dot }} />
             <span>{label}</span>
+            {needsOnline && <span>· {t('license.badge.needsOnlineVerify')}</span>}
             {time && <span className="opacity-80">· {time}</span>}
         </button>
     );

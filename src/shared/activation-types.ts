@@ -52,6 +52,12 @@ export interface ActivationState {
     source: 'none' | 'trial' | 'license';
     /** 降级原因；null = 正常 */
     degraded: ActivationDegradedReason | null;
+    /**
+     * 是否处于「需联网验证」提醒段（plan-1.0 / C2 / U1 分段口径）：
+     * 距最近一次成功复核已超过提醒阈值（默认 30 天）但尚未到失效阈值（默认 60 天）。
+     * **只提示、不减功能**——`degraded` 表达的是「已失效需重新激活」，两者语义不可混用。
+     */
+    needsOnlineVerify: boolean;
 }
 
 /** 对外结果：error 已是「统一文案」，前端直接展示，不解释 */
@@ -76,6 +82,11 @@ export interface RedeemResult {
      * 不回滚、不阻挡激活，UI 据此展示一条 amber 轻提示即可。
      */
     unbindWarning?: boolean;
+    /**
+     * C6（plan-1.0 / U3）：失败时随文案给出的自助动作。目前只有 `openAccount`
+     * （授权已绑其他设备 → 去服务端账户页解绑）。由主进程白名单翻译，UI 不自行判断原因。
+     */
+    action?: 'openAccount';
 }
 
 export interface ActivationApi {
@@ -85,6 +96,11 @@ export interface ActivationApi {
     getMachineCode: () => Promise<string>;
     /** 按配置模板拼出带 machineId 的收银台 URL */
     getPurchaseUrl: () => Promise<string>;
+    /**
+     * C6（U3）：服务端账户管理页地址（自助解绑入口）。
+     * 地址只有主进程知道（来自包外配置），渲染层拿到后走既有 `system.openExternal` 打开。
+     */
+    getAccountPageUrl: () => Promise<string>;
     /**
      * 兑换码 + 购买邮箱 → 后端 redeem → 本地验签 → 落盘。
      * 邮箱是服务端的客户标识（必填）：未注册邮箱会在服务端自动建访客账户。
@@ -99,6 +115,11 @@ export interface ActivationApi {
     deactivate: () => Promise<ActivationState>;
     /** 功能 gate 查询（渲染层仅用于 UI 态，安全边界在主进程） */
     hasFeature: (feature: string) => Promise<boolean>;
+    /**
+     * 订阅主进程授权状态变化（plan-1.0 / C5）：复核停用、支付后自动到账等「只有主进程知道」的变更。
+     * 返回取消订阅函数。渲染层每秒 ticker 只负责倒计时重渲染，**状态跃迁必须靠这条推送**才即时上屏。
+     */
+    onStateChanged: (callback: (state: ActivationState) => void) => () => void;
 }
 
 /** 当前登录用户资料（A5 me 与登录/第二因子响应中的 `user` 同结构） */
