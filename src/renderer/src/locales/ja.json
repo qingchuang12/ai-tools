@@ -505,6 +505,7 @@
     "syncError": "同期に失敗しました"
   },
   "inspector": {
+    "managedProxyHint": "{{clients}} が管理するプロキシアドレス（{{fields}}）は使用しません。直接 URL に Authorization ヘッダーがないため接続は拒否されます（401）。",
     "title": "MCP インスペクター",
     "connect": "接続",
     "disconnect": "切断",
@@ -758,9 +759,9 @@
     "cloudUploadConfirmTitle": "クラウドへのアップロードを上書き確定",
     "cloudUploadConfirmMsg": "すべてのローカル MCP サーバーとスキルをクラウドにアップロードし、既存の内容を上書きします。続行しますか？",
     "cloudUploadMcpConfirmTitle": "クラウドの MCP を上書き確定",
-    "cloudUploadMcpConfirmMsg": "すべてのローカル MCP サーバーをクラウドにアップロードし、既存の内容を上書きします。続行しますか？",
+    "cloudUploadMcpConfirmMsg": "すべてのローカル MCP サーバーをクラウドにアップロードして既存の内容を上書きし、クラウド上の余分な MCP を削除します。続行しますか？",
     "cloudUploadSkillConfirmTitle": "クラウドのスキルを上書き確定",
-    "cloudUploadSkillConfirmMsg": "すべてのローカルのスキルをクラウドにアップロードし、既存の内容を上書きします。続行しますか？",
+    "cloudUploadSkillConfirmMsg": "すべてのローカルのスキルをクラウドにアップロードして既存の内容を上書きし、クラウド上の余分なスキルを削除します。続行しますか？",
     "cloudUploadConfirmBtn": "アップロードを確定",
     "cloudUploading": "アップロード中…",
     "cloudUploadStarted": "クラウドにアップロード中…",
@@ -841,6 +842,8 @@
     "localDiverged": "ローカルクライアントが異なります",
     "unifySync": "統一",
     "unifySyncTitle": "他のすべてのインストール済みクライアントを最新バージョンで上書き",
+    "downloadToLocal": "ローカルへ配布",
+    "downloadToLocalTitle": "クラウド版をすべてのインストール済みクライアントに配布",
     "localDivergedCompare": "ローカルクライアントを比較",
     "noSkillClient": "ダウンロードを受信するスキルクライアントがインストールされていません",
     "noMcpClient": "ダウンロードを受信する MCP クライアントがインストールされていません",

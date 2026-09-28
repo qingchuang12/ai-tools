@@ -15,8 +15,9 @@ export interface McpServerConfig {
     type?: 'stdio' | 'http' | 'streamable-http' | 'sse';
     headers?: Record<string, string>;
     /**
-     * ZCode 专用：显式 false 表示在客户端内被停用，字段缺失即视为启用。
+     * ZCode / Kimi Code CLI 专用：显式 false 表示在客户端内被停用，字段缺失即视为启用。
      * 读写均原样透传——若读写时丢弃该字段，客户端内已停用的 Server 会被静默重新启用。
+     * Kimi 侧的字段名为 `enabled`，由适配器做双向映射。
      */
     enable?: boolean;
     /**
@@ -59,6 +60,14 @@ export type ClientType =
     | 'workbuddy'
     | 'qoder'
     | 'zcode'
+    | 'cline'
+    | 'qwen-code'
+    | 'iflow-cli'
+    | 'lm-studio'
+    | 'openhands'
+    | 'copilot-cli'
+    | 'warp'
+    | 'kimi-code'
     | 'cloud';
 
 /** 任意客户端 id：内置 ClientType 或用户手动添加的 custom:<slug> */
@@ -81,16 +90,20 @@ export type SkillClientType =
     | 'trae-cn'
     | 'trae-solo-cn'
     | 'antigravity'
+    | 'cline'
+    | 'qwen-code'
     | 'cloud';
 
 // 客户端是否支持 Skills
-export const SKILL_SUPPORTED_CLIENTS: SkillClientType[] = ['cursor', 'claude-code', 'gemini-cli', 'codex-cli', 'opencode', 'agent-skills', 'codebuddy', 'workbuddy', 'qoder', 'zcode', 'marscode', 'trae', 'trae-cn', 'trae-solo-cn', 'antigravity', 'cloud'];
+export const SKILL_SUPPORTED_CLIENTS: SkillClientType[] = ['cursor', 'claude-code', 'gemini-cli', 'codex-cli', 'opencode', 'agent-skills', 'codebuddy', 'workbuddy', 'qoder', 'zcode', 'marscode', 'trae', 'trae-cn', 'trae-solo-cn', 'antigravity', 'cline', 'qwen-code', 'cloud'];
 
 /** 所有内置客户端类型（单一来源：备份/遍历统一复用，避免硬编码遗漏，P1-3/P2-4）。'cloud' 为暂存区非真实配置，单独排除。 */
 export const ALL_BUILTIN_CLIENTS: ClientType[] = [
     'cursor', 'vscode', 'claude-code', 'gemini-cli', 'codex-cli', 'windsurf', 'zed',
     'trae', 'trae-cn', 'trae-solo-cn', 'marscode', 'kiro', 'opencode', 'jetbrains', 'antigravity',
     'openclaw', 'codebuddy', 'workbuddy', 'qoder', 'zcode',
+    'cline', 'qwen-code', 'iflow-cli', 'lm-studio', 'openhands', 'copilot-cli',
+    'warp', 'kimi-code',
 ];
 
 // VS Code 使用 "servers" 键而非 "mcpServers"
@@ -112,6 +125,16 @@ export const EXECUTABLE_ONLY_CLIENTS: ClientType[] = [
     'openclaw',
     'qoder',
     'zcode',
+    // 本批新增的纯 CLI 形态：配置文件可能由本工具或第三方脚本创建，不代表本体已装。
+    // Cline 虽有 IDE 扩展形态，但扩展装在宿主编辑器 globalStorage 内、本机无从探测，
+    // 且扩展与 CLI 共用同一 MCP 配置文件，故统一按本体探测口径处理。
+    'cline',
+    'qwen-code',
+    'iflow-cli',
+    'openhands',
+    'copilot-cli',
+    // Kimi Code CLI 同为纯 CLI 形态。Warp 是 GUI 终端（有 .app 本体），走 GUI 口径不进本表。
+    'kimi-code',
 ];
 
 export interface ClientInfo {

@@ -15,7 +15,7 @@ import path from 'path';
 import {app} from 'electron';
 import {getCloudSyncService} from './cloud-sync-service';
 import type {CloudSyncResult} from '../shared/cloud-sync-constants';
-import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
+import type {SyncTask, SyncTaskKind, SyncTaskOptions, SyncTaskScope} from '../shared/sync-task-types';
 
 const MAX_TASKS = 50;
 /** 任务记录保留天数 */
@@ -103,13 +103,18 @@ export class SyncTaskManager {
     }
 
     /** 入队一个同步任务，立即触发队列处理
-     * 去重：已存在「相同类型 + 相同范围」且处于 pending/running（待处理/正在同步）的任务时，不再重复添加，直接返回已有任务。 */
-    enqueue(kind: SyncTaskKind, title: string, scope?: SyncTaskScope): SyncTask {
+     * 去重：已存在「相同类型 + 相同范围 + 相同选项」且处于 pending/running（待处理/正在同步）的任务时，
+     * 不再重复添加，直接返回已有任务。选项不同（如普通上传 vs 镜像覆盖 vs 定向删除）时视为不同任务。 */
+    enqueue(kind: SyncTaskKind, title: string, scope?: SyncTaskScope, opts?: SyncTaskOptions): SyncTask {
         const normScope = scope ?? 'all';
+        const sameOpts = (t: SyncTask) =>
+            !!t.mirror === !!opts?.mirror &&
+            JSON.stringify(t.deletes ?? []) === JSON.stringify(opts?.deletes ?? []);
         const existing = this.tasks.find(t =>
             (t.status === 'pending' || t.status === 'running') &&
             t.kind === kind &&
-            (t.scope ?? 'all') === normScope
+            (t.scope ?? 'all') === normScope &&
+            sameOpts(t)
         );
         if (existing) {
             return existing;
@@ -122,6 +127,8 @@ export class SyncTaskManager {
             title: title || (kind === 'cloud-push' ? '上传到云端' : '从云端下载'),
             status: 'pending',
             createdAt: Date.now(),
+            ...(opts?.mirror ? {mirror: true} : {}),
+            ...(opts?.deletes?.length ? {deletes: [...opts.deletes]} : {}),
         };
         this.tasks.push(task);
         if (this.tasks.length > MAX_TASKS) this.tasks = this.tasks.slice(-MAX_TASKS);
@@ -129,6 +136,31 @@ export class SyncTaskManager {
         this.emit();
         void this.pump();
         return task;
+    }
+
+    /**
+     * 入队并等待任务到达终态，返回与 CloudSyncService 一致的 CloudSyncResult。
+     * 供需要同步拿到结果的 IPC 入口（手动 push/pull、启动拉取）使用，任务同时出现在「同步任务」面板。
+     * 任务记录查不到（被 remove/clear 清除或超出保留上限）时按失败返回——
+     * 绝不能静默当作成功，否则 UI 会显示「同步完成」而实际结果未知（P2-a）。
+     */
+    async enqueueAndWait(kind: SyncTaskKind, title: string, scope?: SyncTaskScope, opts?: SyncTaskOptions): Promise<CloudSyncResult> {
+        const task = this.enqueue(kind, title, scope, opts);
+        return new Promise<CloudSyncResult>((resolve) => {
+            const timer = setInterval(() => {
+                const t = this.tasks.find(x => x.id === task.id);
+                if (!t) {
+                    clearInterval(timer);
+                    resolve({ok: false, message: '同步任务已被移除，无法确认结果'});
+                } else if (t.status === 'success') {
+                    clearInterval(timer);
+                    resolve({ok: true, message: t.detail ?? '同步完成'});
+                } else if (t.status === 'failed') {
+                    clearInterval(timer);
+                    resolve({ok: false, message: t.error ?? '同步失败'});
+                }
+            }, 150);
+        });
     }
 
     /** 重试一个失败的任务 */
@@ -177,7 +209,7 @@ export class SyncTaskManager {
 
                 try {
                     const res: CloudSyncResult = task.kind === 'cloud-push'
-                        ? await getCloudSyncService().push(task.scope)
+                        ? await getCloudSyncService().push(task.scope, {mirror: task.mirror, deletes: task.deletes})
                         : await getCloudSyncService().pull();
                     if (res.ok) {
                         task.status = 'success';

@@ -4,20 +4,22 @@
  * 进入「我的库」/ 云端 pull 完成后主动检测不一致项，在页面顶部展示：摘要 + 可折叠明细。
  * 明细按类型分组（Skill 组与 MCP Server 组互不混排），每项操作：
  * - 本地 vs 云端类（local_newer / cloud_newer / diverged）：「对照」「覆盖本地」「覆盖云端」；
- * - 本地互不一致（local_diverged）：「对照」「统一同步」（以最新版本覆盖其余已安装客户端）。
- * 内容完全相同（仅时间戳差异）与仅单侧存在的条目均为静默，不展示。一致时整体不渲染。
+ * - 本地互不一致（local_diverged）：「对照」「统一同步」（以最新版本覆盖其余已安装客户端）；
+ * - 仅云端存在（cloud_only）：「对照」「下发本地」（云端 → 全部已安装客户端，换机补齐场景）。
+ * 内容完全相同（仅时间戳差异）与仅本地存在的条目为静默，不展示。一致时整体不渲染。
  */
 
 import {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {type ConsistencyItem, type ConsistencyReport} from '../lib/electron';
 
-// 仅两侧都存在或本地互不一致的项会出现在报告里，映射只保留实际发生的判定。
+// 仅单侧缺失（cloud_only）或两侧都存在、本地互不一致的项会出现在报告里，映射只保留实际发生的判定。
 const RESOLUTION_LABEL: Partial<Record<ConsistencyItem['resolution'], string>> = {
     local_newer: 'consistency.localNewer',
     cloud_newer: 'consistency.cloudNewer',
     diverged: 'consistency.diverged',
     local_diverged: 'consistency.localDiverged',
+    cloud_only: 'consistency.cloudOnly',
 };
 
 const RESOLUTION_COLOR: Partial<Record<ConsistencyItem['resolution'], string>> = {
@@ -26,6 +28,7 @@ const RESOLUTION_COLOR: Partial<Record<ConsistencyItem['resolution'], string>> =
     diverged: 'text-[var(--color-muted2)] bg-[var(--color-surface-hover)]',
     // 分叉态用紫色做三源区分编码（无对应语义令牌，保留调色板色）
     local_diverged: 'text-purple-400 bg-purple-400/10',
+    cloud_only: 'text-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]',
 };
 
 function formatTime(iso: string | null): string {
@@ -63,6 +66,7 @@ export default function ConsistencyBanner({
         const key = `${item.kind}:${item.name}`;
         const resolving = resolvingKey === key;
         const isLocalDiverged = item.resolution === 'local_diverged';
+        const isCloudOnly = item.resolution === 'cloud_only';
         return (
             <div key={key}
                  className="flex items-center gap-2.5 px-2 py-1.5 rounded-md bg-[var(--color-surface-hover)]/30">
@@ -106,6 +110,15 @@ export default function ConsistencyBanner({
                             className="text-[11px] px-2 py-0.5 rounded text-purple-400 hover:bg-purple-400/10 transition-colors disabled:opacity-50"
                         >
                             {resolving ? '…' : (t('consistency.unifySync') || '统一同步')}
+                        </button>
+                    ) : isCloudOnly ? (
+                        <button
+                            onClick={() => onResolve(item, 'download')}
+                            disabled={resolving}
+                            title={t('consistency.downloadToLocalTitle') || '把云端版本下发到所有已安装客户端'}
+                            className="text-[11px] px-2 py-0.5 rounded text-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] transition-colors disabled:opacity-50"
+                        >
+                            {resolving ? '…' : (t('consistency.downloadToLocal') || '下发本地')}
                         </button>
                     ) : (
                         <>

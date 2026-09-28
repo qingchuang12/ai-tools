@@ -82,6 +82,7 @@ brew upgrade --cask mcp-dock
 | Zed | 支持 |
 | TRAE | 支持 |
 | TRAE CN | 支持 |
+| TRAE SOLO CN (TraeWork) | 支持 |
 | TRAE 插件 (MarsCode, `~/.marscode`) | 支持 |
 | Kiro | 支持 |
 | Opencode | 支持 |
@@ -91,6 +92,15 @@ brew upgrade --cask mcp-dock
 | CodeBuddy | 支持 |
 | WorkBuddy | 支持 |
 | Qoder | 支持 |
+| ZCode | 支持 |
+| Cline | 支持 |
+| Qwen Code | 支持 |
+| iFlow CLI | 支持 |
+| LM Studio | 支持 |
+| OpenHands | 支持 |
+| GitHub Copilot CLI | 支持 |
+| Warp | 支持 |
+| Kimi Code CLI | 支持 |
 | 云端存储 (Cloud) | 支持 |
 
 ### Skills 客户端
@@ -107,11 +117,13 @@ brew upgrade --cask mcp-dock
 | WorkBuddy | 支持 |
 | Qoder | 支持 |
 | ZCode | 支持 |
+| Antigravity | 支持 |
 | TRAE | 支持 |
 | TRAE CN | 支持 |
 | TRAE SOLO CN (TraeWork) | 支持 |
 | TRAE 插件 (MarsCode) | 支持 |
-| 云端存储 (Cloud) | 支持 |
+| Cline | 支持 |
+| Qwen Code | 支持 |
 | 云端存储 (Cloud) | 支持 |
 
 ## 数据源

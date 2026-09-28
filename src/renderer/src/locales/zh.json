@@ -509,6 +509,7 @@
     "syncError": "同步失败"
   },
   "inspector": {
+    "managedProxyHint": "{{clients}} 托管代理地址（{{fields}}）不参与连接；直连 URL 缺少 Authorization，会被拒（401）。",
     "title": "MCP 调试器",
     "connect": "连接",
     "disconnect": "断开",
@@ -762,9 +763,9 @@
     "cloudUploadConfirmTitle": "确认是否覆盖云端上传",
     "cloudUploadConfirmMsg": "此操作将把本地所有 MCP 与 Skill 全量上传到云端并覆盖现有内容，确认继续？",
     "cloudUploadMcpConfirmTitle": "确认是否覆盖云端 MCP",
-    "cloudUploadMcpConfirmMsg": "此操作将把本地所有 MCP 上传到云端并覆盖现有内容，确认继续？",
+    "cloudUploadMcpConfirmMsg": "此操作将把本地所有 MCP 上传到云端并覆盖现有内容，同时删除云端多余的 MCP，确认继续？",
     "cloudUploadSkillConfirmTitle": "确认是否覆盖云端 Skill",
-    "cloudUploadSkillConfirmMsg": "此操作将把本地所有 Skill 上传到云端并覆盖现有内容，确认继续？",
+    "cloudUploadSkillConfirmMsg": "此操作将把本地所有 Skill 上传到云端并覆盖现有内容，同时删除云端多余的 Skill，确认继续？",
     "cloudUploadConfirmBtn": "确认上传",
     "cloudUploading": "上传中…",
     "cloudUploadStarted": "云端上传中…",
@@ -845,6 +846,8 @@
     "localDiverged": "本地互不一致",
     "unifySync": "统一同步",
     "unifySyncTitle": "以最新版本统一覆盖其他所有已安装客户端",
+    "downloadToLocal": "下发本地",
+    "downloadToLocalTitle": "把云端版本下发到所有已安装客户端",
     "localDivergedCompare": "本地客户端互相对照",
     "noSkillClient": "没有已安装的技能客户端可接收下载",
     "noMcpClient": "没有已安装的 MCP 客户端可接收下载",

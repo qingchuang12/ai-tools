@@ -10,6 +10,7 @@ import {useElectronAPI} from '../lib/electron';
 import {useIsMac} from '../lib/useIsMac';
 import {useStore} from '../store/useStore';
 import {getEffectiveTheme} from '../lib/useTheme';
+import {detectManagedProxyFields, proxyClientLabel} from '../lib/managed-proxy-fields';
 import WindowControls from '../components/WindowControls';
 import JsonTree from '../components/JsonTree';
 
@@ -298,6 +299,21 @@ export default function Inspector() {
       return newValue;
     });
   }, [setInspectorState]);
+
+  // 预设里 `<客户端>_url` 形式的代理字段（如 Qoder 市场安装的条目）不参与连接：该地址要求
+  // 客户端自身登录态，凭证不落配置文件，外部无法复用。缺 Authorization 时提示用户补直连凭证。
+  const proxyFields = useMemo(
+    () => detectManagedProxyFields(presetConfig as unknown as Record<string, unknown> | null),
+    [presetConfig]
+  );
+  const managedProxyHint = useMemo(() => {
+    if (proxyFields.length === 0) return null;
+    if (headers.some((hdr) => /^authorization$/i.test(hdr.key.trim()))) return null;
+    return {
+      clients: [...new Set(proxyFields.map((f) => proxyClientLabel(f.clientKey)))].join(', '),
+      fields: proxyFields.map((f) => f.field).join(', '),
+    };
+  }, [proxyFields, headers]);
 
   // 预设配置变化（从「我的库」点不同 server 的「调试」，路由同为 /inspector 仅 query 不同，
   // 组件不重挂载）时，把表单字段同步为该配置。presetConfig 优先于 inspectorState 的历史值，
@@ -783,6 +799,12 @@ export default function Inspector() {
               </>
             ) : (
               <>
+                {managedProxyHint && (
+                  <div className="px-2.5 py-2 rounded border text-[12px] leading-relaxed text-[var(--color-text)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] border-[color-mix(in_srgb,var(--color-warning)_40%,transparent)]">
+                    {t('inspector.managedProxyHint', managedProxyHint)}
+                  </div>
+                )}
+
                 {/* 远程 URL */}
                 <div>
                   <label className="block text-[12px] text-[var(--color-muted)] uppercase mb-1">

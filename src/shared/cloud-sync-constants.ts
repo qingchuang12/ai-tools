@@ -86,6 +86,18 @@ export interface CloudSyncResult {
   changed?: boolean;
 }
 
+/**
+ * push 行为选项。
+ * 默认（缺省）只增量上传——绝不删除云端内容，避免陈旧设备把其他设备新推的内容清掉（P1-b）。
+ * mirror / deletes 都是「以本地为准」的显式操作，仅由用户确认过的入口传入。
+ */
+export interface SyncPushOptions {
+  /** 镜像模式：上传后删除「云端有而本地暂存区没有」的项（仅 sftp 通道生效；git 通道由非快进拒绝保护） */
+  mirror?: boolean;
+  /** 定向删除的 Skill 名清单（卸载联动；仅 skills 范围生效） */
+  deletes?: string[];
+}
+
 /** 默认配置 */
 export function defaultCloudSyncConfig(): CloudSyncConfig {
   return {

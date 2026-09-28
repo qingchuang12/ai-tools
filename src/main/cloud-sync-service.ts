@@ -16,7 +16,7 @@ import path from 'path';
 import {execFile} from 'child_process';
 import {promisify} from 'util';
 import SftpClient from 'ssh2-sftp-client';
-import {CLOUD_ROOT_DIR, type CloudSyncResult} from '../shared/cloud-sync-constants';
+import {CLOUD_ROOT_DIR, type CloudSyncResult, type SyncPushOptions} from '../shared/cloud-sync-constants';
 import type {SyncTaskScope} from '../shared/sync-task-types';
 import {resolveScopeDirs} from '../shared/sync-scope';
 import {getCloudSyncStore} from './cloud-sync-store';
@@ -55,8 +55,9 @@ export class CloudSyncService {
      * @param scope 同步内容范围：'mcp' 只传 MCP 配置、'skills' 只传技能、
      *              'all'/缺省 传整个暂存区（兼容）。sftp 通道按子目录真实分开上传；
      *              git 通道只提交对应子目录变更（push 仍整仓库）。
+     * @param opts 缺省 = 只增量上传（不删云端任何内容）；mirror / deletes 为显式「以本地为准」操作。
      */
-    async push(scope?: SyncTaskScope): Promise<CloudSyncResult> {
+    async push(scope?: SyncTaskScope, opts?: SyncPushOptions): Promise<CloudSyncResult> {
         const gate = await assertFeature(FEATURE_CLOUD_SYNC);
         if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
         return this.withLock(async () => {
@@ -69,7 +70,7 @@ export class CloudSyncService {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 const cfg = store.getConfig();
-                const res = cfg.provider === 'git' ? await this.gitPush(scope) : await this.sftpPush(scope);
+                const res = cfg.provider === 'git' ? await this.gitPush(scope) : await this.sftpPush(scope, opts);
                 if (res.ok) {
                     store.recordSync(res.message);
                     return res;
@@ -232,6 +233,7 @@ export class CloudSyncService {
         const store = getCloudSyncStore();
         const git = store.getConfig().git;
         await this.ensureRepo();
+        await this.pruneGitBackupBranches(); // P3：清理过期的 backup-before-pull-* 分支，避免只增不减
 
         const url = this.gitRemoteUrl();
         const heads = await this.git(['ls-remote', '--heads', url, git.branch], os.tmpdir());
@@ -240,24 +242,112 @@ export class CloudSyncService {
         }
 
         await this.git(['fetch', url, git.branch]);
-        // 保护未推送 / 未提交的本地改动：硬重置前先提交到本地备份分支，
-        // 否则上次失败重试的任务里用户的本地修改会被无声丢弃（P0-2）。
-        const statusBefore = await this.git(['status', '--porcelain']).catch(() => '');
-        if (statusBefore.trim()) {
-            const backupBranch = `backup-before-pull-${Date.now()}`;
+        // 硬重置前保护本地内容（P0-2 / P1-a）：两类内容都会被 reset --hard FETCH_HEAD 无声丢弃——
+        // ① 工作区未提交改动；② 本地独有提交（push 被 non-fast-forward 拒绝后残留在本地分支的 commit）。
+        // 只要存在其一就先备份到本地分支，备份失败则中止本次下载（宁可不拉，也不能丢内容）。
+        const dirty = (await this.git(['status', '--porcelain']).catch(() => '')).trim().length > 0;
+        const hasHead = !!(await this.git(['rev-parse', '--verify', 'HEAD']).catch(() => ''));
+        let localAhead = false;
+        if (hasHead) {
             try {
+                // 退出码 0 = HEAD 是 FETCH_HEAD 的祖先（无本地独有提交）；非 0 = 存在本地独有内容
+                await this.git(['merge-base', '--is-ancestor', 'HEAD', 'FETCH_HEAD']);
+            } catch {
+                localAhead = true;
+            }
+        }
+
+        let backupBranch: string | null = null;
+        if (dirty || localAhead) {
+            backupBranch = await this.backupBeforePull(git.branch, dirty);
+            if (!backupBranch) {
+                return {ok: false, message: '本地存在未能备份的改动，已取消本次下载以避免覆盖（可稍后重试）'};
+            }
+        }
+
+        // 暂存区是应用私有目录，以远端为准硬重置；本地内容已备份到本地分支。
+        await this.git(['reset', '--hard', 'FETCH_HEAD']);
+        store.ensureStagingDirs();
+        return {
+            ok: true,
+            message: backupBranch
+                ? `已从云端下载最新内容（本地未同步的内容已备份到分支 ${backupBranch}）`
+                : '已从云端下载最新内容',
+            changed: true,
+        };
+    }
+
+    /**
+     * 硬重置前把本地内容备份到 backup-before-pull-* 分支。
+     * - dirty=true：未提交改动切到备份分支提交后留存；
+     * - dirty=false 且本地有独有提交：当前 HEAD 直接建成备份分支。
+     * 成功后必须回到工作分支——用 -B 兜底「本地尚无同名分支」（如 init 默认 master 而配置 main）的情况；
+     * 返回 null 表示失败，调用方必须放弃本次 reset（否则可能连备份分支一起重置掉）。
+     */
+    private async backupBeforePull(branch: string, dirty: boolean): Promise<string | null> {
+        const backupBranch = `backup-before-pull-${Date.now()}`;
+        try {
+            if (dirty) {
                 await this.git(['checkout', '-b', backupBranch]);
                 await this.git(['add', '-A']);
                 await this.git(['commit', '-m', `auto-backup before pull @ ${new Date().toISOString()}`]);
-                await this.git(['checkout', git.branch]);
+            } else {
+                await this.git(['branch', backupBranch, 'HEAD']);
+            }
+            await this.git(['checkout', '-B', branch]);
+            return backupBranch;
+        } catch (e: any) {
+            console.warn('[CloudSync] 创建 pull 前备份分支失败，取消本次下载:', e?.stderr || e?.message || e);
+            return null;
+        }
+    }
+
+    /**
+     * 清理 backup-before-pull-* 本地备份分支（Git 提供方对应的 P3）。
+     *
+     * 背景：gitPull 在本地有未同步内容时会新建 backup-before-pull-<ts> 本地分支，
+     * 原实现只增不删，长期无限堆积。本方法在 gitPull 开头（建新分支前）调用。
+     *
+     * 保留口径与 SFTP 回收站一致（取较宽松者）：分支「距今 ≤ 7 天」或「属最近 10 个」即保留，
+     * 两者皆不满足才删除；并兜底跳过当前所在分支，绝不误删工作分支。
+     */
+    private async pruneGitBackupBranches(): Promise<void> {
+        let branches: string;
+        try {
+            branches = await this.git(['branch', '--list', 'backup-before-pull-*']);
+        } catch {
+            return; // 无仓库或列分支失败则无需清理
+        }
+        const PREFIX = 'backup-before-pull-';
+        const current = (await this.git(['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => '')).trim();
+        const now = Date.now();
+        const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+        const KEEP_RECENT = 10;
+        const parsed = branches
+            .split('\n')
+            .map(l => l.replace(/^\*?\s*/, '').trim())
+            .filter(n => n.startsWith(PREFIX))
+            .map(n => {
+                const ts = Number(n.slice(PREFIX.length));
+                return {name: n, ts: Number.isFinite(ts) ? ts : NaN};
+            })
+            .filter(d => Number.isFinite(d.ts))
+            .sort((a, b) => a.ts - b.ts);
+        let toDelete: string[];
+        if (parsed.length <= KEEP_RECENT) {
+            toDelete = parsed.filter(d => now - d.ts > MAX_AGE_MS).map(d => d.name);
+        } else {
+            const oldestKeptByCount = parsed[parsed.length - KEEP_RECENT].ts;
+            toDelete = parsed.filter(d => (now - d.ts > MAX_AGE_MS) && (d.ts < oldestKeptByCount)).map(d => d.name);
+        }
+        for (const name of toDelete) {
+            if (name === current) continue; // 兜底：绝不删当前分支
+            try {
+                await this.git(['branch', '-D', name]);
             } catch (e: any) {
-                console.warn('[CloudSync] 创建 pull 前备份分支失败（继续硬重置）:', e?.message);
+                console.warn('[CloudSync] 清理 backup 分支失败（跳过）:', name, e?.stderr || e?.message || e);
             }
         }
-        // 暂存区是应用私有目录，以远端为准硬重置；未提交改动已备份到本地分支。
-        await this.git(['reset', '--hard', 'FETCH_HEAD']);
-        store.ensureStagingDirs();
-        return {ok: true, message: '已从云端下载最新内容', changed: true};
     }
 
     private async gitPush(scope?: SyncTaskScope): Promise<CloudSyncResult> {
@@ -371,7 +461,7 @@ export class CloudSyncService {
         }
     }
 
-    private async sftpPush(scope?: SyncTaskScope): Promise<CloudSyncResult> {
+    private async sftpPush(scope?: SyncTaskScope, opts?: SyncPushOptions): Promise<CloudSyncResult> {
         const store = getCloudSyncStore();
         const client = await this.sftpConnect();
 
@@ -403,10 +493,23 @@ export class CloudSyncService {
             }
 
             await client.uploadDir(local, remote);
-            // 镜像清理：uploadDir 只增量上传，不会删除远端本地已删除的文件/目录。
-            // 这里递归比对远端与本地（限定在 scope 子目录内），删除远端多余项，
-            // 使 Skill 卸载等操作真正生效，且不会误删另一范围的内容。
-            await this.mirrorRemote(client, local, remote);
+            if (opts?.mirror) {
+                // 镜像清理（仅显式「以本地为准覆盖云端」路径，用户已二次确认）：
+                // 删除云端存在而本地暂存区没有的项，使本地删除真正生效。
+                // 常规 push 绝不走到这里——否则陈旧设备会把其他设备新推的内容静默清掉（P1-b）。
+                await this.mirrorRemote(client, local, remote);
+            } else if (scope === 'skills' && opts?.deletes?.length) {
+                // 卸载联动：只定向删除明确指定的 Skill，不触碰云端其余内容（P1-b）
+                for (const name of opts.deletes) {
+                    if (!this.isSafeEntryName(name)) continue;
+                    const target = `${remote}/${name}`;
+                    try {
+                        if (await client.exists(target)) await client.rmdir(target, true);
+                    } catch (e: any) {
+                        console.warn('[CloudSync] 定向删除云端项失败:', target, e?.message);
+                    }
+                }
+            }
             return {ok: true, message: '已上传到云端', changed: true};
         } catch (e: any) {
             console.error('[CloudSync] sftp push failed:', e?.message || e, e?.stack);
@@ -417,10 +520,15 @@ export class CloudSyncService {
         }
     }
 
+    /** 条目名校验：拒绝空值、'.'/'..' 与路径分隔符，防止越界操作远端目录 */
+    private isSafeEntryName(name: string): boolean {
+        return !!name && name !== '.' && name !== '..' && !name.includes('/') && !name.includes('\\');
+    }
+
     /**
-     * 镜像清理：删除远端存在但本地暂存区已不存在的文件/目录。
+     * 镜像清理（仅 mirror 模式调用）：删除远端存在但本地暂存区已不存在的文件/目录。
      * 解决 ssh2-sftp-client 的 uploadDir 只增量上传、不会删除远端遗留项的问题
-     * （例如 Skill 目录级卸载后，远端仍残留该 Skill 目录）。
+     * （例如用户显式确认「以本地为准覆盖云端」后，远端残留的已删除 Skill 目录）。
      */
     private async mirrorRemote(
         client: SftpClient,
@@ -457,6 +565,7 @@ export class CloudSyncService {
 
     private async sftpPull(): Promise<CloudSyncResult> {
         const store = getCloudSyncStore();
+        this.pruneCloudTrash(); // P3：清理过期 pull-* 回收目录，避免只增不减
         const client = await this.sftpConnect();
         try {
             const remote = this.remoteDataDir();
@@ -473,6 +582,62 @@ export class CloudSyncService {
         } finally {
             await client.end().catch(() => {
             });
+        }
+    }
+
+    /**
+     * 清理 .cloud-trash 中过期的 pull-* 回收目录（P3）。
+     *
+     * 背景：每次 pull 把「本地有、云端已删」的文件 rename 进
+     * `~/.ai-tools/cloud/.cloud-trash/pull-<ts>/`，原实现只建不删，长期无限占用磁盘、
+     * 且无限期留存含密钥的旧 mcp.json。本方法在 sftpPull 开头调用，
+     * 此时当次新 pull 目录尚未创建，不会误删。
+     *
+     * 保留口径（取较宽松者）：目录「距今 ≤ 7 天」或「属于最近 10 次 pull」即保留，
+     * 两者皆不满足才删除——既限磁盘，又保留最低可恢复历史（低频用户不丢唯一备份）。
+     */
+    private pruneCloudTrash(): void {
+        const trashBase = path.join(getCloudSyncStore().getStagingRoot(), '.cloud-trash');
+        let entries: fs.Dirent[];
+        try {
+            entries = fs.readdirSync(trashBase, {withFileTypes: true});
+        } catch {
+            return; // 回收站不存在则无需清理
+        }
+        const PULL_PREFIX = 'pull-';
+        const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+        const KEEP_RECENT = 10;
+        const now = Date.now();
+        const dirs = entries
+            .filter(e => e.isDirectory() && e.name.startsWith(PULL_PREFIX))
+            .map(e => {
+                const ts = Number(e.name.slice(PULL_PREFIX.length));
+                return {name: e.name, ts: Number.isFinite(ts) ? ts : NaN};
+            })
+            .filter(d => Number.isFinite(d.ts))
+            .sort((a, b) => a.ts - b.ts);
+        if (dirs.length <= KEEP_RECENT) {
+            // 数量未超下限：全部满足「最近 KEEP_RECENT」保留条件，仅按年龄清理
+            for (const d of dirs) {
+                if (now - d.ts > MAX_AGE_MS) this.removeTrashDir(trashBase, d.name);
+            }
+            return;
+        }
+        const oldestKeptByCount = dirs[dirs.length - KEEP_RECENT].ts; // 最近 KEEP_RECENT 个里最旧的时间戳
+        for (const d of dirs) {
+            const withinAge = now - d.ts <= MAX_AGE_MS;
+            const withinCount = d.ts >= oldestKeptByCount;
+            if (!withinAge && !withinCount) this.removeTrashDir(trashBase, d.name);
+        }
+    }
+
+    /** 递归删除单个过期回收目录；失败仅告警，不阻断同步 */
+    private removeTrashDir(base: string, name: string): void {
+        const full = path.join(base, name);
+        try {
+            fs.rmSync(full, {recursive: true, force: true});
+        } catch (e: any) {
+            console.warn('[CloudSync] 清理 .cloud-trash 失败（跳过）:', full, e?.message);
         }
     }
 

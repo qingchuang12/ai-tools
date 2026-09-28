@@ -3,6 +3,7 @@ import {useTranslation} from 'react-i18next';
 import type {InstalledSkill, SkillClientType, SkillCloudConflict} from '../lib/electron';
 import {useElectronAPI} from '../lib/electron';
 import type {InstalledServer} from '../pages/Library';
+import type {SyncTaskOptions} from '../../../shared/sync-task-types';
 import {toast} from '../components/Toast';
 
 export interface CloudUploadController {
@@ -17,7 +18,7 @@ export interface CloudUploadController {
     setCloudConflictOpen: (v: boolean) => void;
     setConflictResolutions: (v: Record<string, 'overwrite' | 'skip'>) => void;
     setMcpOverwriteConfirm: (v: { total: number; existing: number } | null) => void;
-    pushCloudAsync: (scope: 'mcp' | 'skills') => void;
+    pushCloudAsync: (scope: 'mcp' | 'skills', opts?: SyncTaskOptions) => void;
     autoPushIfCloud: (targets: string[], scope: 'mcp' | 'skills') => Promise<void>;
     handleCloudUpload: () => void;
     confirmCloudUpload: () => void;
@@ -51,10 +52,12 @@ export function useCloudUpload(params: {
 
     /**
      * 后台异步把暂存区推到云端（不阻塞当前操作界面）。
+     * opts.mirror 仅在用户显式确认「以本地为准覆盖云端」的调用点传入（P1-b）：
+     * 常规上传一律增量，绝不删除云端多余项。
      */
-    const pushCloudAsync = (scope: 'mcp' | 'skills') => {
+    const pushCloudAsync = (scope: 'mcp' | 'skills', opts?: SyncTaskOptions) => {
         if (!api.syncTasks) {
-            // 兜底：极少数情况下接口不可用，退回直接推送
+            // 兜底：队列接口不可用时退回直接推送（不支持 mirror/deletes，只增量、不删云端）
             void api.cloudSync.push().then((res) => {
                 if (res.ok) toast.success(res.message || t('library.uploadedToCloud'));
                 else toast.error(res.message || t('library.uploadCloudFailed'));
@@ -66,7 +69,7 @@ export function useCloudUpload(params: {
         const title = scope === 'mcp'
             ? (t('syncTasks.pushMcpTitle') || '上传 MCP 配置到云端')
             : (t('syncTasks.pushSkillsTitle') || '上传技能到云端');
-        void api.syncTasks.enqueue('cloud-push', title, scope).then(() => {
+        void api.syncTasks.enqueue('cloud-push', title, scope, opts).then(() => {
             toast.info(t('library.cloudEnqueued') || '已加入后台同步队列，可在左侧「同步任务」查看');
         }).catch((err) => {
             toast.error(err?.message || t('library.syncEnqueueFailed'));
@@ -130,7 +133,7 @@ export function useCloudUpload(params: {
                 await api.skills.syncBatch(skillItems, ['cloud']);
                 await loadData();
                 toast.success(t('library.cloudUploadStarted') || '云端上传中…');
-                pushCloudAsync('skills');
+                pushCloudAsync('skills', {mirror: true});
             }
         } catch (error: any) {
             console.error('Cloud upload failed:', error);
@@ -151,7 +154,7 @@ export function useCloudUpload(params: {
         // 本地暂存区已就绪，立即刷新界面，远端推送在后台异步完成
         await loadData();
         toast.success(t('library.cloudUploadStarted') || '云端上传中…');
-        pushCloudAsync('mcp');
+        pushCloudAsync('mcp', {mirror: true});
     };
 
     /** MCP「完整覆盖云端」确认：继续执行上传 */
@@ -180,7 +183,7 @@ export function useCloudUpload(params: {
             }
             await loadData();
             toast.success(t('library.cloudUploadStarted') || '云端上传中…');
-            pushCloudAsync('skills');
+            pushCloudAsync('skills', {mirror: true});
         } catch (error: any) {
             console.error('Cloud upload failed:', error);
             toast.error(error?.message || t('library.cloudUploadFailed'));

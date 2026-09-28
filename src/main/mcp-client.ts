@@ -364,7 +364,7 @@ export class McpClient extends EventEmitter {
             const sseRes = await this.performRequest('GET', this.url, {
                 'Accept': 'text/event-stream',
                 'Cache-Control': 'no-cache',
-                ...(this.httpHeaders || {}),
+                ...this.resolvedHeaders(),
             });
 
             this.startSseRead(Readable.toWeb(sseRes) as unknown as ReadableStream<Uint8Array>);
@@ -442,8 +442,9 @@ export class McpClient extends EventEmitter {
                 'Accept': 'text/event-stream',
                 'Cache-Control': 'no-cache',
                 ...(this.sessionId ? { 'mcp-session-id': this.sessionId } : {}),
-                ...(this.httpHeaders || {}),
+                ...this.resolvedHeaders(),
             });
+            if ((res.statusCode ?? 200) >= 400) return; // 非致命：GET 流不可用不应阻断 POST 自有响应
             this.startSseRead(Readable.toWeb(res) as unknown as ReadableStream<Uint8Array>);
         } catch (error) {
             if ((error as Error)?.name === 'AbortError') return;
@@ -640,8 +641,27 @@ export class McpClient extends EventEmitter {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json, text/event-stream',
                 ...(this.sessionId ? { 'mcp-session-id': this.sessionId } : {}),
-                ...(this.httpHeaders || {}),
+                ...this.resolvedHeaders(),
             }, message);
+
+            const status = res.statusCode ?? 200;
+            if (status >= 400) {
+                const body = await this.collectText(res).catch(() => '');
+                const errMsg = this.describeHttpStatus(status, body);
+                // 4xx/5xx：直接拒绝本次请求对应的 pending，避免 30s 静默超时（P0）
+                try {
+                    const id = (JSON.parse(message) as { id?: number }).id;
+                    if (id != null) {
+                        const pending = this.pendingRequests.get(id);
+                        if (pending) {
+                            this.pendingRequests.delete(id);
+                            pending.reject(new Error(errMsg));
+                        }
+                    }
+                } catch { /* 忽略请求体解析失败 */ }
+                this.emit('error', new Error(errMsg));
+                return;
+            }
 
             const sid = res.headers['mcp-session-id'] || res.headers['mcp-session-id'];
             if (sid) this.sessionId = sid as string;
@@ -675,6 +695,52 @@ export class McpClient extends EventEmitter {
                 // 忽略解析失败
             }
         }
+    }
+
+    /**
+     * 解析请求头值里的占位符（P1：避免明文密钥落盘配置）。
+     *  - `${VAR}` / `${ENV:VAR}` → 环境变量 process.env[VAR]
+     * 未解析（变量不存在）时置空并告警，而非把字面量 `${...}` 发出去。
+     * 注：密钥库（SecretStore）集成本版不做（P2/OAuth 一并搁置），密钥经由环境变量注入即可。
+     */
+    private resolveHeaderValue(raw: string): string {
+        return raw.replace(/\$\{([^}]+)\}/g, (_m, expr) => {
+            const key = String(expr).trim();
+            const val = key.startsWith('ENV:') ? process.env[key.slice(4)] : process.env[key];
+            if (val === undefined) {
+                console.warn('[MCP] 请求头占位符未解析，已置空：', raw);
+                return '';
+            }
+            return val;
+        });
+    }
+
+    /** 把 httpHeaders 全部做占位符解析后返回（每次发送时调用，便于运行时读取最新 env/密钥） */
+    private resolvedHeaders(): Record<string, string> {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(this.httpHeaders || {})) {
+            out[k] = this.resolveHeaderValue(v);
+        }
+        return out;
+    }
+
+    /**
+     * 把 HTTP 错误状态码翻译成可读错误信息（P0：让 401/403 现形，而非 30s 后才超时）。
+     */
+    private describeHttpStatus(status: number, body: string): string {
+        let detail = '';
+        if (body) {
+            try {
+                const j = JSON.parse(body);
+                detail = j.error?.message || j.message || (typeof j.error === 'string' ? j.error : '');
+            } catch {
+                detail = body.slice(0, 200);
+            }
+        }
+        const hint = status === 401 || status === 403
+            ? '，请检查连接配置里 headers 的 API Key / Token 是否正确'
+            : '';
+        return `MCP 服务器返回 HTTP ${status}${hint}${detail ? `（${detail}）` : ''}`;
     }
 
     /**

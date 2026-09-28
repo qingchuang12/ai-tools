@@ -5,6 +5,8 @@
  * 由 SyncTaskManager 在后台队列中串行处理，状态变化通过 IPC 事件推送给渲染层。
  */
 
+import type {SyncPushOptions} from './cloud-sync-constants';
+
 /** 任务类型：对应具体的云同步动作 */
 export type SyncTaskKind = 'cloud-push' | 'cloud-pull';
 
@@ -35,7 +37,14 @@ export interface SyncTask {
     error?: string;
     /** 成功时的可读结果摘要 */
     detail?: string;
+    /** push 镜像模式（「以本地为准覆盖云端」显式操作；见 SyncPushOptions） */
+    mirror?: boolean;
+    /** push 定向删除的 Skill 名清单（卸载联动；见 SyncPushOptions） */
+    deletes?: string[];
 }
+
+/** 入队附加选项：随任务一起流转到 push 执行体 */
+export type SyncTaskOptions = SyncPushOptions;
 
 /** 各类型对应给用户的默认标题（渲染层也用于兜底） */
 export const SYNC_TASK_TITLES: Record<SyncTaskKind, string> = {

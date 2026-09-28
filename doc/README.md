@@ -93,6 +93,14 @@ brew upgrade --cask mcp-dock
 | WorkBuddy | Supported |
 | Qoder | Supported |
 | ZCode | Supported |
+| Cline | Supported |
+| Qwen Code | Supported |
+| iFlow CLI | Supported |
+| LM Studio | Supported |
+| OpenHands | Supported |
+| GitHub Copilot CLI | Supported |
+| Warp | Supported |
+| Kimi Code CLI | Supported |
 | Cloud (云端存储) | Supported |
 
 ### Skills Clients
@@ -109,6 +117,9 @@ brew upgrade --cask mcp-dock
 | WorkBuddy | Supported |
 | Qoder | Supported |
 | ZCode | Supported |
+| Antigravity | Supported |
+| Cline | Supported |
+| Qwen Code | Supported |
 | TRAE | Supported |
 | TRAE CN | Supported |
 | TRAE SOLO CN (TraeWork) | Supported |

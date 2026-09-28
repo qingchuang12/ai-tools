@@ -22,6 +22,12 @@ export function getServersKey(client: AnyClientId): string {
 }
 
 /**
+ * TRAE IDE 家族：Trae / Trae CN / TRAE SOLO CN 同为 VS Code fork，共用同一 mcp.json 形态
+ * （远程条目只认 url、无 type；type: stdio/sse/http 只属 TraeCode CLI）。
+ */
+const TRAE_IDE_CLIENTS: string[] = ['trae', 'trae-cn', 'trae-solo-cn'];
+
+/**
  * 配置文件不存在（ENOENT）时返回的默认 ClientConfig。
  */
 export function defaultConfigForMissing(client: AnyClientId): ClientConfig {
@@ -50,6 +56,13 @@ export function reachesDefaultBranch(client: AnyClientId): boolean {
         || client === 'zcode'
         || client === 'claude-code'
         || client === 'zed'
+        || client === 'qoder'
+        || client === 'qwen-code'
+        || client === 'iflow-cli'
+        || client === 'warp'
+        || client === 'kimi-code'
+        || client === 'antigravity'
+        || TRAE_IDE_CLIENTS.includes(client)
         || SERVERS_KEY_CLIENTS.includes(client as ClientType)
     );
 }
@@ -88,11 +101,16 @@ export function readClientConfig(client: AnyClientId, content: string): ClientCo
         const mcpServers: Record<string, McpServerConfig> = {};
         for (const [name, def] of Object.entries(rawServers)) {
             const d = def as Record<string, any>;
+            // 规范字段是 transport（stdio/sse/streamable-http）；type 仅 CLI 兼容写法，
+            // doctor --fix 会把它改写成 transport，故读侧两者都认。enabled:false ≡ 内部 enable:false。
+            const transport = d.transport || d.type;
+            const enable = d.enabled === false ? {enable: false} : {};
             if (d.url) {
                 mcpServers[name] = {
                     url: d.url,
-                    type: d.type || 'http',
+                    type: transport === 'sse' ? 'sse' : 'http',
                     headers: d.headers || {},
+                    ...enable,
                 };
             } else if (d.command) {
                 mcpServers[name] = {
@@ -100,6 +118,7 @@ export function readClientConfig(client: AnyClientId, content: string): ClientCo
                     args: d.args || [],
                     env: {},
                     ...(d.cwd ? {cwd: d.cwd} : {}),
+                    ...enable,
                 };
             }
         }
@@ -159,6 +178,67 @@ export function readClientConfig(client: AnyClientId, content: string): ClientCo
         return {mcpServers, ...config};
     }
 
+    // Warp：官方 schema 用 working_directory 而非 cwd（docs.warp.dev/agents/capabilities/mcp），
+    // 且不以 type/transport 区分本地/远程（由 command / url 决定）。
+    if (client === 'warp') {
+        const config = jsonc.parse(content);
+        const mcpServers: Record<string, McpServerConfig> = {};
+        for (const [name, def] of Object.entries(config.mcpServers || {})) {
+            const {working_directory: workingDirectory, ...rest} = def as Record<string, any>;
+            mcpServers[name] = {...rest, ...(workingDirectory ? {cwd: workingDirectory} : {})};
+        }
+        return {...config, mcpServers};
+    }
+
+    // Kimi Code CLI：官方 schema 用 transport 而非 type、enabled 而非 enable
+    // （www.kimi.com/code/docs/kimi-code-cli/customization/mcp）
+    if (client === 'kimi-code') {
+        const config = jsonc.parse(content);
+        const mcpServers: Record<string, McpServerConfig> = {};
+        for (const [name, def] of Object.entries(config.mcpServers || {})) {
+            const {transport, enabled, ...rest} = def as Record<string, any>;
+            mcpServers[name] = {
+                ...rest,
+                ...(transport ? {type: transport} : {}),
+                // 只回读显式 false：缺失即启用，补 true 会给客户端配置平添噪声
+                ...(enabled === false ? {enable: false} : {}),
+            };
+        }
+        return {...config, mcpServers};
+    }
+
+    // TRAE IDE 家族：官方形态无 type（远程靠 url 区分），停用字段是 disabled，
+    // 实文件另有 fromGalleryId 等扩展字段——除这两个映射外原样保留。
+    if (TRAE_IDE_CLIENTS.includes(client)) {
+        const config = jsonc.parse(content);
+        const mcpServers: Record<string, McpServerConfig> = {};
+        for (const [name, def] of Object.entries(config.mcpServers || {})) {
+            const {disabled, type, ...rest} = def as Record<string, any>;
+            const enable = disabled === true ? {enable: false} : {};
+            mcpServers[name] = rest.url
+                ? {...rest, type: type === 'sse' ? 'sse' : 'http', ...enable}
+                : {...rest, ...enable};
+        }
+        return {...config, mcpServers};
+    }
+
+    // Antigravity：远程条目用 serverUrl（与通用 url 不同），SSE / streamable HTTP 共用同一字段；
+    // schema 拒绝未知属性，故 type 不参与读写。停用字段为 disabled（mcp_config.json 实测字段集
+    // command/args/env/disabled）。
+    if (client === 'antigravity') {
+        const config = jsonc.parse(content);
+        const mcpServers: Record<string, McpServerConfig> = {};
+        for (const [name, def] of Object.entries(config.mcpServers || {})) {
+            const {serverUrl, disabled, ...rest} = def as Record<string, any>;
+            mcpServers[name] = {
+                ...rest,
+                ...(serverUrl ? {url: serverUrl, type: rest.type || 'http'} : {}),
+                ...(disabled === true ? {enable: false} : {}),
+            };
+        }
+        return {...config, mcpServers};
+    }
+
     if (client === 'claude-code' || client === 'zed') {
         const config = jsonc.parse(content);
         const serversKey = getServersKey(client);
@@ -183,7 +263,7 @@ export function readClientConfig(client: AnyClientId, content: string): ClientCo
 /**
  * 将 ClientConfig 序列化为待写入的配置文本。
  * 对应 ConfigManager.writeConfig 的各分支（jetbrains / codex-cli / openclaw /
- * zcode / opencode / claude-code+zed / servers-key / 默认），行为与原文逐字一致。
+ * zcode / opencode / warp / kimi-code / claude-code+zed / servers-key / 默认），行为与原文逐字一致。
  * existingContent 为「已读取到的现有文件内容」（文件不存在时由调用方传入 '{}'）。
  */
 export function writeClientConfig(client: AnyClientId, config: ClientConfig, existingContent: string): string {
@@ -223,17 +303,23 @@ export function writeClientConfig(client: AnyClientId, config: ClientConfig, exi
         const mcpServers = config.mcpServers || {};
         const openclawServers: Record<string, any> = {};
         for (const [name, def] of Object.entries(mcpServers)) {
+            // 只写显式 false：缺失即启用，补 enabled:true 会给客户端配置平添噪声
+            const enabled = def.enable === false ? {enabled: false} : {};
             if (def.url) {
                 openclawServers[name] = {
                     url: def.url,
-                    type: 'http',
+                    // 官方规范字段为 transport（stdio/sse/streamable-http），type 是会被 doctor --fix
+                    // 改写的 CLI 兼容写法；内部 'http' 即 streamable HTTP。
+                    transport: def.type === 'sse' ? 'sse' : 'streamable-http',
                     ...(def.headers && Object.keys(def.headers).length > 0 ? {headers: def.headers} : {}),
+                    ...enabled,
                 };
             } else {
                 openclawServers[name] = {
                     command: def.command,
                     ...(def.args && def.args.length > 0 ? {args: def.args} : {}),
                     ...(def.cwd ? {cwd: def.cwd} : {}),
+                    ...enabled,
                 };
             }
         }
@@ -302,8 +388,65 @@ export function writeClientConfig(client: AnyClientId, config: ClientConfig, exi
         return jsonc.applyEdits(existingContent, edits);
     }
 
-    // Claude Code / Zed: 包含非 MCP 设置，需 merge 写入
-    if (client === 'claude-code' || client === 'zed') {
+    // Warp：写盘前把 cwd 换成官方字段名 working_directory，其余字段原样保留（含用户手写的扩展字段）
+    if (client === 'warp') {
+        const {mcpServers, ...rest} = config;
+        const warpServers: Record<string, any> = {};
+        for (const [name, def] of Object.entries(mcpServers || {})) {
+            const {cwd, ...withoutCwd} = def;
+            warpServers[name] = {...withoutCwd, ...(cwd ? {working_directory: cwd} : {})};
+        }
+        return JSON.stringify({...rest, mcpServers: warpServers}, null, 2);
+    }
+
+    // Kimi Code CLI：type -> transport（stdio 由 command 隐含，官方 schema 无该取值）、
+    // enable -> enabled（只写显式 false）
+    if (client === 'kimi-code') {
+        const {mcpServers, ...rest} = config;
+        const kimiServers: Record<string, any> = {};
+        for (const [name, def] of Object.entries(mcpServers || {})) {
+            const {type, enable, ...withoutType} = def;
+            kimiServers[name] = {
+                ...withoutType,
+                ...(type && type !== 'stdio' ? {transport: type} : {}),
+                ...(enable === false ? {enabled: false} : {}),
+            };
+        }
+        return JSON.stringify({...rest, mcpServers: kimiServers}, null, 2);
+    }
+
+    // TRAE IDE 家族：写盘剥掉官方形态不认的 type / enable，停用映射为 disabled:true
+    if (TRAE_IDE_CLIENTS.includes(client)) {
+        const {mcpServers, ...rest} = config;
+        const traeServers: Record<string, any> = {};
+        for (const [name, def] of Object.entries(mcpServers || {})) {
+            const {type, enable, ...withoutSpecial} = def;
+            traeServers[name] = {...withoutSpecial, ...(enable === false ? {disabled: true} : {})};
+        }
+        return JSON.stringify({...rest, mcpServers: traeServers}, null, 2);
+    }
+
+    // Antigravity：写盘前把 url 换成官方字段名 serverUrl、去掉 schema 不认的 type/cwd，
+    // enable:false 映射为 disabled:true（其余字段原样保留）。
+    if (client === 'antigravity') {
+        const {mcpServers, ...rest} = config;
+        const antigravityServers: Record<string, any> = {};
+        for (const [name, def] of Object.entries(mcpServers || {})) {
+            const {type, url, cwd, enable, ...withoutSpecial} = def;
+            antigravityServers[name] = {
+                ...withoutSpecial,
+                ...(url ? {serverUrl: url} : {}),
+                ...(enable === false ? {disabled: true} : {}),
+            };
+        }
+        return JSON.stringify({...rest, mcpServers: antigravityServers}, null, 2);
+    }
+
+    // Claude Code / Zed / Qoder / Qwen Code / iFlow CLI: 配置文件同时承载客户端自身的其他设置
+    // （~/.claude.json、Zed/Qoder/Qwen/iFlow 的 settings.json），只能定点改 mcpServers 键，
+    // 整文件重写会压掉用户的注释与无关配置。
+    if (client === 'claude-code' || client === 'zed' || client === 'qoder'
+        || client === 'qwen-code' || client === 'iflow-cli') {
         const serversKey = getServersKey(client);
         const mcpServers = config.mcpServers || (config as any)[serversKey] || {};
 

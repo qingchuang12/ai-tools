@@ -505,6 +505,7 @@
     "syncError": "Échec de la synchronisation"
   },
   "inspector": {
+    "managedProxyHint": "L'adresse proxy gérée par {{clients}} ({{fields}}) n'est pas utilisée ; l'URL directe manque d'en-tête Authorization et sera refusée (401).",
     "title": "Inspecteur MCP",
     "connect": "Connecter",
     "disconnect": "Déconnecter",
@@ -758,9 +759,9 @@
     "cloudUploadConfirmTitle": "Confirmer l'écrasement lors de l'envoi cloud",
     "cloudUploadConfirmMsg": "Ceci enverra tous les serveurs MCP et compétences locaux vers le cloud et écrasera le contenu existant. Continuer ?",
     "cloudUploadMcpConfirmTitle": "Confirmer l'écrasement du MCP cloud",
-    "cloudUploadMcpConfirmMsg": "Ceci enverra tous les serveurs MCP locaux vers le cloud et écrasera le contenu existant. Continuer ?",
+    "cloudUploadMcpConfirmMsg": "Ceci enverra tous les serveurs MCP locaux vers le cloud, écrasera le contenu existant et supprimera les MCP en trop dans le cloud. Continuer ?",
     "cloudUploadSkillConfirmTitle": "Confirmer l'écrasement de la compétence cloud",
-    "cloudUploadSkillConfirmMsg": "Ceci enverra toutes les compétences locales vers le cloud et écrasera le contenu existant. Continuer ?",
+    "cloudUploadSkillConfirmMsg": "Ceci enverra toutes les compétences locales vers le cloud, écrasera le contenu existant et supprimera les compétences en trop dans le cloud. Continuer ?",
     "cloudUploadConfirmBtn": "Confirmer l'envoi",
     "cloudUploading": "Envoi…",
     "cloudUploadStarted": "Envoi vers le cloud…",
@@ -841,6 +842,8 @@
     "localDiverged": "Les clients locaux diffèrent",
     "unifySync": "Unifier",
     "unifySyncTitle": "Écraser tous les autres clients installés avec la version la plus récente",
+    "downloadToLocal": "Télécharger en local",
+    "downloadToLocalTitle": "Pousser la version cloud vers tous les clients installés",
     "localDivergedCompare": "Comparer les clients locaux",
     "noSkillClient": "Aucun client de compétences installé disponible pour recevoir le téléchargement",
     "noMcpClient": "Aucun client MCP installé disponible pour recevoir le téléchargement",

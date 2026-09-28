@@ -169,7 +169,13 @@ export default function Library() {
             // 卸载目标含云端存储：本地暂存区已删除，云端推送在后台异步进行，这里仅给出进行中反馈
             if (clients.includes('cloud')) {
                 toast.success(t('library.cloudUninstallStarted') || '云端删除中…');
-                pushCloudAsync(uninstallTarget.type === 'mcp' ? 'mcp' : 'skills');
+                // 常规 push 已改为只增量上传（P1-b），云端残留的 Skill 目录需按名定向删除；
+                // MCP 暂存区是单个 mcp.json，增量上传即整体覆盖，删除天然生效
+                const type = uninstallTarget.type;
+                pushCloudAsync(
+                    type === 'mcp' ? 'mcp' : 'skills',
+                    type === 'skill' ? {deletes: [uninstallTarget.id]} : undefined
+                );
             }
         } finally {
             setUninstallTarget(null);

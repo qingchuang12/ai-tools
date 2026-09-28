@@ -499,11 +499,12 @@ export default function SkillDetail() {
             setInstalledInClients([]);
             syncInstalledSkillIds();
             // 卸载目标含云端存储：本地暂存区已删除，需在后台把 skills 范围的变更推送到远端，
-            // 否则云端仍残留该 Skill 目录（补齐此前卸载未触发云端同步的缺口）。
+            // 否则云端仍残留该 Skill 目录。常规 push 只增量上传（P1-b），
+            // 故把该 Skill 名作为定向删除一并下发给任务队列。
             if (targets.includes('cloud')) {
                 const title = t('syncTasks.pushSkillsTitle') || '上传技能到云端';
                 if (api.syncTasks) {
-                    void api.syncTasks.enqueue('cloud-push', title, 'skills').then(() => {
+                    void api.syncTasks.enqueue('cloud-push', title, 'skills', {deletes: [skillView.name]}).then(() => {
                         toast.info(t('library.cloudEnqueued') || '已加入后台同步队列，可在左侧「同步任务」查看');
                     }).catch((err) => {
                         toast.error(err?.message || t('library.syncEnqueueFailed'));

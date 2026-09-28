@@ -2,11 +2,10 @@
  * 客户端路径探测与默认路径表（单一来源）
  *
  * 原实现散落在 ConfigManager 的构造函数与各 private 方法（getAppPaths /
- * getClientName / getConfigMarkers / getEnhancedPath / findJetBrainsConfigPath），
- * 现整体下沉为模块级纯函数与数据表，行为完全一致。ConfigManager 仅做薄转发。
+ * getClientName / getConfigMarkers / getEnhancedPath），现整体下沉为模块级纯函数与
+ * 数据表，行为完全一致。ConfigManager 仅做薄转发。
  */
 
-import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import {CLOUD_ROOT_DIR} from '../../shared/cloud-sync-constants';
@@ -24,49 +23,86 @@ export function getDefaultClientPaths(home: string, platform: NodeJS.Platform): 
             'claude-code': path.join(home, '.claude.json'),
             'gemini-cli': path.join(home, '.gemini', 'settings.json'),
             'codex-cli': path.join(home, '.codex', 'config.toml'),
-            windsurf: path.join(home, '.codeium', 'windsurf', 'mcp_config.json'),
+            // Windsurf 随 Devin 品牌迁移改了配置落点：Cascade 实际加载 devin 目录，
+            // 且 macOS 与 Linux 同为 XDG 风格路径（官方文档原文 macOS and Linux）。
+            // 旧 ~/.codeium/windsurf/mcp_config.json 现仅作编辑器 discovery 源（需用户勾选），不再写。
+            windsurf: path.join(home, '.config', 'devin', 'mcp_config.json'),
             zed: path.join(home, '.config', 'zed', 'settings.json'),
             trae: path.join(home, 'Library', 'Application Support', 'Trae', 'User', 'mcp.json'),
             'trae-cn': path.join(home, 'Library', 'Application Support', 'Trae CN', 'User', 'mcp.json'),
-            // TRAE SOLO CN（TraeWork 桌面端）：VS Code fork，MCP 配置走标准 User/mcp.json
-            'trae-solo-cn': path.join(home, 'Library', 'Application Support', 'TRAE SOLO CN', 'User', 'mcp.json'),
+            // TRAE SOLO CN 不是独立配置形态：SOLO 是 TraeCode 内的模式，与 Trae CN IDE 共用同一
+            // User/mcp.json（独立客户端官方名为 TraeWork）。旧「TRAE SOLO CN」目录无官方依据。
+            'trae-solo-cn': path.join(home, 'Library', 'Application Support', 'Trae CN', 'User', 'mcp.json'),
             marscode: path.join(home, '.marscode', 'IDEA.mcp.config.json'),
             kiro: path.join(home, '.kiro', 'settings', 'mcp.json'),
             opencode: path.join(home, '.config', 'opencode', 'opencode.json'),
-            jetbrains: '', // resolved dynamically via findJetBrainsConfigPath
+            // AI Assistant / Junie 的用户级 MCP 配置：三平台同为 ~/.junie/mcp/mcp.json
+            // （Windows 即 %USERPROFILE%\.junie\mcp\mcp.json）。IDE 配置目录里的
+            // <产品><版本>/mcp.json 从不被读取（本机 IDEA 2025.2 只有 options/*.xml 内部状态），
+            // 且 Android Studio 落在 %APPDATA%\Google\ 下、前缀扫描永远找不到，故取消版本目录扫描。
+            jetbrains: path.join(home, '.junie', 'mcp', 'mcp.json'),
             antigravity: path.join(home, '.gemini', 'config', 'mcp_config.json'),
             openclaw: path.join(home, '.openclaw', 'openclaw.json'),
             codebuddy: path.join(home, '.codebuddy', 'mcp.json'),
             workbuddy: path.join(home, '.workbuddy', 'mcp.json'),
-            qoder: path.join(home, '.qoder', 'mcp.json'),
+            // Qoder 用户级 MCP 配置在 settings.json 的顶层 mcpServers 键（官方 docs/cli/mcp-reference）；
+            // 写独立 mcp.json 的话 Qoder 完全不读。
+            qoder: path.join(home, '.qoder', 'settings.json'),
             // ZCode 用户级配置位于 .zcode/cli/ 下（工作区级才是 .zcode/config.json，本项目只管用户级）
             zcode: path.join(home, '.zcode', 'cli', 'config.json'),
+            // 以下几家的官方文档均以 `~` 表述用户级路径、不按操作系统分列（Windows 即 %USERPROFILE%），
+            // 故三平台同值。Cline 的 IDE 扩展与 CLI 共用同一文件（旧 Documents/Cline/MCP 由官方自动迁移）。
+            cline: path.join(home, '.cline', 'data', 'settings', 'cline_mcp_settings.json'),
+            'qwen-code': path.join(home, '.qwen', 'settings.json'),
+            'iflow-cli': path.join(home, '.iflow', 'settings.json'),
+            'lm-studio': path.join(home, '.lmstudio', 'mcp.json'),
+            openhands: path.join(home, '.openhands', 'mcp.json'),
+            'copilot-cli': path.join(home, '.copilot', 'mcp-config.json'),
+            // Warp / Kimi Code CLI 的字段形状与通用 mcpServers 不同（Warp 用 working_directory，
+            // Kimi 用 transport / enabled），读写映射见 config/format-adapters.ts。
+            warp: path.join(home, '.warp', '.mcp.json'),
+            // Kimi 另支持 $KIMI_CODE_HOME 与项目级 .kimi-code/mcp.json，本工具只管用户级这一处。
+            'kimi-code': path.join(home, '.kimi-code', 'mcp.json'),
             cloud: path.join(home, '.ai-tools', 'cloud', CLOUD_ROOT_DIR, 'mcp', 'mcp.json'),
         };
     } else if (platform === 'win32') {
         return {
-            cursor: path.join(home, 'AppData', 'Roaming', 'Cursor', 'mcp.json'),
+            // Cursor 全局配置三平台统一为 ~/.cursor/mcp.json（官方文档不按操作系统区分）
+            cursor: path.join(home, '.cursor', 'mcp.json'),
             vscode: path.join(home, 'AppData', 'Roaming', 'Code', 'User', 'mcp.json'),
             'claude-code': path.join(home, '.claude.json'),
             'gemini-cli': path.join(home, '.gemini', 'settings.json'),
             'codex-cli': path.join(home, '.codex', 'config.toml'),
-            windsurf: path.join(home, '.codeium', 'windsurf', 'mcp_config.json'),
+            windsurf: path.join(home, 'AppData', 'Roaming', 'devin', 'mcp_config.json'),
             zed: path.join(home, 'AppData', 'Roaming', 'Zed', 'settings.json'),
             trae: path.join(home, 'AppData', 'Roaming', 'Trae', 'User', 'mcp.json'),
             'trae-cn': path.join(home, 'AppData', 'Roaming', 'Trae CN', 'User', 'mcp.json'),
-            // TRAE SOLO CN（TraeWork 桌面端）：VS Code fork，MCP 配置走标准 User/mcp.json
-            'trae-solo-cn': path.join(home, 'AppData', 'Roaming', 'TRAE SOLO CN', 'User', 'mcp.json'),
+            // TRAE SOLO CN 与 Trae CN IDE 共用同一 User/mcp.json（SOLO 只是 TraeCode 内的模式）
+            'trae-solo-cn': path.join(home, 'AppData', 'Roaming', 'Trae CN', 'User', 'mcp.json'),
             marscode: path.join(home, '.marscode', 'IDEA.mcp.config.json'),
             kiro: path.join(home, '.kiro', 'settings', 'mcp.json'),
             opencode: path.join(home, '.config', 'opencode', 'opencode.json'),
-            jetbrains: '', // resolved dynamically
+            jetbrains: path.join(home, '.junie', 'mcp', 'mcp.json'),
             antigravity: path.join(home, '.gemini', 'config', 'mcp_config.json'),
             openclaw: path.join(home, '.openclaw', 'openclaw.json'),
             codebuddy: path.join(home, '.codebuddy', 'mcp.json'),
             workbuddy: path.join(home, '.workbuddy', 'mcp.json'),
-            qoder: path.join(home, '.qoder', 'mcp.json'),
+            qoder: path.join(home, '.qoder', 'settings.json'),
             // ZCode 用户级配置位于 .zcode/cli/ 下（工作区级才是 .zcode/config.json，本项目只管用户级）
             zcode: path.join(home, '.zcode', 'cli', 'config.json'),
+            // 以下几家的官方文档均以 `~` 表述用户级路径、不按操作系统分列（Windows 即 %USERPROFILE%），
+            // 故三平台同值。Cline 的 IDE 扩展与 CLI 共用同一文件（旧 Documents/Cline/MCP 由官方自动迁移）。
+            cline: path.join(home, '.cline', 'data', 'settings', 'cline_mcp_settings.json'),
+            'qwen-code': path.join(home, '.qwen', 'settings.json'),
+            'iflow-cli': path.join(home, '.iflow', 'settings.json'),
+            'lm-studio': path.join(home, '.lmstudio', 'mcp.json'),
+            openhands: path.join(home, '.openhands', 'mcp.json'),
+            'copilot-cli': path.join(home, '.copilot', 'mcp-config.json'),
+            // Warp / Kimi Code CLI 的字段形状与通用 mcpServers 不同（Warp 用 working_directory，
+            // Kimi 用 transport / enabled），读写映射见 config/format-adapters.ts。
+            warp: path.join(home, '.warp', '.mcp.json'),
+            // Kimi 另支持 $KIMI_CODE_HOME 与项目级 .kimi-code/mcp.json，本工具只管用户级这一处。
+            'kimi-code': path.join(home, '.kimi-code', 'mcp.json'),
             cloud: path.join(home, '.ai-tools', 'cloud', CLOUD_ROOT_DIR, 'mcp', 'mcp.json'),
         };
     } else {
@@ -76,23 +112,36 @@ export function getDefaultClientPaths(home: string, platform: NodeJS.Platform): 
             'claude-code': path.join(home, '.claude.json'),
             'gemini-cli': path.join(home, '.gemini', 'settings.json'),
             'codex-cli': path.join(home, '.codex', 'config.toml'),
-            windsurf: path.join(home, '.codeium', 'windsurf', 'mcp_config.json'),
+            windsurf: path.join(home, '.config', 'devin', 'mcp_config.json'),
             zed: path.join(home, '.config', 'zed', 'settings.json'),
             trae: path.join(home, '.config', 'Trae', 'User', 'mcp.json'),
             'trae-cn': path.join(home, '.config', 'Trae CN', 'User', 'mcp.json'),
-            // TRAE SOLO CN（TraeWork 桌面端）：VS Code fork，MCP 配置走标准 User/mcp.json
-            'trae-solo-cn': path.join(home, '.config', 'TRAE SOLO CN', 'User', 'mcp.json'),
+            // TRAE SOLO CN 与 Trae CN IDE 共用同一 User/mcp.json（SOLO 只是 TraeCode 内的模式）
+            'trae-solo-cn': path.join(home, '.config', 'Trae CN', 'User', 'mcp.json'),
             marscode: path.join(home, '.marscode', 'IDEA.mcp.config.json'),
             kiro: path.join(home, '.kiro', 'settings', 'mcp.json'),
             opencode: path.join(home, '.config', 'opencode', 'opencode.json'),
-            jetbrains: '', // resolved dynamically
+            jetbrains: path.join(home, '.junie', 'mcp', 'mcp.json'),
             antigravity: path.join(home, '.gemini', 'config', 'mcp_config.json'),
             openclaw: path.join(home, '.openclaw', 'openclaw.json'),
             codebuddy: path.join(home, '.codebuddy', 'mcp.json'),
             workbuddy: path.join(home, '.workbuddy', 'mcp.json'),
-            qoder: path.join(home, '.qoder', 'mcp.json'),
+            qoder: path.join(home, '.qoder', 'settings.json'),
             // ZCode 用户级配置位于 .zcode/cli/ 下（工作区级才是 .zcode/config.json，本项目只管用户级）
             zcode: path.join(home, '.zcode', 'cli', 'config.json'),
+            // 以下几家的官方文档均以 `~` 表述用户级路径、不按操作系统分列（Windows 即 %USERPROFILE%），
+            // 故三平台同值。Cline 的 IDE 扩展与 CLI 共用同一文件（旧 Documents/Cline/MCP 由官方自动迁移）。
+            cline: path.join(home, '.cline', 'data', 'settings', 'cline_mcp_settings.json'),
+            'qwen-code': path.join(home, '.qwen', 'settings.json'),
+            'iflow-cli': path.join(home, '.iflow', 'settings.json'),
+            'lm-studio': path.join(home, '.lmstudio', 'mcp.json'),
+            openhands: path.join(home, '.openhands', 'mcp.json'),
+            'copilot-cli': path.join(home, '.copilot', 'mcp-config.json'),
+            // Warp / Kimi Code CLI 的字段形状与通用 mcpServers 不同（Warp 用 working_directory，
+            // Kimi 用 transport / enabled），读写映射见 config/format-adapters.ts。
+            warp: path.join(home, '.warp', '.mcp.json'),
+            // Kimi 另支持 $KIMI_CODE_HOME 与项目级 .kimi-code/mcp.json，本工具只管用户级这一处。
+            'kimi-code': path.join(home, '.kimi-code', 'mcp.json'),
             cloud: path.join(home, '.ai-tools', 'cloud', CLOUD_ROOT_DIR, 'mcp', 'mcp.json'),
         };
     }
@@ -102,10 +151,12 @@ export function getDefaultClientPaths(home: string, platform: NodeJS.Platform): 
  * 返回某客户端的 MCP 配置文件「候选路径」有序列表（用于自动识别）。
  *
  * 设计动机：单一硬编码路径在以下场景会漏判——
- * - Trae / Trae CN 同时存在「VS Code fork 布局」(`AppData/Roaming/Trae/User/mcp.json`)
- *   与「扁平布局」(`~/.trae/mcp.json`) 两种形态，随版本而异；
  * - CodeBuddy 官方优先级为 `~/.codebuddy/.mcp.json`(推荐) > `~/.codebuddy/mcp.json`(弃用) > `~/.codebuddy.json`(legacy)；
  * - antigravity 旧代码误写成 `~/.gemini/antigravity/...`，真实路径为 `~/.gemini/config/mcp_config.json`。
+ *
+ * 注：Trae / Trae CN 只有 VS Code fork 布局（AppData 下 Trae 系列的 User/mcp.json）——旧代码里的
+ * 「扁平布局」候选 `~/.trae/mcp.json`、`~/.trae-cn/mcp.json` 系由项目级 `<项目>/.trae/mcp.json`
+ * 误推（`~/.trae-cn` 实为 TraeCode CLI 目录，不放 mcp.json），已移除。
  *
  * 列表第一项即「首选写路径」（无已有配置时的落盘位置），其余为「探测回退」。
  * 解析时取首个 `fs.existsSync` 命中的候选；全不存在则回退到第一项（首选）。
@@ -128,19 +179,6 @@ export function getClientMcpCandidatePaths(client: AnyClientId, platform: NodeJS
                 path.join(home, '.codebuddy', 'mcp.json'), // 弃用但有效
                 path.join(home, '.codebuddy.json'), // legacy
             ];
-        case 'trae':
-            return [
-                primary, // VS Code fork 布局（当前默认，保持向后兼容）
-                path.join(home, '.trae', 'mcp.json'), // 扁平布局
-            ];
-        case 'trae-cn':
-            return [
-                primary,
-                path.join(home, '.trae-cn', 'mcp.json'),
-            ];
-        case 'trae-solo-cn':
-            // 官方论坛确认此即全局路径，单路径即可，无需回退
-            return [primary];
         default:
             return [primary];
     }
@@ -171,6 +209,14 @@ export function getClientDisplayName(client: AnyClientId): string {
         workbuddy: 'WorkBuddy',
         qoder: 'Qoder',
         zcode: 'ZCode',
+        cline: 'Cline',
+        'qwen-code': 'Qwen Code',
+        'iflow-cli': 'iFlow CLI',
+        'lm-studio': 'LM Studio',
+        openhands: 'OpenHands',
+        'copilot-cli': 'GitHub Copilot CLI',
+        warp: 'Warp',
+        'kimi-code': 'Kimi Code CLI',
         // .agents 统一标准目录（skills.sh），虚拟客户端：无 MCP 配置、仅作 Skill 载体
         'agent-skills': 'Agent Skills (.agents)',
         cloud: '云端存储',
@@ -215,6 +261,16 @@ export function getClientAppPaths(client: AnyClientId, platform: NodeJS.Platform
             path.join(home, '.local', 'bin', 'zcode'),
             path.join(home, '.zcode', 'cli'),
         ],
+        // 新增客户端：GUI 形态按 .app bundle 探测，CLI 形态按 PATH 上的可执行文件 + which 查找（cliClients）。
+        cline: ['/usr/local/bin/cline', path.join(home, '.local', 'bin', 'cline'), '/opt/homebrew/bin/cline'],
+        'qwen-code': ['/usr/local/bin/qwen', path.join(home, '.local', 'bin', 'qwen'), '/opt/homebrew/bin/qwen'],
+        'iflow-cli': ['/usr/local/bin/iflow', path.join(home, '.local', 'bin', 'iflow'), '/opt/homebrew/bin/iflow'],
+        'lm-studio': ['/Applications/LM Studio.app', path.join(home, 'Applications', 'LM Studio.app')],
+        openhands: ['/usr/local/bin/openhands', path.join(home, '.local', 'bin', 'openhands'), '/opt/homebrew/bin/openhands'],
+        'copilot-cli': ['/usr/local/bin/copilot', path.join(home, '.local', 'bin', 'copilot'), '/opt/homebrew/bin/copilot'],
+        // Warp 本体为 GUI 终端应用；Kimi Code CLI 的可执行文件名官方文档给出为 kimi。
+        warp: ['/Applications/Warp.app', path.join(home, 'Applications', 'Warp.app')],
+        'kimi-code': ['/usr/local/bin/kimi', path.join(home, '.local', 'bin', 'kimi'), '/opt/homebrew/bin/kimi'],
         cloud: [], // 虚拟客户端：可用性由云同步配置决定，不做文件探测
         jetbrains: [
             '/Applications/IntelliJ IDEA.app',
@@ -311,6 +367,18 @@ export function getClientAppPaths(client: AnyClientId, platform: NodeJS.Platform
             path.join(home, 'AppData', 'Roaming', 'npm', 'zcode.cmd'),
             path.join(home, '.zcode', 'cli'),
         ],
+        // 新增 CLI 形态客户端：本体探测以 npm 全局 bin + PATH 查找（cliClients）为准，
+        // 不臆造未文档化的安装目录。
+        cline: [path.join(home, 'AppData', 'Roaming', 'npm', 'cline.cmd')],
+        'qwen-code': [path.join(home, 'AppData', 'Roaming', 'npm', 'qwen.cmd')],
+        'iflow-cli': [path.join(home, 'AppData', 'Roaming', 'npm', 'iflow.cmd')],
+        'lm-studio': [],
+        openhands: [path.join(home, 'AppData', 'Roaming', 'npm', 'openhands.cmd')],
+        'copilot-cli': [path.join(home, 'AppData', 'Roaming', 'npm', 'copilot.cmd')],
+        // Warp 官方「File and folder locations」文档给出的 Windows 本地配置目录（仅 Warp 自身创建，
+        // 本工具不写入该处），故可作为本体探测信号；exe 具体落点官方未列，不臆造。
+        warp: [path.join(home, 'AppData', 'Local', 'warp', 'Warp', 'config')],
+        'kimi-code': [path.join(home, 'AppData', 'Roaming', 'npm', 'kimi.cmd')],
         cloud: [],
         jetbrains: [
             path.join(home, 'AppData', 'Local', 'JetBrains', 'Toolbox'),
@@ -417,6 +485,16 @@ export function getClientAppPaths(client: AnyClientId, platform: NodeJS.Platform
             path.join(home, '.local', 'bin', 'zcode'),
             path.join(home, '.zcode', 'cli'),
         ],
+        // 新增 CLI 形态客户端：本体探测以 PATH 上的可执行文件 + which 查找（cliClients）为准。
+        cline: ['/usr/bin/cline', '/usr/local/bin/cline', path.join(home, '.local', 'bin', 'cline')],
+        'qwen-code': ['/usr/bin/qwen', '/usr/local/bin/qwen', path.join(home, '.local', 'bin', 'qwen')],
+        'iflow-cli': ['/usr/bin/iflow', '/usr/local/bin/iflow', path.join(home, '.local', 'bin', 'iflow')],
+        'lm-studio': [],
+        openhands: ['/usr/bin/openhands', '/usr/local/bin/openhands', path.join(home, '.local', 'bin', 'openhands')],
+        'copilot-cli': ['/usr/bin/copilot', '/usr/local/bin/copilot', path.join(home, '.local', 'bin', 'copilot')],
+        // Warp 官方文档 Linux 配置目录为 ${XDG_CONFIG_HOME:-~/.config}/warp-terminal（仅 Warp 自身创建）。
+        warp: [path.join(home, '.config', 'warp-terminal')],
+        'kimi-code': ['/usr/bin/kimi', '/usr/local/bin/kimi', path.join(home, '.local', 'bin', 'kimi')],
         cloud: [],
         jetbrains: [
             path.join(home, '.local', 'share', 'JetBrains', 'Toolbox'),
@@ -491,44 +569,4 @@ export function getEnhancedPathEnv(): string {
         path.join(home, '.cargo', 'bin'),
     ];
     return [...additionalPaths, currentPath].join(path.delimiter);
-}
-
-/**
- * 扫描 JetBrains 配置目录，找到最新版本的 mcp.json
- */
-export async function findJetBrainsConfigPath(home: string, platform: NodeJS.Platform): Promise<string> {
-    let baseDir: string;
-    if (platform === 'darwin') {
-        baseDir = path.join(home, 'Library', 'Application Support', 'JetBrains');
-    } else if (platform === 'win32') {
-        baseDir = path.join(home, 'AppData', 'Roaming', 'JetBrains');
-    } else {
-        baseDir = path.join(home, '.config', 'JetBrains');
-    }
-
-    try {
-        const entries = await fs.readdir(baseDir, {withFileTypes: true});
-        const idePatterns = /^(IntelliJIdea|IdeaIC|WebStorm|PyCharm|GoLand|Rider|CLion|PhpStorm|RubyMine|DataGrip)/;
-        const ideDirs = entries
-            .filter(e => e.isDirectory() && idePatterns.test(e.name))
-            .map(e => e.name)
-            .sort()
-            .reverse();
-
-        for (const dir of ideDirs) {
-            const mcpPath = path.join(baseDir, dir, 'mcp.json');
-            try {
-                await fs.access(mcpPath);
-                return mcpPath;
-            } catch {
-                // mcp.json doesn't exist in this dir
-            }
-        }
-        if (ideDirs.length > 0) {
-            return path.join(baseDir, ideDirs[0], 'mcp.json');
-        }
-    } catch {
-        // JetBrains dir doesn't exist
-    }
-    return '';
 }
