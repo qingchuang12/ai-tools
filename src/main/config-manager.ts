@@ -32,7 +32,6 @@ import {
     SkillClientType,
 } from './config/types';
 import {
-    findJetBrainsConfigPath,
     getClientAppPaths,
     getClientConfigMarkers,
     getClientDisplayName,
@@ -151,10 +150,7 @@ export class ConfigManager {
      */
     private async loadUserSettings(): Promise<void> {
         this.userSettings = await loadUserSettingsFile(this.userSettingsPath);
-        this.resolvedJetBrainsPath = await findJetBrainsConfigPath(os.homedir(), process.platform);
     }
-
-    private resolvedJetBrainsPath: string = '';
 
     private async saveUserSettings(): Promise<void> {
         // 确保构造期加载已完成，避免用空对象覆盖整份设置（P0-5）
@@ -527,6 +523,14 @@ export class ConfigManager {
             'gemini-cli': 'gemini',
             'openclaw': 'openclaw',
             'codebuddy': 'codebuddy',
+            cline: 'cline',
+            'qwen-code': 'qwen',
+            'iflow-cli': 'iflow',
+            // LM Studio 的命令行是 lms（GUI 本体另由配置文件信号判定）
+            'lm-studio': 'lms',
+            openhands: 'openhands',
+            'copilot-cli': 'copilot',
+            'kimi-code': 'kimi',
         };
 
         const cliName = cliClients[client as ClientType];
@@ -669,8 +673,8 @@ export class ConfigManager {
     /**
      * 获取客户端配置路径（优先用户自定义，否则在候选路径中探测首个存在者）。
      *
-     * 关键增强：内置客户端的 MCP 配置文件可能存在多形态（如 Trae 的 fork/扁平布局、
-     * CodeBuddy 的 .mcp.json/mcp.json/legacy），此处用同步 existsSync 在候选列表里
+     * 关键增强：内置客户端的 MCP 配置文件可能存在多形态（如 CodeBuddy 的
+     * .mcp.json/mcp.json/legacy、antigravity 的旧误写路径），此处用同步 existsSync 在候选列表里
      * 挑第一个真实存在的文件；都不存在时回退到首选（写路径）。读取与写入因此永远落在
      * 同一文件，保证往返一致，且能兼容多种安装布局（需求 G：尽量做好自动识别客户端能力）。
      */
@@ -679,11 +683,6 @@ export class ConfigManager {
         const custom = this.userSettings.customClients?.find(c => c.id === client);
         if (custom) return custom.configPath;
 
-        if (client === 'jetbrains') {
-            const customPath = this.userSettings.customConfigPaths?.['jetbrains'];
-            if (customPath) return customPath;
-            return this.resolvedJetBrainsPath || '';
-        }
         const customOverride = this.userSettings.customConfigPaths?.[client as ClientType];
         if (customOverride) return customOverride;
 

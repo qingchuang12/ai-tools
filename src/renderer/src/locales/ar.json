@@ -510,6 +510,7 @@
     "syncError": "فشلت المزامنة"
   },
   "inspector": {
+    "managedProxyHint": "عنوان الوكيل الذي يديره {{clients}} ({{fields}}) غير مستخدم؛ الرابط المباشر يفتقر إلى ترويسة Authorization سيتم رفضه (401).",
     "title": "مفتش MCP",
     "connect": "اتصال",
     "disconnect": "قطع الاتصال",
@@ -771,9 +772,9 @@
     "cloudUploadConfirmTitle": "تأكيد الكتابة فوق الرفع إلى السحابة",
     "cloudUploadConfirmMsg": "سيتم رفع جميع خوادم MCP والمهارات المحلية إلى السحابة والكتابة فوق المحتوى الموجود. المتابعة؟",
     "cloudUploadMcpConfirmTitle": "تأكيد الكتابة فوق MCP السحابي",
-    "cloudUploadMcpConfirmMsg": "سيتم رفع جميع خوادم MCP المحلية إلى السحابة والكتابة فوق المحتوى الموجود. المتابعة؟",
+    "cloudUploadMcpConfirmMsg": "سيتم رفع جميع خوادم MCP المحلية إلى السحابة والكتابة فوق المحتوى الموجود وحذف خوادم MCP الزائدة في السحابة. المتابعة؟",
     "cloudUploadSkillConfirmTitle": "تأكيد الكتابة فوق مهارة السحابة",
-    "cloudUploadSkillConfirmMsg": "سيتم رفع جميع المهارات المحلية إلى السحابة والكتابة فوق المحتوى الموجود. المتابعة؟",
+    "cloudUploadSkillConfirmMsg": "سيتم رفع جميع المهارات المحلية إلى السحابة والكتابة فوق المحتوى الموجود وحذف المهارات الزائدة في السحابة. المتابعة؟",
     "cloudUploadConfirmBtn": "تأكيد الرفع",
     "cloudUploading": "جارٍ الرفع…",
     "cloudUploadStarted": "جارٍ الرفع إلى السحابة…",
@@ -854,6 +855,8 @@
     "localDiverged": "العملاء المحليون مختلفون",
     "unifySync": "توحيد",
     "unifySyncTitle": "الكتابة فوق جميع العملاء المثبّتين الآخرين بأحدث إصدار",
+    "downloadToLocal": "تنزيل إلى المحلي",
+    "downloadToLocalTitle": "إرسال نسخة السحابة إلى جميع العملاء المثبّتين",
     "localDivergedCompare": "مقارنة العملاء المحليين",
     "noSkillClient": "لا يوجد عميل مهارات مثبّت لاستلام التنزيل",
     "noMcpClient": "لا يوجد عميل MCP مثبّت لاستلام التنزيل",

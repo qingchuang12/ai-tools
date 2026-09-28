@@ -510,6 +510,7 @@
     "syncError": "Sincronizzazione fallita"
   },
   "inspector": {
+    "managedProxyHint": "L'indirizzo proxy gestito da {{clients}} ({{fields}}) non viene usato; all'URL diretto manca l'intestazione Authorization e verrà rifiutata (401).",
     "title": "Ispettore MCP",
     "connect": "Connetti",
     "disconnect": "Disconnetti",
@@ -771,9 +772,9 @@
     "cloudUploadConfirmTitle": "Conferma sovrascrittura upload cloud",
     "cloudUploadConfirmMsg": "Questo caricherà tutti i server MCP e le skill locali nel cloud e sovrascriverà i contenuti esistenti. Continuare?",
     "cloudUploadMcpConfirmTitle": "Conferma sovrascrittura cloud MCP",
-    "cloudUploadMcpConfirmMsg": "Questo caricherà tutti i server MCP locali nel cloud e sovrascriverà i contenuti esistenti. Continuare?",
+    "cloudUploadMcpConfirmMsg": "Questo caricherà tutti i server MCP locali nel cloud, sovrascriverà i contenuti esistenti ed eliminerà i server MCP in eccesso nel cloud. Continuare?",
     "cloudUploadSkillConfirmTitle": "Conferma sovrascrittura cloud Skill",
-    "cloudUploadSkillConfirmMsg": "Questo caricherà tutte le skill locali nel cloud e sovrascriverà i contenuti esistenti. Continuare?",
+    "cloudUploadSkillConfirmMsg": "Questo caricherà tutte le skill locali nel cloud, sovrascriverà i contenuti esistenti ed eliminerà le skill in eccesso nel cloud. Continuare?",
     "cloudUploadConfirmBtn": "Conferma upload",
     "cloudUploading": "Caricamento…",
     "cloudUploadStarted": "Caricamento nel cloud…",
@@ -854,6 +855,8 @@
     "localDiverged": "I client locali differiscono",
     "unifySync": "Unifica",
     "unifySyncTitle": "Sovrascrivi tutti gli altri client installati con la versione più recente",
+    "downloadToLocal": "Scarica in locale",
+    "downloadToLocalTitle": "Invia la versione cloud a tutti i client installati",
     "localDivergedCompare": "Confronta client locali",
     "noSkillClient": "Nessun client skill installato disponibile per ricevere il download",
     "noMcpClient": "Nessun client MCP installato disponibile per ricevere il download",

@@ -18,7 +18,7 @@ import type {AnyClientId, ClientInfo, ClientType, CustomClientDef, SkillClientTy
 import type {ConsistencyItem, ConsistencyReport} from '../../../main/cloud-consistency';
 import type {CloudSyncConfig, CloudSyncConfigInput, CloudSyncResult} from '../../../shared/cloud-sync-constants';
 import {defaultCloudSyncConfig} from '../../../shared/cloud-sync-constants';
-import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../../../shared/sync-task-types';
+import type {SyncTask, SyncTaskKind, SyncTaskOptions, SyncTaskScope} from '../../../shared/sync-task-types';
 import type {UpdateEventPayload} from '../../../main/updater';
 import type {McpServerConfig} from '../../../main/config/types';
 import type {
@@ -521,8 +521,9 @@ interface ElectronAPI {
     syncTasks: {
         /** 拉取当前任务列表 */
         list: () => Promise<SyncTask[]>;
-        /** 入队一个同步任务（kind: 'cloud-push' | 'cloud-pull'，scope: 'mcp' | 'skills' | 'all'） */
-        enqueue: (kind: SyncTaskKind, title?: string, scope?: SyncTaskScope) => Promise<SyncTask>;
+        /** 入队一个同步任务（kind: 'cloud-push' | 'cloud-pull'，scope: 'mcp' | 'skills' | 'all'）；
+         *  opts 用于 mirror / deletes 等「以本地为准」的显式推送语义，缺省为只增量上传 */
+        enqueue: (kind: SyncTaskKind, title?: string, scope?: SyncTaskScope, opts?: SyncTaskOptions) => Promise<SyncTask>;
         /** 重试一个失败的任务 */
         retry: (id: string) => Promise<boolean>;
         /** 移除单条任务 */
@@ -604,7 +605,7 @@ const mockAPI: ElectronAPI = {
                 id: 'windsurf',
                 name: 'Windsurf',
                 installed: false,
-                configPath: '~/.windsurf/mcp.json',
+                configPath: '~/.config/devin/mcp_config.json',
                 configExists: false,
                 supportsSkills: false,
                 supportsMcp: true
@@ -642,7 +643,7 @@ const mockAPI: ElectronAPI = {
                 id: 'trae-solo-cn',
                 name: 'TRAE SOLO CN',
                 installed: false,
-                configPath: '~/AppData/Roaming/TRAE SOLO CN/User/mcp.json',
+                configPath: '~/AppData/Roaming/Trae CN/User/mcp.json',
                 configExists: false,
                 supportsSkills: true,
                 supportsMcp: true,
@@ -692,7 +693,7 @@ const mockAPI: ElectronAPI = {
                 id: 'qoder',
                 name: 'Qoder',
                 installed: false,
-                configPath: '~/.qoder/mcp.json',
+                configPath: '~/.qoder/settings.json',
                 configExists: false,
                 supportsSkills: true,
                 supportsMcp: true,
@@ -1051,7 +1052,7 @@ const mockAPI: ElectronAPI = {
     },
     syncTasks: {
         list: async () => [],
-        enqueue: async (_kind: SyncTaskKind, _title?: string) => ({
+        enqueue: async (_kind: SyncTaskKind, _title?: string, _scope?: SyncTaskScope, _opts?: SyncTaskOptions) => ({
             id: `mock_${Date.now()}`,
             kind: _kind,
             title: _title || (_kind === 'cloud-push' ? '上传到云端' : '从云端下载'),

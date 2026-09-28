@@ -3,7 +3,8 @@
  *
  * 覆盖：技能双向（内容比对静默 / local_newer / cloud_newer / local_diverged 本地互检）、
  * MCP 内容比对（键序无关、内容一致静默、mtime 判先后、local_diverged 互检）、stableStringify 规范化。
- * 口径（用户反馈修正⑤）：内容完全相同（仅时间戳不同）视为一致静默，不产出不一致项。
+ * 口径：内容完全相同（仅时间戳不同）视为一致静默，不产出不一致项（用户反馈修正⑤）；
+ * 单侧存在：仅云端（cloud_only）产出可见项、仅本地（local_only）静默（P2-b）。
  */
 
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
@@ -104,13 +105,18 @@ describe('stableStringify', () => {
 });
 
 describe('checkCloudConsistency · Skill', () => {
-    it('云端有本地无 → 不属于不一致，静默不报（用户反馈：仅单侧存在是常态，报出来是噪音）', async () => {
+    it('云端有本地无 → 产出 cloud_only（P2-b：换机 pull 后未下发内容需可见）', async () => {
         await writeSkill(cloudSkills, 'only-cloud', '2026-01-02T00:00:00Z');
         const report = await checkCloudConsistency(makeParams());
-        expect(report.items.find(i => i.name === 'only-cloud')).toBeUndefined();
+        const item = report.items.find(i => i.name === 'only-cloud');
+        expect(item?.resolution).toBe('cloud_only');
+        expect(item?.kind).toBe('skill');
+        expect(item?.localClients).toEqual([]);
+        expect(item?.localUpdatedAt).toBeNull();
+        expect(item?.cloudUpdatedAt).toBe('2026-01-02T00:00:00Z');
     });
 
-    it('本地有云端无 → 不属于不一致，静默不报', async () => {
+    it('本地有云端无 → local_only 仍静默不报（上传入口本身可见，避免噪音翻倍）', async () => {
         await writeSkill(cursorSkills, 'only-local', '2026-01-02T00:00:00Z');
         const report = await checkCloudConsistency(makeParams());
         expect(report.items.find(i => i.name === 'only-local')).toBeUndefined();
@@ -191,11 +197,17 @@ describe('checkCloudConsistency · MCP Server', () => {
         expect(report.items.find(i => i.name === 'demo')?.resolution).toBe('cloud_newer');
     });
 
-    it('仅云端 / 仅本地 → 均不属于不一致，静默不报', async () => {
+    it('仅云端 → 产出 cloud_only；仅本地 → 静默不报（P2-b 口径）', async () => {
         await writeMcp(cloudMcp, {cloudOnly: {command: 'x'}});
         await writeMcp(cursorMcp, {localOnly: {command: 'y'}});
+        await setMtime(cloudMcp, '2026-09-07T10:00:00Z');
         const report = await checkCloudConsistency(makeParams());
-        expect(report.items.find(i => i.name === 'cloudOnly')).toBeUndefined();
+        const item = report.items.find(i => i.name === 'cloudOnly');
+        expect(item?.resolution).toBe('cloud_only');
+        expect(item?.kind).toBe('server');
+        expect(item?.localClients).toEqual([]);
+        expect(item?.localUpdatedAt).toBeNull();
+        expect(item?.cloudUpdatedAt).toBe(new Date('2026-09-07T10:00:00Z').toISOString());
         expect(report.items.find(i => i.name === 'localOnly')).toBeUndefined();
     });
 

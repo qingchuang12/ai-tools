@@ -18,7 +18,7 @@ import type {AnyClientId, ClientInfo, ClientType, CustomClientDef, SkillClientTy
 import type {CloudSyncConfig, CloudSyncConfigInput, CloudSyncResult} from '../shared/cloud-sync-constants';
 import type {ConsistencyReport} from '../main/cloud-consistency';
 import type {SkillsExportResult} from '../main/skills-export';
-import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
+import type {SyncTask, SyncTaskKind, SyncTaskOptions, SyncTaskScope} from '../shared/sync-task-types';
 import type {UpdateEventPayload} from '../main/updater';
 import type {McpServerConfig} from '../main/config/types';
 import type {
@@ -529,8 +529,8 @@ const api = {
     syncTasks: {
         list: (): Promise<SyncTask[]> =>
             ipcRenderer.invoke('sync-tasks:list'),
-        enqueue: (kind: SyncTaskKind, title?: string, scope?: SyncTaskScope): Promise<SyncTask> =>
-            ipcRenderer.invoke('sync-tasks:enqueue', kind, title, scope),
+        enqueue: (kind: SyncTaskKind, title?: string, scope?: SyncTaskScope, opts?: SyncTaskOptions): Promise<SyncTask> =>
+            ipcRenderer.invoke('sync-tasks:enqueue', kind, title, scope, opts),
         retry: (id: string): Promise<boolean> =>
             ipcRenderer.invoke('sync-tasks:retry', id),
         remove: (id: string): Promise<void> =>

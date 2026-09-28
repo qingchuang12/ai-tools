@@ -510,6 +510,7 @@
     "syncError": "Error de sincronización"
   },
   "inspector": {
+    "managedProxyHint": "La dirección de proxy gestionada por {{clients}} ({{fields}}) no se usa; la URL directa carece de encabezado Authorization y será rechazada (401).",
     "title": "Inspector MCP",
     "connect": "Conectar",
     "disconnect": "Desconectar",
@@ -771,9 +772,9 @@
     "cloudUploadConfirmTitle": "Confirmar sobrescritura al subir a la nube",
     "cloudUploadConfirmMsg": "Esto subirá todos los servidores MCP y habilidades locales a la nube y sobrescribirá el contenido existente. ¿Continuar?",
     "cloudUploadMcpConfirmTitle": "Confirmar sobrescritura del MCP en la nube",
-    "cloudUploadMcpConfirmMsg": "Esto subirá todos los servidores MCP locales a la nube y sobrescribirá el contenido existente. ¿Continuar?",
+    "cloudUploadMcpConfirmMsg": "Esto subirá todos los servidores MCP locales a la nube, sobrescribirá el contenido existente y eliminará los MCP sobrantes de la nube. ¿Continuar?",
     "cloudUploadSkillConfirmTitle": "Confirmar sobrescritura de la habilidad en la nube",
-    "cloudUploadSkillConfirmMsg": "Esto subirá todas las habilidades locales a la nube y sobrescribirá el contenido existente. ¿Continuar?",
+    "cloudUploadSkillConfirmMsg": "Esto subirá todas las habilidades locales a la nube, sobrescribirá el contenido existente y eliminará las habilidades sobrantes de la nube. ¿Continuar?",
     "cloudUploadConfirmBtn": "Confirmar subida",
     "cloudUploading": "Subiendo…",
     "cloudUploadStarted": "Subiendo a la nube…",
@@ -854,6 +855,8 @@
     "localDiverged": "Los clientes locales difieren",
     "unifySync": "Unificar",
     "unifySyncTitle": "Sobrescribir todos los demás clientes instalados con la versión más reciente",
+    "downloadToLocal": "Descargar a local",
+    "downloadToLocalTitle": "Enviar la versión de la nube a todos los clientes instalados",
     "localDivergedCompare": "Comparar clientes locales",
     "noSkillClient": "No hay ningún cliente de habilidades instalado disponible para recibir la descarga",
     "noMcpClient": "No hay ningún cliente MCP instalado disponible para recibir la descarga",

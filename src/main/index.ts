@@ -49,7 +49,7 @@ import {getCloudSyncService} from './cloud-sync-service';
 import {CLOUD_SYNC_DISABLED_MESSAGE, cloudSyncHardDisabled} from './build-flags';
 import {checkCloudConsistency, type ConsistencyReport, readCompareEnds} from './cloud-consistency';
 import {getSyncTaskManager, initSyncTaskManager} from './sync-task-manager';
-import type {SyncTask, SyncTaskKind, SyncTaskScope} from '../shared/sync-task-types';
+import type {SyncTask, SyncTaskKind, SyncTaskOptions, SyncTaskScope} from '../shared/sync-task-types';
 import {FEATURE_CLOUD_SYNC} from '../shared/license-constants';
 import type {CloudSyncConfig, CloudSyncConfigInput, CloudSyncResult} from '../shared/cloud-sync-constants';
 import {
@@ -266,7 +266,7 @@ app.whenReady().then(async () => {
     void (async () => {
         try {
             if (!getCloudSyncStore().isActive()) return;
-            const res = await enqueueCloudAndWait('cloud-pull', '从云端下载');
+            const res = await getSyncTaskManager().enqueueAndWait('cloud-pull', '从云端下载');
             mainWindow?.webContents.send('cloud-sync:pulled', res);
         } catch (e: any) {
             console.error('[CloudSync] startup pull error:', e?.message || e);
@@ -876,8 +876,8 @@ ipcMain.handle('sync-tasks:list', (): SyncTask[] => {
     return getSyncTaskManager().list();
 });
 
-ipcMain.handle('sync-tasks:enqueue', (_, kind: SyncTaskKind, title: string, scope?: SyncTaskScope): SyncTask => {
-    return getSyncTaskManager().enqueue(kind, title, scope);
+ipcMain.handle('sync-tasks:enqueue', (_, kind: SyncTaskKind, title: string, scope?: SyncTaskScope, opts?: SyncTaskOptions): SyncTask => {
+    return getSyncTaskManager().enqueue(kind, title, scope, opts);
 });
 
 ipcMain.handle('sync-tasks:retry', (_, id: string): boolean => {
@@ -1269,14 +1269,14 @@ ipcMain.handle('cloud-sync:push', async (): Promise<CloudSyncResult> => {
     const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
     if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
     // 经由同步队列执行（P1-1），与启动 pull / 其他 push 串行，状态可见且避免并发冲突
-    return enqueueCloudAndWait('cloud-push', '上传到云端');
+    return getSyncTaskManager().enqueueAndWait('cloud-push', '上传到云端');
 });
 
 ipcMain.handle('cloud-sync:pull', async (): Promise<CloudSyncResult> => {
     if (cloudSyncHardDisabled()) return {ok: false, message: CLOUD_SYNC_DISABLED_MESSAGE};
     const gate = await license.assertFeature(FEATURE_CLOUD_SYNC);
     if (!gate.allowed) return {ok: false, message: GATE_LOCKED_MESSAGE};
-    return enqueueCloudAndWait('cloud-pull', '从云端下载');
+    return getSyncTaskManager().enqueueAndWait('cloud-pull', '从云端下载');
 });
 
 // ============ 云端一致性（plan-3.0） ============
@@ -1334,28 +1334,6 @@ ipcMain.handle('cloud-sync:read-ends', async (_, req: {
         : configManager.getConfigPath('cloud');
     return readCompareEnds({kind: req.kind, name: req.name, localPath, cloudPath});
 });
-
-/**
- * 入队一个云同步任务并等待其完成，返回与 cloudSyncService 一致的 CloudSyncResult。
- * 轮询任务状态（队列本身已串行化），保证 IPC 调用方拿到的仍是结果对象，
- * 同时让任务出现在「同步任务」面板（P1-1）。
- */
-async function enqueueCloudAndWait(kind: SyncTaskKind, title: string): Promise<CloudSyncResult> {
-    const mgr = getSyncTaskManager();
-    const task = mgr.enqueue(kind, title);
-    return new Promise<CloudSyncResult>((resolve) => {
-        const timer = setInterval(() => {
-            const t = mgr.list().find(x => x.id === task.id);
-            if (!t || t.status === 'success') {
-                clearInterval(timer);
-                resolve({ok: true, message: t?.detail ?? '同步完成'});
-            } else if (t.status === 'failed') {
-                clearInterval(timer);
-                resolve({ok: false, message: t?.error ?? '同步失败'});
-            }
-        }, 150);
-    });
-}
 
 // ============ 缓存 IPC 处理器 ============
 

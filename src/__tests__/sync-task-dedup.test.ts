@@ -62,4 +62,60 @@ describe('SyncTaskManager 去重', () => {
         const b = mgr.enqueue('cloud-push', 'MCP', 'mcp');
         expect(b.id).toBe(a.id);
     });
+
+    it('mirror 选项不同视为不同任务（镜像覆盖不被增量任务吞掉）', () => {
+        const mgr = fresh();
+        const incremental = mgr.enqueue('cloud-push', 'Skills', 'skills');
+        const mirrored = mgr.enqueue('cloud-push', 'Skills', 'skills', {mirror: true});
+        expect(mirrored.id).not.toBe(incremental.id);
+        expect(mirrored.mirror).toBe(true);
+        expect(incremental.mirror).toBeUndefined();
+        // 同 mirror 的再一次入队仍去重
+        const again = mgr.enqueue('cloud-push', 'Skills', 'skills', {mirror: true});
+        expect(again.id).toBe(mirrored.id);
+    });
+
+    it('deletes 清单不同视为不同任务，相同则去重', () => {
+        const mgr = fresh();
+        const a = mgr.enqueue('cloud-push', 'Skills', 'skills', {deletes: ['skill-a']});
+        const b = mgr.enqueue('cloud-push', 'Skills', 'skills', {deletes: ['skill-b']});
+        expect(b.id).not.toBe(a.id);
+        expect(a.deletes).toEqual(['skill-a']);
+        const sameAsA = mgr.enqueue('cloud-push', 'Skills', 'skills', {deletes: ['skill-a']});
+        expect(sameAsA.id).toBe(a.id);
+    });
+});
+
+describe('SyncTaskManager.enqueueAndWait（P2-a）', () => {
+    it('成功时返回任务 detail，并把 mirror/deletes 透传给 push', async () => {
+        const mgr = fresh();
+        fakePush.mockResolvedValueOnce({ok: true, message: '已上传到云端(2 项变更)'});
+
+        const res = await mgr.enqueueAndWait('cloud-push', '上传技能到云端', 'skills', {deletes: ['skill-a']});
+
+        expect(res).toEqual({ok: true, message: '已上传到云端(2 项变更)'});
+        expect(fakePush).toHaveBeenCalledWith('skills', {mirror: undefined, deletes: ['skill-a']});
+    });
+
+    it('失败时按任务 error 返回，不谎报成功', async () => {
+        const mgr = fresh();
+        fakePush.mockResolvedValueOnce({ok: false, message: '连接超时'});
+
+        const res = await mgr.enqueueAndWait('cloud-push', '上传到云端');
+
+        expect(res.ok).toBe(false);
+        expect(res.message).toBe('连接超时');
+    });
+
+    it('任务记录被移除 → 按失败返回（不得当作成功）', async () => {
+        const mgr = fresh();
+        const pending = mgr.enqueueAndWait('cloud-push', '上传到云端', 'skills');
+        const id = mgr.list()[0].id;
+        mgr.remove(id);
+
+        const res = await pending;
+
+        expect(res.ok).toBe(false);
+        expect(res.message).toContain('已被移除');
+    });
 });

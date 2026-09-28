@@ -9,7 +9,8 @@
  * - Skill：SKILL.md 全文（与对照查看口径一致）；内容完全相同（仅 updatedAt/mtime 不同）视为一致静默；
  * - MCP Server：mcpServers 配置 deep-equal（键序无关）。
  *
- * 仅单侧存在（local_only / cloud_only）属正常状态，不产出。
+ * 仅本地存在（local_only）属正常状态，不产出（上传入口本身可见）；
+ * 仅云端存在（cloud_only）产出可见项——换机 pull 后「云端有 N 项本地还没下发」需被看到（P2-b）。
  * 检测结果驱动 Library 顶部 consistency banner。
  */
 
@@ -24,7 +25,8 @@ export type ConsistencyResolution =
     | 'local_newer'    // 本地与云端都有该条目，本地更新
     | 'cloud_newer'    // 本地与云端都有该条目，云端更新
     | 'diverged'       // 两端都有但时间无法判定先后（如一端缺时间戳）
-    | 'local_diverged'; // 本地多个客户端之间内容互不一致（优先于云端比对）
+    | 'local_diverged' // 本地多个客户端之间内容互不一致（优先于云端比对）
+    | 'cloud_only';    // 仅云端存在（本地无任何客户端持有），可一键下发到全部已安装客户端
 
 /** local_diverged 时逐客户端的时间信息 */
 export interface ConsistencyLocalInfo {
@@ -173,7 +175,18 @@ async function checkSkills(params: ConsistencyCheckParams): Promise<ConsistencyI
         });
     }
 
-    // 仅云端存在（云端有 & 本地完全无）→ 正常状态（用户反馈修正③），不产出
+    // 仅云端存在（云端有 & 本地完全无）→ 产出 cloud_only（P2-b）：
+    // 换机 pull 后本地还没下发的内容必须可见，否则只能自己翻云端 Tab 才发现。
+    for (const name of cloudNames) {
+        if (localIndex.has(name)) continue;
+        items.push({
+            kind: 'skill', name,
+            localClients: [],
+            localUpdatedAt: null,
+            cloudUpdatedAt: await readSkillUpdatedAt(path.join(params.cloudSkillsPath, name)),
+            resolution: 'cloud_only',
+        });
+    }
     return items;
 }
 
@@ -242,6 +255,18 @@ async function checkServers(params: ConsistencyCheckParams): Promise<Consistency
         });
     }
 
+    // 仅云端存在 → 产出 cloud_only（P2-b），与 Skill 同口径：逐项可下发到全部已安装客户端
+    for (const name of Object.keys(cloudServers)) {
+        if (localIndex.has(name)) continue;
+        items.push({
+            kind: 'server', name,
+            localClients: [],
+            localUpdatedAt: null,
+            cloudUpdatedAt: cloudMcpMtime,
+            resolution: 'cloud_only',
+        });
+    }
+
     return items;
 }
 
@@ -271,7 +296,7 @@ async function readJson(filePath: string): Promise<any | null> {
     }
 }
 
-/** 一致性检测入口：返回全部「内容不一致」项（一致项与仅单侧存在的条目均已在内层静默）。云同步未激活时由调用方短路。 */
+/** 一致性检测入口：返回全部「内容不一致」项（内容一致项与仅本地存在的条目在内层静默，仅云端存在产出 cloud_only）。云同步未激活时由调用方短路。 */
 export async function checkCloudConsistency(params: ConsistencyCheckParams): Promise<ConsistencyReport> {
     const [skillItems, serverItems] = await Promise.all([checkSkills(params), checkServers(params)]);
     return {

@@ -14,6 +14,7 @@ import {
     getClientAppPaths,
     getClientConfigMarkers,
     getClientDisplayName,
+    getClientMcpCandidatePaths,
     getDefaultClientPaths
 } from '../main/config/client-probe';
 import {ALL_BUILTIN_CLIENTS, EXECUTABLE_ONLY_CLIENTS, SKILL_SUPPORTED_CLIENTS} from '../main/config/types';
@@ -24,10 +25,10 @@ const PLATFORMS: NodeJS.Platform[] = ['darwin', 'win32', 'linux'];
 
 describe('EXECUTABLE_ONLY_CLIENTS（用户报障防回归：配置文件存在≠CLI 本体已安装）', () => {
     it('纯 CLI 形态客户端在列，GUI/IDE 形态客户端不在列', () => {
-        for (const c of ['claude-code', 'gemini-cli', 'codex-cli', 'opencode', 'openclaw', 'qoder', 'zcode']) {
+        for (const c of ['claude-code', 'gemini-cli', 'codex-cli', 'opencode', 'openclaw', 'qoder', 'zcode', 'cline', 'qwen-code', 'iflow-cli', 'openhands', 'copilot-cli', 'kimi-code']) {
             expect(EXECUTABLE_ONLY_CLIENTS, c).toContain(c);
         }
-        for (const c of ['cursor', 'vscode', 'windsurf', 'zed', 'trae', 'trae-cn', 'trae-solo-cn', 'marscode', 'kiro', 'jetbrains', 'antigravity', 'codebuddy', 'workbuddy']) {
+        for (const c of ['cursor', 'vscode', 'windsurf', 'zed', 'trae', 'trae-cn', 'trae-solo-cn', 'marscode', 'kiro', 'jetbrains', 'antigravity', 'codebuddy', 'workbuddy', 'lm-studio', 'warp']) {
             expect(EXECUTABLE_ONLY_CLIENTS, c).not.toContain(c);
         }
     });
@@ -54,11 +55,17 @@ describe('安装探测路径为文件级（用户报障防回归：裸目录存�
 });
 
 describe('getDefaultClientPaths', () => {
-    it.each(PLATFORMS)('%s 下每个内置客户端都有配置路径（jetbrains 动态扫描除外）', (platform: NodeJS.Platform) => {
+    it.each(PLATFORMS)('%s 下每个内置客户端都有配置路径', (platform: NodeJS.Platform) => {
         const paths = getDefaultClientPaths(HOME, platform);
         for (const client of ALL_BUILTIN_CLIENTS) {
-            if (client === 'jetbrains') continue; // 版本目录需运行时扫描，路径表留空
             expect(paths[client], `${client} @ ${platform}`).toBeTruthy();
+        }
+    });
+
+    it('JetBrains 三平台均指向用户级 ~/.junie/mcp/mcp.json（AI Assistant/Junie 唯一可编辑入口）', () => {
+        for (const platform of PLATFORMS) {
+            expect(getDefaultClientPaths(HOME, platform).jetbrains)
+                .toBe(path.join(HOME, '.junie', 'mcp', 'mcp.json'));
         }
     });
 
@@ -69,13 +76,80 @@ describe('getDefaultClientPaths', () => {
         }
     });
 
-    it('TRAE SOLO CN 三平台均指向 User/mcp.json（VS Code fork 布局）', () => {
-        expect(getDefaultClientPaths(HOME, 'darwin')['trae-solo-cn'])
-            .toBe(path.join(HOME, 'Library', 'Application Support', 'TRAE SOLO CN', 'User', 'mcp.json'));
+    it('Warp 三平台均指向 ~/.warp/.mcp.json（官方 File and folder locations 按三平台同列）', () => {
+        for (const platform of PLATFORMS) {
+            expect(getDefaultClientPaths(HOME, platform).warp)
+                .toBe(path.join(HOME, '.warp', '.mcp.json'));
+        }
+    });
+
+    it('Kimi Code CLI 三平台均指向用户级 ~/.kimi-code/mcp.json', () => {
+        for (const platform of PLATFORMS) {
+            expect(getDefaultClientPaths(HOME, platform)['kimi-code'])
+                .toBe(path.join(HOME, '.kimi-code', 'mcp.json'));
+        }
+    });
+
+    it('TRAE SOLO CN 与 Trae CN 共用同一 User/mcp.json（防回归：独立 SOLO CN 目录无官方依据）', () => {
+        for (const platform of PLATFORMS) {
+            expect(getDefaultClientPaths(HOME, platform)['trae-solo-cn'])
+                .toBe(getDefaultClientPaths(HOME, platform)['trae-cn']);
+        }
         expect(getDefaultClientPaths(HOME, 'win32')['trae-solo-cn'])
-            .toBe(path.join(HOME, 'AppData', 'Roaming', 'TRAE SOLO CN', 'User', 'mcp.json'));
-        expect(getDefaultClientPaths(HOME, 'linux')['trae-solo-cn'])
-            .toBe(path.join(HOME, '.config', 'TRAE SOLO CN', 'User', 'mcp.json'));
+            .toBe(path.join(HOME, 'AppData', 'Roaming', 'Trae CN', 'User', 'mcp.json'));
+    });
+
+    it('Qoder 用户级 MCP 在 ~/.qoder/settings.json 的 mcpServers 键（防回归：独立 mcp.json 客户端不读）', () => {
+        for (const platform of PLATFORMS) {
+            expect(getDefaultClientPaths(HOME, platform).qoder)
+                .toBe(path.join(HOME, '.qoder', 'settings.json'));
+        }
+    });
+
+    it('Cursor 三平台统一 ~/.cursor/mcp.json（官方文档不按操作系统区分）', () => {
+        for (const platform of PLATFORMS) {
+            expect(getDefaultClientPaths(HOME, platform).cursor)
+                .toBe(path.join(HOME, '.cursor', 'mcp.json'));
+        }
+    });
+
+    it('Windsurf 跟随 Devin 迁移落到 devin 目录（防回归：旧 ~/.codeium/windsurf 仅作需勾选的 discovery 源）', () => {
+        expect(getDefaultClientPaths(HOME, 'darwin').windsurf)
+            .toBe(path.join(HOME, '.config', 'devin', 'mcp_config.json'));
+        expect(getDefaultClientPaths(HOME, 'linux').windsurf)
+            .toBe(path.join(HOME, '.config', 'devin', 'mcp_config.json'));
+        expect(getDefaultClientPaths(HOME, 'win32').windsurf)
+            .toBe(path.join(HOME, 'AppData', 'Roaming', 'devin', 'mcp_config.json'));
+    });
+});
+
+describe('getClientMcpCandidatePaths', () => {
+    it('Qoder / Cursor 单候选路径（不留旧错误路径的回退，读写永远落同一文件）', () => {
+        const realHome = os.homedir();
+        for (const platform of PLATFORMS) {
+            expect(getClientMcpCandidatePaths('qoder', platform))
+                .toEqual([path.join(realHome, '.qoder', 'settings.json')]);
+            expect(getClientMcpCandidatePaths('cursor', platform))
+                .toEqual([path.join(realHome, '.cursor', 'mcp.json')]);
+        }
+    });
+
+    it('TRAE 家族单候选路径（防回归：~/.trae、~/.trae-cn 扁平布局系项目级路径误推）', () => {
+        const realHome = os.homedir();
+        const expected: Record<NodeJS.Platform, string[]> = {
+            darwin: [path.join(realHome, 'Library', 'Application Support', 'Trae', 'User', 'mcp.json')],
+            win32: [path.join(realHome, 'AppData', 'Roaming', 'Trae', 'User', 'mcp.json')],
+            linux: [path.join(realHome, '.config', 'Trae', 'User', 'mcp.json')],
+        } as Record<NodeJS.Platform, string[]>;
+        for (const platform of PLATFORMS) {
+            expect(getClientMcpCandidatePaths('trae', platform), platform).toEqual(expected[platform]);
+            // 家族另外两个成员都只有自身那一条，不含 ~/.trae-cn 之类的扁平回退
+            for (const client of ['trae-cn', 'trae-solo-cn']) {
+                const candidates = getClientMcpCandidatePaths(client, platform);
+                expect(candidates.length, `${client} @ ${platform}`).toBe(1);
+                expect(candidates[0], `${client} @ ${platform}`).not.toContain('.trae');
+            }
+        }
     });
 });
 
