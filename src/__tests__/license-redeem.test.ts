@@ -42,7 +42,7 @@ const {fetchRedeem, reportBinding, fetchPendingLicenses, buildCheckoutUrl, build
     '../main/license/redeem'
 );
 const {publicErrorFor, PUBLIC_ERROR_KEY} = await import('../main/license/errors');
-const {PRODUCT_SKU} = await import('../shared/license-constants');
+const {PRODUCT_CODE} = await import('../shared/license-constants');
 /** 服务端成功响应（统一壳） */
 function envelope(data: Record<string, unknown>): Record<string, unknown> {
     return {success: true, code: 'SUCCESS', data, traceId: 'abc123', timestamp: '2026-09-18T12:00:00.123'};
@@ -285,14 +285,15 @@ describe('fetchPendingLicenses（plan-1.0 / C4：按机器码领取待激活授�
     });
 });
 
-describe('收银台与账号页 URL（plan-1.0 / C3）', () => {
-    it('收银台 URL 同时带 machineId 与 productId（无深链回调，靠 productId 预选档位）', async () => {
+describe('收银台与账号页 URL（plan-1.0 / C3 + 审计 D2）', () => {
+    it('收银台 URL 带 machineId 与产品码 product（档位由用户在收银台自选，不预置 productId）', async () => {
         const url = await buildCheckoutUrl();
         expect(url).toBe(
             `https://billing.example.test/checkout/index.html?machineId=${encodeURIComponent(
                 hoisted.mid,
-            )}&productId=${encodeURIComponent(PRODUCT_SKU)}`,
+            )}&product=${encodeURIComponent(PRODUCT_CODE)}`,
         );
+        expect(url).not.toContain('productId');
     });
 
     it('账号页 URL 指向 billing 的无密码授权管理入口', () => {

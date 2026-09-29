@@ -89,6 +89,20 @@ export interface RedeemResult {
     action?: 'openAccount';
 }
 
+/**
+ * 手动「立即联网验证」的对外结论（plan-1.0 审计 D4）：只有四类语义，
+ * 服务端业务码（`LICENSE_INVALID` 等）只进主进程日志，绝不跨 IPC 上屏。
+ */
+export type ManualRecheckResult =
+    /** 服务端明确回答授权有效 → 提醒态消失 */
+    | 'verified'
+    /** 拿不到明确结论（网络/超时/429/畸形）→ 提示稍后再试，不当失败处理 */
+    | 'unverified'
+    /** 本次判定为停用（服务端吊销 或 离线宽限耗尽） */
+    | 'disabled'
+    /** 未激活 / 复核开关关闭 → 无需验证 */
+    | 'skipped';
+
 export interface ActivationApi {
     /** 读取当前激活状态（主进程会顺带做到期降级并持久化） */
     getState: () => Promise<ActivationState>;
@@ -101,6 +115,11 @@ export interface ActivationApi {
      * 地址只有主进程知道（来自包外配置），渲染层拿到后走既有 `system.openExternal` 打开。
      */
     getAccountPageUrl: () => Promise<string>;
+    /**
+     * 立即发起一次联网复核（提醒态横幅的出口）。走的是与后台循环同一条 `runRecheck()`，
+     * 因此结论口径一致；返回对外四态，调用方随后 `getState()` 读新状态即可。
+     */
+    recheckNow: () => Promise<ManualRecheckResult>;
     /**
      * 兑换码 + 购买邮箱 → 后端 redeem → 本地验签 → 落盘。
      * 邮箱是服务端的客户标识（必填）：未注册邮箱会在服务端自动建访客账户。

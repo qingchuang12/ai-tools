@@ -5,9 +5,9 @@
  * 本模块**不做任何停用动作**——停用判定统一由 `isDisabledByRecheck()` 表达，
  * 由 `index.ts#getState()` 与 `feature-gate.ts#assertFeature()` 各自在本地闸门里消费。
  *
- * 节奏（plan-1.0 第 1~3 条）：正常 **15 天**一次；**拿不到明确结论**（网络/超时/5xx/畸形）时
- * **2 小时**后重试，直到拿到明确答案；429 走 `rateLimitedRetryMs` + 抖动退避。
- * 排期时刻落盘在 `LicenseVault.next_check_at`，跨重启存活。
+ * 节奏（plan-1.0 第 1~3 条）：正常 **15 天**一次；**拿不到明确结论**（网络/超时/5xx/畸形/429）时
+ * **2 小时**后重试，直到拿到明确答案（429 额外叠加 0~10min 抖动，防同 NAT 下群体同步重试）。
+ * 排期时刻落盘在 `LicenseVault.next_check_at`，跨重启存活，启动时按 `intervalMs` 夹上界。
  *
  * 停用分两段（plan-1.0 / U1）：距最近一次「服务端明确回答 ACTIVE」
  * `offlineGraceDays`（默认 30 天）之内无感 → 之上进入**提醒段**（`needsOnlineVerify`，功能不减）→
@@ -19,7 +19,7 @@
  * 2. **宁可放过也不误杀**：只有服务端明确回答 `LICENSE_INVALID` / `LICENSE_EXPIRED` 才立即停用；
  *    `LICENSE_NOT_FOUND`（可能是服务端数据迁移/恢复）、429、5xx、网络失败、JSON 畸形一律 `unknown`。
  *    误判停用是资损级事故，漏判只是少收一天钱。
- * 3. **429 照常累加宽限**：绝不能因为「服务端在限流」就免扣——否则攻击者只要打满
+ * 3. **429 不豁免停用判定**：绝不能因为「服务端在限流」就免扣——否则攻击者只要打满
  *    verify 限流（60/min/IP），客户端就永远只能拿到 429 → 永不停用，限流本身变成永久续命后门。
  * 4. **本次进程尚未复核过时，不因「超阈值」停用**（plan-1.0 新增）：15 天间隔下「闲置 40 天回来
  *    第一次启动」会成为常态，此时距上次成功复核早已超阈值，但一次复核几秒就能翻案。
@@ -27,12 +27,13 @@
  *    故停用判定要求「本次进程已发起过至少一次复核尝试」。见 `hasPendingRecheckAttempt()`。
  *
  * 时间口径：入参 `nowMs` 由调用方给（单测可注入）；`last_checked_at` 单调只增（防改系统时间倒拨宽限）。
- * 阈值判定取真实经过时长（`now - last_verified_ok_at`，缺失回落 `activated_at`），
- * 改系统时间既不能让 `last_verified_ok_at` 倒退，也不影响既有的付费态水印/服务器时间下界。
+ * 阈值判定取真实经过时长（`基准 - last_verified_ok_at`，缺失回落 `activated_at`），而基准是
+ * `max(nowMs, server_time_floor)`——只能由服务端 HTTP Date 推进的那一路下界：改系统时间既不能让
+ * `last_verified_ok_at` 倒退，也不能把「距上次成功复核」算小（plan-1.0 审计 D1）。
  */
 
 import {getConfig} from './config';
-import {LICENSE_VERIFY_API_PATH} from './constants';
+import {LICENSE_VERIFY_API_PATH, RECHECK_SERVER_DELAY_MAX_MS, RECHECK_SERVER_DELAY_MIN_MS} from './constants';
 import {logLicenseEvent} from './errors';
 import {raiseLicenseServerFloor} from './trial';
 import type {LicenseConfig, LicenseVault, TrialVault} from './types';
@@ -73,11 +74,18 @@ export interface RecheckOutcome {
     disabled: boolean;
     /** 落盘后的累计已耗宽限（ms） */
     graceUsedMs: number;
+    /** 服务端下发的下次复核间隔原值（ms，未经夹逼）；null = 未下发 / 非数字（审计 D8） */
+    serverNextDelayMs: number | null;
 }
 
 /** 服务端统一壳：业务字段在 `$.data` 段；`data` 缺失时兼容扁平结构 */
 interface VerifyData {
     status?: string;
+    /**
+     * 服务端希望的下次复核间隔（ms），由 `billing.license-check-interval-hours` 换算。
+     * 审计 D8 接活：正常态（`active`）排期优先用它，但必须经 `clampServerDelay()` 夹安全区间。
+     */
+    nextCheckAfterMs?: number;
 }
 
 interface VerifyEnvelope extends VerifyData {
@@ -95,6 +103,11 @@ interface VerifyResponse {
     status: string | null;
     /** HTTP `Date` 响应头解析值（GMT，无时区歧义）；本端点响应体没有 serverTime 字段 */
     serverTimeMs: number | null;
+    /**
+     * `data.nextCheckAfterMs`：服务端希望的下次复核间隔（审计 D8 接活）。
+     * 只在**成功解析到 200/400 body** 时可能有值；值非有限数字时按缺失处理（回落本地 `intervalMs`）。
+     */
+    serverNextDelayMs: number | null;
 }
 
 /**
@@ -116,7 +129,7 @@ export function isDisabledByRecheck(
     if (!license || !cfg.recheck.enabled) return false;
     if (license.revoked_by_server === true) return true;
     if (attemptPending) return false;
-    const elapsed = elapsedSinceLastOkMs(license, nowMs);
+    const elapsed = elapsedSinceLastOkMs(license, graceBaseline(license, nowMs));
     // 时间基准缺失（老 vault 连 activated_at 都没有）→ 不误杀（红线 2）
     if (elapsed === null) return false;
     return elapsed >= cfg.recheck.hardStopDays * DAY_MS;
@@ -132,9 +145,26 @@ export function isRecheckAttentionNeeded(
     nowMs: number = Date.now(),
 ): boolean {
     if (!license || !cfg.recheck.enabled) return false;
-    const elapsed = elapsedSinceLastOkMs(license, nowMs);
+    const elapsed = elapsedSinceLastOkMs(license, graceBaseline(license, nowMs));
     if (elapsed === null) return false;
     return elapsed >= cfg.recheck.offlineGraceDays * DAY_MS;
+}
+
+/**
+ * 距上次成功复核的时间基准：本地传入时间与**服务端时间下界**（`server_time_floor`）取较大者。
+ *
+ * 系统时间被往回调时 `nowMs` 会变小，直接用 `nowMs` 会让「已耗宽限」凭空缩水（回拨即续命）。
+ * `server_time_floor` 只由 redeem 响应与复核响应的 HTTP `Date` 抬高（见 `applyVerdict`），
+ * 本地时钟影响不到它，故用它做基准既能封死回拨，又不会反过来误杀：
+ * **不能**换成 `licenseFloor`（含 `watermark`）或 vault 外锚——那两路由 `raiseLicenseWatermark`
+ * 按本地时间推进，用户偶然把时钟往前调过一次就把下界永久抬高，回来就成了「60 天没复核」的假象，
+ * 属付费用户被误杀（红线 2）。
+ */
+function graceBaseline(license: LicenseVault, nowMs: number): number {
+    const floor = typeof license.server_time_floor === 'number' && Number.isFinite(license.server_time_floor)
+        ? license.server_time_floor
+        : 0;
+    return Math.max(nowMs, floor);
 }
 
 /**
@@ -195,20 +225,20 @@ async function fetchLicenseStatus(licenseKey: string): Promise<VerifyResponse> {
         });
     } catch (error) {
         logLicenseEvent('LIC_RECHECK_NETWORK', {event: 'recheck_request_failed', reason: (error as Error).name});
-        return {httpStatus: null, code: null, status: null, serverTimeMs: null};
+        return {httpStatus: null, code: null, status: null, serverTimeMs: null, serverNextDelayMs: null};
     }
 
     const serverTimeMs = parseServerDate(response);
 
     if (response.status === 429) {
         logLicenseEvent('LIC_RECHECK_RATE_LIMITED', {event: 'recheck_rate_limited'});
-        return {httpStatus: 429, code: null, status: null, serverTimeMs};
+        return {httpStatus: 429, code: null, status: null, serverTimeMs, serverNextDelayMs: null};
     }
 
     // 只解析 200（成功）与 400（业务失败）两种契约内状态；5xx / 3xx 等不解析（body 可能不是 JSON）
     if (response.status !== 200 && response.status !== 400) {
         logLicenseEvent('LIC_RECHECK_UNKNOWN', {event: 'recheck_unexpected_status', httpStatus: response.status});
-        return {httpStatus: response.status, code: null, status: null, serverTimeMs};
+        return {httpStatus: response.status, code: null, status: null, serverTimeMs, serverNextDelayMs: null};
     }
 
     let body: VerifyEnvelope | null = null;
@@ -216,7 +246,7 @@ async function fetchLicenseStatus(licenseKey: string): Promise<VerifyResponse> {
         body = (await response.json()) as VerifyEnvelope;
     } catch {
         logLicenseEvent('LIC_RECHECK_BAD_RESPONSE', {event: 'recheck_json_invalid', httpStatus: response.status});
-        return {httpStatus: response.status, code: null, status: null, serverTimeMs};
+        return {httpStatus: response.status, code: null, status: null, serverTimeMs, serverNextDelayMs: null};
     }
 
     const data = body?.data ?? body ?? null;
@@ -225,6 +255,7 @@ async function fetchLicenseStatus(licenseKey: string): Promise<VerifyResponse> {
         code: typeof body?.code === 'string' ? body.code : null,
         status: typeof data?.status === 'string' ? data.status : null,
         serverTimeMs,
+        serverNextDelayMs: typeof data?.nextCheckAfterMs === 'number' ? data.nextCheckAfterMs : null,
     };
 }
 
@@ -276,10 +307,16 @@ function applyVerdict(
         };
     }
 
-    // unknown：方案 A —— 不累加 offline_grace_used_ms，停用判定交由 isDisabledByRecheck 现算
+    // unknown：方案 A —— 不累加 offline_grace_used_ms，停用判定交由 isDisabledByRecheck 现算。
+    // 但只要拿到过 HTTP Date 就抬高服务端时间下界（429/5xx 也算）：否则「断网 + 回拨时钟」能把
+    // 已耗宽限原地冻住，红线 3 的「429 照常累加宽限」形同虚设。
+    const floored =
+        typeof serverTimeMs === 'number' && Number.isFinite(serverTimeMs)
+            ? raiseLicenseServerFloor(license, serverTimeMs) ?? license
+            : license;
     return {
-        license: {...license, last_checked_at: checkedAt},
-        disabled: isDisabledByRecheck(license, cfg, nowMs),
+        license: {...floored, last_checked_at: checkedAt},
+        disabled: isDisabledByRecheck(floored, cfg, nowMs),
     };
 }
 
@@ -299,8 +336,8 @@ export function setRecheckDisableHook(fn: DisableHook | null): void {
 }
 
 /**
- * 下一次排期间隔（plan-1.0 / C1）：
- * - 429 → `rateLimitedRetryMs` + 抖动（服务端明确说「别再来这么密」，退避要更长）；
+ * 下一次排期间隔（plan-1.0 / C1 + 审计 D3 定案）：
+ * - 429 → `retryMs` + 0~10min 抖动（与普通失败同节奏，抖动只是防同 NAT 群体同一秒回来）；
  * - `unknown`（网络/超时/5xx/畸形=**没拿到结论**）→ `retryMs`（默认 2 小时），持续到拿到明确答案；
  * - 其余（active / revoked / skipped 终态）→ `intervalMs`（默认 15 天）。
  *
@@ -309,7 +346,7 @@ export function setRecheckDisableHook(fn: DisableHook | null): void {
 function nextDelay(outcome: RecheckOutcome): number {
     const cfg = getConfig();
     if (outcome.httpStatus === 429) {
-        return cfg.recheck.rateLimitedRetryMs + Math.floor(Math.random() * RATE_LIMIT_JITTER_MS);
+        return cfg.recheck.retryMs + Math.floor(Math.random() * RATE_LIMIT_JITTER_MS);
     }
     if (outcome.verdict === 'unknown') return cfg.recheck.retryMs;
     return cfg.recheck.intervalMs;
@@ -352,7 +389,7 @@ function scheduleNext(delayMs: number): void {
  *
  * 首次延迟取 vault 里的 `next_check_at`（plan-1.0 / C1：节奏要**跨重启存活**，
  * 否则「失败后 2 小时重试」只在进程活着时成立，用户重启一次就重置回 15 天）；
- * 缺失或已过期 → delay 0，即「启动即查」（退款时效优先，与既有行为一致）。
+ * 缺失、已过期、或已进入提醒段 → delay 0，即「启动即查」（退款时效优先）。
  */
 export function startRecheckLoop(): void {
     loopStopped = false;
@@ -361,13 +398,23 @@ export function startRecheckLoop(): void {
     void initialDelay().then(scheduleNext);
 }
 
-/** 启动延迟：读持久化排期，拿不到就当「立即查」——旁路逻辑，异常绝不影响启动 */
+/**
+ * 启动延迟：读持久化排期，见 `startRecheckLoop` 的三种「立即查」条件。
+ *
+ * 未到点时**把等待量夹到 `intervalMs` 上界**——系统时间被往回调后 `scheduled - now` 可以是任意大
+ * 的正数，而分段定时器（见 `MAX_TIMER_MS`）等的是真实时间，不夹上界等于把首查无限推迟，
+ * 红线 4 的启动保护随之变成「永不停用」后门（plan-1.0 审计 D1）。
+ * 旁路逻辑：任何异常都退化成「立即查」，绝不影响启动。
+ */
 async function initialDelay(): Promise<number> {
     try {
+        const cfg = getConfig();
         const vault = await readVault();
+        const now = Date.now();
+        if (isRecheckAttentionNeeded(vault.license, cfg, now)) return 0;
         const scheduled = vault.license?.next_check_at;
         if (typeof scheduled !== 'number' || !Number.isFinite(scheduled)) return 0;
-        return Math.max(0, scheduled - Date.now());
+        return Math.min(Math.max(0, scheduled - now), cfg.recheck.intervalMs);
     } catch (error) {
         logLicenseEvent('LIC_INTERNAL', {event: 'recheck_initial_delay_failed', reason: (error as Error).name});
         return 0;

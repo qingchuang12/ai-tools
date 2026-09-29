@@ -51,6 +51,7 @@ import {checkCloudConsistency, type ConsistencyReport, readCompareEnds} from './
 import {getSyncTaskManager, initSyncTaskManager} from './sync-task-manager';
 import type {SyncTask, SyncTaskKind, SyncTaskOptions, SyncTaskScope} from '../shared/sync-task-types';
 import {FEATURE_CLOUD_SYNC} from '../shared/license-constants';
+import type {ManualRecheckResult} from '../shared/activation-types';
 import type {CloudSyncConfig, CloudSyncConfigInput, CloudSyncResult} from '../shared/cloud-sync-constants';
 import {
     checkForUpdatesAndNotify,
@@ -635,6 +636,10 @@ ipcMain.handle('activation:get-purchase-url', async (): Promise<string> => licen
 // C6（U3）：账户管理页地址（绑机冲突时的自助解绑入口）。同理由主进程持有服务地址，
 // 渲染层拿到 URL 后走既有的 system:open-external（内含 http/https 白名单）打开。
 ipcMain.handle('activation:get-account-url', async () => license.getAccountPageUrl());
+
+// plan-1.0 审计 D4：提醒态横幅的「立即联网验证」出口——与后台循环同一条 runRecheck，
+// 只回四态语义（verified/unverified/disabled/skipped），服务端业务码不出主进程。
+ipcMain.handle('activation:recheck-now', async (): Promise<ManualRecheckResult> => license.recheckNow());
 
 // 兑换码 → 后端 redeem → 本地验签 → 落盘（switchMode 透传 R6 换绑语义）
 ipcMain.handle('activation:redeem', async (_e, code: string, email: string, switchMode?: boolean) =>

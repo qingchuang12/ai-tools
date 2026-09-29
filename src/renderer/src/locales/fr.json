@@ -11,7 +11,8 @@
       "unitYear": "an",
       "unitHour": "h",
       "unitMin": "min",
-      "needsOnlineVerify": "Vérification en ligne requise"
+      "needsOnlineVerify": "Vérification en ligne requise",
+      "verifyShort": "Vérifier"
     },
     "feature": {
       "cloudSync": "Synchronisation cloud",
@@ -48,11 +49,19 @@
       "remaining": "{{d}} j {{h}} h {{m}} min",
       "licenseKey": "Clé de licence",
       "hardwareChanged": "Modification matérielle détectée. Réactivez sous {{days}} jours.",
+      "accountPageFailed": "Impossible d’ouvrir la page de gestion des licences. Vérifiez votre connexion puis réessayez.",
       "upgrade": "Mettre à niveau",
       "needActivation": "Une activation est requise pour utiliser la synchronisation cloud",
       "openFeatures": "Fonctionnalités débloquées par l'essai ou l'activation",
       "featureLocked": "Verrouillé · disponible après essai ou activation",
-      "openAccountPage": "Ouvrir la gestion des licences"
+      "openAccountPage": "Ouvrir la gestion des licences",
+      "needsOnlineVerifyHint": "La dernière vérification en ligne date. Aucune fonction n’est désactivée ; veuillez vérifier en ligne pour éviter l’expiration automatique de la licence.",
+      "recheckNow": "Vérifier maintenant",
+      "recheckBusy": "Vérification…",
+      "recheckVerified": "Vérification en ligne réussie. Licence valide.",
+      "recheckUnverified": "Impossible d’effectuer la vérification en ligne. Réessayez plus tard.",
+      "recheckDisabled": "Échec de la vérification ; la licence n’est plus active. Veuillez réactiver.",
+      "recheckSkipped": "Aucune vérification en ligne nécessaire pour le moment."
     },
     "errors": {
       "generic": "Échec de l'activation. Vérifiez votre code d'activation ou contactez le support.",

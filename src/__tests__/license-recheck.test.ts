@@ -17,7 +17,7 @@
  *  13. recheck.enabled=false → isDisabledByRecheck 恒 false；runRecheck 直接 skipped 且不发请求
  *  14. 429 连续多轮 → 跨过 hardStopDays 当天 disabled（revoked_by_server 仍 false）
  *  —— plan-1.0 新增（15~22）——
- *  15. 排期：unknown → now + retryMs（2 小时）；active → now + intervalMs（15 天）；429 → ≥ now + rateLimitedRetryMs
+ *  15. 排期：unknown → now + retryMs（2 小时）；active → now + intervalMs（15 天）；429 → 同 retryMs + 抖动
  *  16. 红线 4：闲置超硬停但**本次进程尚未复核** → 不停用（新误杀面已被堵住）
  *  17. 红线 4 解除：闲置 70 天后启动 + 复核拿不到结论 → 本次即停用
  *  18. 提醒段：超过 offlineGraceDays 未到 hardStopDays → needsOnlineVerify=true 且**不停用**
@@ -25,10 +25,16 @@
  *  20. 排期跨重启：startRecheckLoop 读 next_check_at，未到点不发起请求
  *  21. 红线 4：getState 停用判定优先于验签，但受 attemptPending 保护
  *  22. 阈值兜底：hardStopDays 小于 offlineGraceDays 时按配置原样判定（clamp 属 config 层，见 license-recheck-config 用例）
+ *  —— plan-1.0 审计 D1（23~26）——
+ *  23. 启动排期：进提醒段强制「启动即查」；`next_check_at` 被时钟回拨放大时夹到 intervalMs，
+ *      且不会因 `setTimeout` 32 位截断变成启动即查
+ *  24. 停用/提醒基准 = `max(now, server_time_floor)`：回拨时钟不能凭空续命
+ *  25. 基准**不含** `watermark`：本地时钟前调抬高的 watermark 不得误杀付费用户
+ *  26. unknown/429 也抬 `server_time_floor`（HTTP Date），本次停用即用新基准
  *
  * 设计红线（务必在测试中守住）：
  * - 宁可放过不误杀：只有 LICENSE_INVALID / LICENSE_EXPIRED 立即停用，其余一律 unknown/grace。
- * - 429 照常累加宽限：方案 A 下停用判定现算（now - last_verified_ok_at >= hardStopDays），
+ * - 429 照常消耗宽限：方案 A 下停用判定现算（基准 - last_verified_ok_at >= hardStopDays），
  *   429 既不刷新也不清零 last_verified_ok_at，故连续 429 终究会在阈值当天耗尽宽限。
  * - 15 天心跳必须配 30/60 天分段：宽限若小于「一个心跳周期」，用户只是隔周期没开机就会被误杀。
  */
@@ -484,7 +490,7 @@ describe('recheck：开关、排期与宽限耗尽', () => {
         expect(stored.license?.last_verified_ok_at).toBe(T0);
     });
 
-    it('15) 排期落盘：unknown→+retryMs(2h)；active→+intervalMs(15d)；429→+rateLimitedRetryMs(+抖动)', async () => {
+    it('15) 排期落盘：unknown→+retryMs(2h)；active→+intervalMs(15d)；429→+retryMs(+抖动)', async () => {
         const cfg = defaultConfig();
 
         // 15a：拿不到结论 → 按 retryMs 重试，而不是傻等 15 天
@@ -498,13 +504,15 @@ describe('recheck：开关、排期与宽限耗尽', () => {
         await runRecheck(BASE + cfg.recheck.retryMs);
         expect((await readVault()).license?.next_check_at).toBe(BASE + cfg.recheck.retryMs + cfg.recheck.intervalMs);
 
-        // 15c：429 → 退避 base 之上再加 0~10min 抖动（同 NAT 群体不同时重试）
+        // 15c：429 与 unknown **同节奏**（审计 D3 定案），只在退避之上再加 0~10min 抖动
+        // （同 NAT 群体不同时重试）；宽限照常在 `hardStopDays` 后触发停用（见用例 14），
+        // 所以「429 退避更短」并不会给限流留续命后门。
         stubFetch({status: 429});
         const t429 = BASE + 2 * cfg.recheck.retryMs;
         await runRecheck(t429);
         const scheduled = (await readVault()).license?.next_check_at ?? 0;
-        expect(scheduled).toBeGreaterThanOrEqual(t429 + cfg.recheck.rateLimitedRetryMs);
-        expect(scheduled).toBeLessThan(t429 + cfg.recheck.rateLimitedRetryMs + 10 * 60 * 1000);
+        expect(scheduled).toBeGreaterThanOrEqual(t429 + cfg.recheck.retryMs);
+        expect(scheduled).toBeLessThan(t429 + cfg.recheck.retryMs + 10 * 60 * 1000);
     });
 
     it('16) 红线 4：闲置超阈值但本次进程尚未复核 → 不停用；服务端权威吊销不受此保护', () => {
@@ -607,15 +615,16 @@ describe('recheck：开关、排期与宽限耗尽', () => {
                 mid_soft_at_activation: 'RECHECK-SOFT',
                 last_verified_ok_at: now - 90 * DAY_MS,
                 activated_at: now - 90 * DAY_MS,
-                // 排期放远（30 天，故意跨过 setTimeout 的 2^31-1 ms 截断线）：
-                // startRecheckLoop 只用于重新 arm 红线 4 的启动保护，本用例不让它真的发请求。
-                // 若长延迟被截断成 1ms，这里会出现「未复核却已复核」的假象，本用例即回归门禁。
+                // 排期放远（30 天）+ 立刻 stopRecheckLoop：本用例只要「新进程尚未复核」这个起始态，
+                // 不希望后台循环抢先问过服务端（提醒段现在会「启动即查」，见用例 20c）。
+                // stop 在 initialDelay 的异步读盘之前发生 → 一次请求都不发；红线 4 的置回仍生效。
                 next_check_at: now + 30 * DAY_MS,
             }),
         });
 
         await writeVault(seed());
         startRecheckLoop(); // 模拟新进程启动：本次尚未复核过
+        stopRecheckLoop();
 
         const protectedState = await getState(null);
         expect(protectedState.status).toBe('activated');
@@ -628,6 +637,89 @@ describe('recheck：开关、排期与宽限耗尽', () => {
         const stoppedState = await getState(null);
         expect(stoppedState.status).toBe('inactive');
         expect(stoppedState.needsOnlineVerify).toBe(false);
+    });
+
+    // ==================== plan-1.0 审计 D1：排期夹逼 + 停用基准防回拨 ====================
+
+    it('23) 启动排期：处于提醒段强制即查；排期被时钟回拨放大时夹到 intervalMs 且绝不当「立刻再查」', async () => {
+        const fetchSpy = vi.fn(async (_url: string) => ({
+            status: 200,
+            headers: {get: (): null => null},
+            json: async () => ({success: true, code: 'SUCCESS', data: {status: 'ACTIVE'}}),
+        }));
+        vi.stubGlobal('fetch', fetchSpy);
+        const now = Date.now();
+
+        // 23a：排期还有 10 天，但已进提醒段（40 天没成功复核）→ 强制启动即查，
+        //      否则「提醒了却只能干等排期」，用户点「立即联网验证」之前界面会一直挂着提醒。
+        await writeVault({
+            trial: null,
+            license: seedLicense({
+                last_verified_ok_at: now - 40 * DAY_MS,
+                activated_at: now - 40 * DAY_MS,
+                next_check_at: now + 10 * DAY_MS,
+            }),
+        });
+        startRecheckLoop();
+        expect(await until(() => fetchSpy.mock.calls.length > 0)).toBe(true);
         stopRecheckLoop();
+
+        // 23b：排期被回拨的时钟放大成 400 天 → 夹到 intervalMs 后仍远超用例观察窗口，
+        //      而且**不能**因为「delay > 2^31-1 ms 被 Node 静默截成 1ms」变成启动即查（打满限流）。
+        fetchSpy.mockClear();
+        await writeVault({
+            trial: null,
+            license: seedLicense({last_verified_ok_at: now, activated_at: now, next_check_at: now + 400 * DAY_MS}),
+        });
+        startRecheckLoop();
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        expect(fetchSpy).not.toHaveBeenCalled();
+        stopRecheckLoop();
+    });
+
+    it('24) 停用/提醒基准含服务端时间下界：把时钟往回调不能凭空续命', () => {
+        const cfg = defaultConfig();
+        // 末次成功复核在 60 天前；时钟被回拨到 30 天前
+        const rolledBack = BASE - 30 * DAY_MS;
+        const seed = (floor: number | null) =>
+            seedLicense({last_verified_ok_at: BASE - 60 * DAY_MS, activated_at: BASE - 60 * DAY_MS, server_time_floor: floor});
+
+        // 无下界可参照时按本地时间算（30 天前）→ 宽限未耗尽，不误杀
+        expect(isDisabledByRecheck(seed(null), cfg, rolledBack, false)).toBe(false);
+        // 有服务端下界（= BASE）时以它为基准 → 真实经过 60 天，硬停生效
+        expect(isDisabledByRecheck(seed(BASE), cfg, rolledBack, false)).toBe(true);
+        // 提醒段同理
+        expect(isRecheckAttentionNeeded(seed(BASE), cfg, BASE - 45 * DAY_MS)).toBe(true);
+    });
+
+    it('25) 基准只认服务端下界：本地 watermark 被时钟前调抬高，不得反过来误杀付费用户', () => {
+        const cfg = defaultConfig();
+        // watermark 由本地时间推进：用户偶然把时钟调快 80 天，watermark 就永久抬高了 80 天。
+        // 若拿它当宽限基准，回来后立刻被判「60 天没复核」——属误杀（红线 2），故基准不含 watermark。
+        const license = seedLicense({
+            last_verified_ok_at: BASE,
+            activated_at: BASE,
+            watermark: BASE + 80 * DAY_MS,
+            server_time_floor: null,
+        });
+        expect(isDisabledByRecheck(license, cfg, BASE, false)).toBe(false);
+        expect(isRecheckAttentionNeeded(license, cfg, BASE)).toBe(false);
+    });
+
+    it('26) 复核失败（unknown/429）也抬服务端时间下界，本次停用判定即用新基准', async () => {
+        const cfg = defaultConfig();
+        const since = BASE - cfg.recheck.hardStopDays * DAY_MS;
+        await writeVault({
+            trial: null,
+            license: seedLicense({last_verified_ok_at: since, activated_at: since, server_time_floor: null}),
+        });
+        // 服务端 429 答不上来，但 HTTP Date 头仍给出真实时间 = BASE
+        stubFetch({status: 429, date: new Date(BASE).toUTCString()});
+
+        // 本地时钟被回拨到 90 天前（elapsed 会算成负数 → 旧实现等于无限续命）
+        const outcome = await runRecheck(BASE - 90 * DAY_MS);
+        expect(outcome.verdict).toBe('unknown');
+        expect(outcome.disabled).toBe(true);
+        expect((await readVault()).license?.server_time_floor).toBe(BASE);
     });
 });

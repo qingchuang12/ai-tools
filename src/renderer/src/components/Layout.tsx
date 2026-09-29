@@ -167,10 +167,12 @@ export default function Layout({children}: LayoutProps) {
                 {/* 同步任务面板：左侧菜单栏、设置按钮下方，展示后台异步云同步队列 */}
                 <SyncTasksPanel />
 
-                {/* 底部状态：左侧版本号，右侧授权状态标识（点开激活管理弹窗） */}
+                {/* 底部状态：左侧版本号，右侧授权状态标识（点开激活管理弹窗）。
+                    min-w-0 + 版本号 shrink-0：让徽标拿到「剩余宽度」这个确定上限，
+                    窄侧栏下徽标内部 truncate，而不是把整行顶出侧栏。 */}
                 <div className="p-3 border-t border-content-border">
-                    <div className="flex items-center justify-between text-[12px]">
-                        <span className="text-muted2">{version ? `v${version}` : ''}</span>
+                    <div className="flex items-center justify-between gap-2 text-[12px] min-w-0">
+                        <span className="text-muted2 shrink-0">{version ? `v${version}` : ''}</span>
                         <ActivationBadge />
                     </div>
                 </div>

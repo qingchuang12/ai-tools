@@ -164,10 +164,6 @@ export function mergeConfig(raw: unknown): LicenseConfig {
         base.recheck.offlineGraceDays = Math.max(0, Math.floor(num(recheck.offlineGraceDays, base.recheck.offlineGraceDays)));
         base.recheck.hardStopDays = Math.max(0, Math.floor(num(recheck.hardStopDays, base.recheck.hardStopDays)));
         base.recheck.timeoutMs = Math.max(1000, Math.floor(num(recheck.timeoutMs, base.recheck.timeoutMs)));
-        base.recheck.rateLimitedRetryMs = Math.max(
-            1000,
-            Math.floor(num(recheck.rateLimitedRetryMs, base.recheck.rateLimitedRetryMs)),
-        );
 
         // 两段时间阈值必须**盖过一个完整复核周期**，否则「用户一个周期没运行软件」就会在下次启动
         // 立刻落到提醒/停用判定（结构性误杀，与网络好坏无关）。包外配置写小了就取下限并记日志——

@@ -11,7 +11,8 @@
       "unitYear": "年",
       "unitHour": "小时",
       "unitMin": "分",
-      "needsOnlineVerify": "需联网验证"
+      "needsOnlineVerify": "需联网验证",
+      "verifyShort": "需验证"
     },
     "feature": {
       "cloudSync": "云同步",
@@ -48,6 +49,7 @@
       "remaining": "{{d}}天{{h}}小时{{m}}分",
       "licenseKey": "许可证密钥",
       "hardwareChanged": "检测到硬件变更，请在 {{days}} 天内重新激活",
+      "accountPageFailed": "打开授权管理页面失败，请检查网络后重试",
       "upgrade": "升级",
       "needActivation": "需要激活后才能使用云同步",
       "openFeatures": "试用 / 激活后开放的功能",
@@ -56,7 +58,14 @@
       "switchSuccess": "已换绑，新授权生效",
       "unbindFailed": "旧授权解绑未成功（不影响新授权使用，可稍后在已激活页重试）",
       "cancelSwitch": "取消换绑",
-      "openAccountPage": "打开授权管理页面"
+      "openAccountPage": "打开授权管理页面",
+      "needsOnlineVerifyHint": "距上次联网验证已较久，功能不受影响；请在联网后完成一次验证，以免授权自动失效。",
+      "recheckNow": "立即联网验证",
+      "recheckBusy": "验证中…",
+      "recheckVerified": "联网验证成功，授权有效",
+      "recheckUnverified": "暂时无法完成联网验证，请稍后再试",
+      "recheckDisabled": "联网验证未通过，授权已失效，请重新激活",
+      "recheckSkipped": "当前状态无需联网验证"
     },
     "errors": {
       "generic": "激活失败，请检查激活码或联系支持",

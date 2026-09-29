@@ -11,7 +11,8 @@
       "unitYear": "Jahre",
       "unitHour": "Std.",
       "unitMin": "Min.",
-      "needsOnlineVerify": "Online-Prüfung erforderlich"
+      "needsOnlineVerify": "Online-Prüfung erforderlich",
+      "verifyShort": "Prüfen"
     },
     "feature": {
       "cloudSync": "Cloud-Sync",
@@ -48,11 +49,19 @@
       "remaining": "{{d}} Tage {{h}} Std. {{m}} Min.",
       "licenseKey": "Lizenzschlüssel",
       "hardwareChanged": "Hardwareänderung erkannt. Bitte innerhalb von {{days}} Tagen erneut aktivieren.",
+      "accountPageFailed": "Lizenzverwaltung konnte nicht geöffnet werden. Verbindung prüfen und erneut versuchen.",
       "upgrade": "Upgrade",
       "needActivation": "Für Cloud-Sync ist eine Aktivierung erforderlich",
       "openFeatures": "Durch Testversion oder Aktivierung freigeschaltete Funktionen",
       "featureLocked": "Gesperrt · nach Testversion oder Aktivierung verfügbar",
-      "openAccountPage": "Lizenzverwaltung öffnen"
+      "openAccountPage": "Lizenzverwaltung öffnen",
+      "needsOnlineVerifyHint": "Die letzte Online-Prüfung ist länger her. Alle Funktionen bleiben verfügbar; bitte prüfe online, damit die Lizenz nicht automatisch ungültig wird.",
+      "recheckNow": "Jetzt online prüfen",
+      "recheckBusy": "Prüfung läuft…",
+      "recheckVerified": "Online-Prüfung erfolgreich. Lizenz ist gültig.",
+      "recheckUnverified": "Online-Prüfung derzeit nicht möglich. Bitte später erneut versuchen.",
+      "recheckDisabled": "Online-Prüfung fehlgeschlagen; die Lizenz ist nicht mehr aktiv. Bitte erneut aktivieren.",
+      "recheckSkipped": "Derzeit ist keine Online-Prüfung nötig."
     },
     "errors": {
       "generic": "Aktivierung fehlgeschlagen. Prüfen Sie den Aktivierungscode oder wenden Sie sich an den Support.",

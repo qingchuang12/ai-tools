@@ -11,7 +11,8 @@
       "unitYear": "anni",
       "unitHour": "h",
       "unitMin": "min",
-      "needsOnlineVerify": "È richiesta la verifica online"
+      "needsOnlineVerify": "È richiesta la verifica online",
+      "verifyShort": "Verifica"
     },
     "feature": {
       "cloudSync": "Sincronizzazione cloud",
@@ -48,11 +49,19 @@
       "remaining": "{{d}} g {{h}} h {{m}} min",
       "licenseKey": "Chiave di licenza",
       "hardwareChanged": "Rilevata modifica hardware. Riattiva entro {{days}} giorni.",
+      "accountPageFailed": "Impossibile aprire la pagina di gestione delle licenze. Controlla la connessione e riprova.",
       "upgrade": "Aggiorna",
       "needActivation": "Per usare la sincronizzazione cloud è necessaria l'attivazione",
       "openFeatures": "Funzioni sbloccate con la prova o l'attivazione",
       "featureLocked": "Bloccato · disponibile dopo la prova o l'attivazione",
-      "openAccountPage": "Apri la gestione delle licenze"
+      "openAccountPage": "Apri la gestione delle licenze",
+      "needsOnlineVerifyHint": "L'ultima verifica online risale a tempo fa. Nessuna funzione è stata disattivata; esegui una verifica online per evitare la scadenza automatica della licenza.",
+      "recheckNow": "Verifica online ora",
+      "recheckBusy": "Verifica in corso…",
+      "recheckVerified": "Verifica online riuscita. Licenza valida.",
+      "recheckUnverified": "Impossibile completare la verifica online. Riprova più tardi.",
+      "recheckDisabled": "Verifica non riuscita; la licenza non è più attiva. Riattivarla.",
+      "recheckSkipped": "Al momento non serve alcuna verifica online."
     },
     "errors": {
       "generic": "Attivazione non riuscita. Controlla il codice di attivazione o contatta l'assistenza.",

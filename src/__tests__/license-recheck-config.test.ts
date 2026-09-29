@@ -2,8 +2,8 @@
  * 复核节奏参数包外化单测（plan-1.0 / C7，`mergeConfig` 的 `recheck` 段）。
  *
  * 守两件事：
- * 1. **可调不发版**：六个键（enabled/intervalMs/retryMs/offlineGraceDays/hardStopDays/timeoutMs/
- *    rateLimitedRetryMs）都能从包外 `license.config.json` 覆盖；
+ * 1. **可调不发版**：六个键（enabled/intervalMs/retryMs/offlineGraceDays/hardStopDays/timeoutMs）
+ *    都能从包外 `license.config.json` 覆盖；
  * 2. **误配不致命**：非法值回落默认、下限保护（1s）、两段时间阈值必须盖过一个完整复核周期——
  *    否则「用户只是隔了一个周期没开机」就会在下次启动被提醒甚至停用（结构性误杀）。
  */
@@ -38,13 +38,12 @@ describe('mergeConfig：recheck 段包外化与兜底', () => {
         expect(rc.retryMs).toBe(2 * 60 * 60 * 1000);
         expect(rc.offlineGraceDays).toBe(30);
         expect(rc.hardStopDays).toBe(60);
-        expect(rc.rateLimitedRetryMs).toBe(60 * 60 * 1000);
         // 提醒段必须严格盖过一个复核周期（默认口径自洽，不依赖 clamp 才成立）
         expect(rc.offlineGraceDays).toBeGreaterThan(Math.ceil(rc.intervalMs / DAY_MS));
         expect(rc.hardStopDays).toBeGreaterThan(rc.offlineGraceDays);
     });
 
-    it('2) 六键均可覆盖（调节奏不必发版）', () => {
+    it('2) 六键均可覆盖（调节奏不必发版）；已废弃的 rateLimitedRetryMs 残留键被忽略', () => {
         const rc = recheckOf({
             enabled: false,
             intervalMs: DAY_MS,
@@ -52,6 +51,7 @@ describe('mergeConfig：recheck 段包外化与兜底', () => {
             offlineGraceDays: 45,
             hardStopDays: 90,
             timeoutMs: 12_000,
+            // plan-1.0 审计 D3：429 与 unknown 同走 retryMs；老包外配置里残留的这键不再被读
             rateLimitedRetryMs: 900_000,
         });
         expect(rc).toEqual({
@@ -61,7 +61,6 @@ describe('mergeConfig：recheck 段包外化与兜底', () => {
             offlineGraceDays: 45,
             hardStopDays: 90,
             timeoutMs: 12_000,
-            rateLimitedRetryMs: 900_000,
         });
     });
 

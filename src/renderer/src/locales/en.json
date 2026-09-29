@@ -11,7 +11,8 @@
       "unitYear": "y",
       "unitHour": "h",
       "unitMin": "m",
-      "needsOnlineVerify": "Needs online check"
+      "needsOnlineVerify": "Needs online check",
+      "verifyShort": "Verify"
     },
     "feature": {
       "cloudSync": "Cloud sync",
@@ -48,6 +49,7 @@
       "remaining": "{{d}}d {{h}}h {{m}}m",
       "licenseKey": "License key",
       "hardwareChanged": "Hardware change detected. Please reactivate within {{days}} days.",
+      "accountPageFailed": "Couldn't open the license management page. Check your connection and try again.",
       "upgrade": "Upgrade",
       "needActivation": "Activation required to use cloud sync",
       "openFeatures": "Features unlocked by trial or activation",
@@ -56,7 +58,14 @@
       "switchSuccess": "Switched. New license is active.",
       "unbindFailed": "Old license could not be released. New license still works; retry later from the Activated view.",
       "cancelSwitch": "Cancel switch",
-      "openAccountPage": "Open license management"
+      "openAccountPage": "Open license management",
+      "needsOnlineVerifyHint": "It has been a while since the last online check. Nothing is disabled yet, but please verify while online so the license does not expire automatically.",
+      "recheckNow": "Check online now",
+      "recheckBusy": "Checking…",
+      "recheckVerified": "Online check passed. Your license is valid.",
+      "recheckUnverified": "Couldn't complete the online check. Please try again later.",
+      "recheckDisabled": "The online check failed and this license is no longer active. Please activate again.",
+      "recheckSkipped": "No online check needed right now."
     },
     "errors": {
       "generic": "Activation failed. Check your code or contact support.",

@@ -11,7 +11,8 @@
       "unitYear": "年",
       "unitHour": "時間",
       "unitMin": "分",
-      "needsOnlineVerify": "オンライン確認が必要です"
+      "needsOnlineVerify": "オンライン確認が必要です",
+      "verifyShort": "要確認"
     },
     "feature": {
       "cloudSync": "クラウド同期",
@@ -48,11 +49,19 @@
       "remaining": "{{d}}日{{h}}時間{{m}}分",
       "licenseKey": "ライセンスキー",
       "hardwareChanged": "ハードウェアの変更を検出しました。{{days}} 日以内に再アクティベーションしてください。",
+      "accountPageFailed": "ライセンス管理ページを開けませんでした。ネットワークを確認して再試行してください。",
       "upgrade": "アップグレード",
       "needActivation": "クラウド同期を利用するにはアクティベーションが必要です",
       "openFeatures": "トライアル／アクティベートで開放される機能",
       "featureLocked": "未開放 · トライアルまたはアクティベート後に利用可能",
-      "openAccountPage": "ライセンス管理を開く"
+      "openAccountPage": "ライセンス管理を開く",
+      "needsOnlineVerifyHint": "前回のオンライン確認から時間が経っています。機能は利用できますが、ライセンスの自動失効を防ぐためオンラインで確認してください。",
+      "recheckNow": "今すぐオンライン確認",
+      "recheckBusy": "確認中…",
+      "recheckVerified": "オンライン確認が完了しました。ライセンスは有効です。",
+      "recheckUnverified": "オンライン確認を完了できませんでした。後でもう一度お試しください。",
+      "recheckDisabled": "オンライン確認に失敗し、ライセンスは無効になりました。再認証してください。",
+      "recheckSkipped": "現在オンライン確認は不要です。"
     },
     "errors": {
       "generic": "アクティベーションに失敗しました。コードを確認するか、サポートにお問い合わせください。",

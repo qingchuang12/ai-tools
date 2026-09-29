@@ -9,7 +9,12 @@
  * 不得直接 `Date.now()`，否则改系统时间就能让已过期的授权复活。
  */
 
-import type {ActivationDegradedReason, ActivationState, RedeemResult} from '../../shared/activation-types';
+import type {
+    ActivationDegradedReason,
+    ActivationState,
+    ManualRecheckResult,
+    RedeemResult
+} from '../../shared/activation-types';
 import {getConfig} from './config';
 import type {LicenseErrorCode} from './errors';
 import {logLicenseEvent, PUBLIC_ERROR_KEY, publicErrorFor, redactLicenseKey} from './errors';
@@ -43,7 +48,13 @@ import {
     touchTrial,
 } from './trial';
 import {raiseAnchorFloor, readAnchorFloor} from './anchor';
-import {isDisabledByRecheck, isRecheckAttentionNeeded, setRecheckDisableHook, startRecheckLoop} from './recheck';
+import {
+    isDisabledByRecheck,
+    isRecheckAttentionNeeded,
+    runRecheck,
+    setRecheckDisableHook,
+    startRecheckLoop
+} from './recheck';
 import {setPurchaseClaimHandler, startPurchasePolling} from './purchase-poll';
 import type {VaultData} from './vault';
 import {readVault, writeVault} from './vault';
@@ -475,6 +486,21 @@ async function claimPendingToken(signedToken: string): Promise<boolean> {
 /** C6（U3）：账户管理页地址（绑机冲突时的自助解绑入口） */
 export function getAccountPageUrl(): string {
     return buildAccountPageUrl();
+}
+
+/**
+ * 用户主动发起的一次复核（提醒横幅上的「立即联网验证」，plan-1.0 审计 D4）。
+ *
+ * 与后台循环走的是同一条 `runRecheck()`，因此语义完全一致（含「本次进程已复核过」的解除，
+ * 红线 4 之后停用判定才会生效）。渲染层随后 `refresh()` 读新状态即可，这里不再额外广播；
+ * 真被停用时的广播由 `setRecheckDisableHook` 那条路径负责。
+ */
+export async function recheckNow(): Promise<ManualRecheckResult> {
+    const {verdict, disabled} = await runRecheck();
+    if (disabled) return 'disabled';
+    if (verdict === 'active') return 'verified';
+    if (verdict === 'skipped') return 'skipped';
+    return 'unverified';
 }
 
 /** 当前会话已验签的载荷；没有则为 null */

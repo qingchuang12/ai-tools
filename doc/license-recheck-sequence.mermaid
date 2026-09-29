@@ -13,20 +13,24 @@ sequenceDiagram
     Facade->>Facade: warmupMachineCode()
     Facade-->>Main: ActivationState（不阻塞）
     Facade->>Loop: startRecheckLoop()
-    Loop->>Loop: void runRecheck()（fire-and-forget，首查）
+    Loop->>Loop: attemptPending = true（红线 4 复位）
+    Loop->>Vault: readVault()（取 next_check_at）
+    Note right of Loop: initialDelay() 三条：已进提醒段 → 0 启动即查；<br/>未到点 → 等待量夹到 intervalMs 上界；异常 → 0
+    Loop->>Loop: runRecheck()（fire-and-forget）
 
-    Note over Loop, Svc: 一次复核 runRecheck(nowMs = effectiveNow(...))
+    Note over Loop, Svc: 一次复核 runRecheck(nowMs)
     Loop->>Vault: readVault()
     Vault-->>Loop: {trial, license}
     Loop->>Loop: licenseKey = extractLicenseKeyFromToken(license.signed_token)
     alt 无 token / 取不到 licenseKey / cfg.recheck.enabled=false
         Loop-->>Facade: verdict = 'skipped'（不动任何状态）
     else 有 token
-        Loop->>Svc: GET /api/licenses/verify/{licenseKey}（AbortSignal.timeout(8s)）
+        Loop->>Svc: GET /api/licenses/verify/{licenseKey}（AbortSignal.timeout(timeoutMs=8s)）
+        Loop->>Loop: markAttemptDone()（解除红线 4，判定之前）
         alt 200 + data.status = ACTIVE
             Svc-->>Loop: {success:true, data:{status:'ACTIVE', ...}}
             Loop->>Loop: verdict = 'active'
-            Loop->>Vault: used=0, revoked_by_server=false,<br/>last_verified_ok_at=now, last_checked_at=now
+            Loop->>Vault: used=0, revoked_by_server=false,<br/>last_verified_ok_at=last_checked_at=now
             opt HTTP Date 响应头存在
                 Loop->>Vault: raiseLicenseServerFloor(license, dateMs)（复用防回拨）
             end
@@ -35,24 +39,22 @@ sequenceDiagram
             Note right of Loop: 单次即停用，无二次确认（§1.7 第 3 条）
             Loop->>Loop: verdict = 'revoked'
             Loop->>Vault: revoked_by_server = true, last_checked_at = now
-            Loop->>Facade: setStateChangeListener → 广播 activation:state-changed
         else 429（限流）
-            Svc-->>Loop: 429 空 body（无 JSON，须先判 status）
-            Loop->>Loop: verdict = 'unknown'；<b>照常累加宽限</b>（防限流续命后门）
-            Loop->>Vault: used += min(elapsed, intervalMs)
-            Loop->>Loop: 下次调度 rateLimitedRetryMs(1h + jitter)
+            Svc-->>Loop: 429 空 body（无 JSON，须先判 status 再 json()）
+            Loop->>Loop: verdict = 'unknown'；<b>照常消耗宽限</b>（防限流续命后门）
+            Loop->>Vault: 有 HTTP Date 就 raiseLicenseServerFloor<br/>last_checked_at = max(last_checked_at, now)
+            Note right of Loop: 不刷新 last_verified_ok_at ⇒ 真实天数照走<br/>下次调度 retryMs(2h) + 0~10min 抖动
         else 5xx / 网络 / 超时 / JSON 畸形 / 其它 4xx / LICENSE_NOT_FOUND
             Svc-->>Loop: （失败）
             Loop->>Loop: verdict = 'unknown'
-            Loop->>Vault: used += min(max(0, now - last_checked_at), intervalMs)<br/>last_checked_at = max(last_checked_at, now)
-            alt used >= offlineGraceDays
-                Loop->>Loop: 宽限耗尽 → 停用（同 revoked 效果）
-                Loop->>Facade: 广播状态变化
-            else 仍在宽限内
-                Loop->>Loop: 保持可用
-            end
+            Loop->>Vault: last_checked_at = max(last_checked_at, now)（单调，不累加 used）
         end
-        Loop->>Loop: scheduleNext(24h | 1h)（递归 setTimeout + unref）
+        Loop->>Loop: applyVerdict(license, verdict, now, serverTimeMs)<br/>→ 新账本 + 本次 disabled（unknown 分支内现算，且先抬 server_time_floor）
+        Loop->>Vault: writeVault()（同一次写入 next_check_at = now + nextDelay）
+        opt 本次判定为停用
+            Loop->>Facade: disableHook() → 广播 activation:state-changed
+        end
+        Loop->>Loop: scheduleNext(nextDelay)（递归 setTimeout + unref；>24 天分段挂载）
     end
 
     Note over Facade, UI: 停用如何生效（"马上不能用"）
@@ -60,15 +62,16 @@ sequenceDiagram
     Facade->>Vault: readVault()
     Facade->>Facade: 推进 watermark / anchor（防回拨，不受停用影响）
     Facade->>Facade: isDisabledByRecheck ?（<b>在 verifyToken 之前</b>，压过硬件宽限）
-    alt revoked_by_server=true 或 宽限耗尽
+    alt revoked_by_server=true 或 现算天数 >= hardStopDays
         Facade->>Facade: payloadCache = null
         Facade-->>UI: {status:'inactive', degraded:'token_invalid'}
     else 未停用
+        Facade->>Facade: isRecheckAttentionNeeded ? 超 offlineGraceDays → needsOnlineVerify=true
         Facade->>Facade: verifyToken(...)
         alt LIC_MACHINE_MISMATCH → resolveHardwareGrace
             Facade-->>UI: 硬件宽限态（仅未停用时可达）
         else 验签通过
-            Facade-->>UI: {status:'activated', ...}
+            Facade-->>UI: {status:'activated', needsOnlineVerify, ...}（提醒态不减功能）
         end
     end
 
@@ -84,3 +87,11 @@ sequenceDiagram
         Gate-->>Facade: {allowed:true, code:'LIC_OK'}
         Facade-->>UI: true
     end
+
+    Note over UI, Loop: 提醒态的手动出口（审计 D4）
+    UI->>Main: activation:recheck-now（横幅「立即联网验证」）
+    Main->>Facade: recheckNow()
+    Facade->>Loop: runRecheck()
+    Loop-->>Facade: {verdict, disabled}
+    Facade-->>UI: ManualRecheckResult（verified / unverified / disabled / skipped）
+    Note right of UI: 只回四态枚举，服务端业务码绝不跨 IPC；UI 据此出 i18n 文案并 refresh() 重读状态

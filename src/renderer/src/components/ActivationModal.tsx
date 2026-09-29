@@ -4,6 +4,7 @@
  * - 未激活：在线激活（打开授权页，自动带入 machineId）→ 离线激活（导入 license.lic / 粘贴令牌）→ 兑换码输入；
  * - 试用中：剩余时间 + 立即激活（进入激活方式选择页）；
  * - 已激活：剩余时间 + 脱敏 licenseKey + 去激活（**二次确认**：确认才执行，取消保持已激活不变；硬件变更宽限期内额外提示）。
+ *   已激活且「需联网验证」时顶部多一条 info 蓝提醒横幅 + 「立即联网验证」出口（功能不减，仅提示）。
  *
  * 全部文案走 i18n（license.*）；授权页 URL 与兑换 API 由主进程按配置拼装
  * （默认指向本地 billing-license-service，可经包外 license.config.json 覆盖）。
@@ -15,10 +16,18 @@ import Modal from './Modal';
 import {useActivationStore} from '../store/activationStore';
 import {useElectronAPI} from '../lib/electron';
 import {FEATURE_CLOUD_SYNC} from '../../../shared/license-constants';
-import type {RedeemResult} from '../../../shared/activation-types';
+import type {ManualRecheckResult, RedeemResult} from '../../../shared/activation-types';
 import AccountLoginSection from './AccountLoginSection';
 
 type Mode = 'choose' | 'redeem' | 'offline';
+
+/** 「立即联网验证」的四态结论 → i18n key（主进程只回语义，不回服务端业务码） */
+const RECHECK_RESULT_KEY: Record<ManualRecheckResult, string> = {
+    verified: 'license.modal.recheckVerified',
+    unverified: 'license.modal.recheckUnverified',
+    disabled: 'license.modal.recheckDisabled',
+    skipped: 'license.modal.recheckSkipped',
+};
 
 function formatRemaining(ms: number | null, t: (k: string, opts?: Record<string, unknown>) => string): string {
     if (ms === null) return t('license.modal.permanent');
@@ -127,6 +136,11 @@ export default function ActivationModal() {
     const [switching, setSwitching] = useState(false);
     // R6：换绑后旧授权解绑失败的轻提示标记（新授权已生效，不阻挡）
     const [unbindWarn, setUnbindWarn] = useState(false);
+    // D4：提醒横幅的「立即联网验证」进行态与本次结论
+    const [recheckBusy, setRecheckBusy] = useState(false);
+    const [recheckResult, setRecheckResult] = useState<ManualRecheckResult | null>(null);
+    // D4：打开授权管理页失败的副文案。**独立于 msg**——覆盖 msg 会把「已绑他机」原提示和解绑按钮一起抹掉
+    const [accountPageFailed, setAccountPageFailed] = useState(false);
 
     useEffect(() => {
         if (modalOpen) {
@@ -140,6 +154,9 @@ export default function ActivationModal() {
             setConfirmingDeactivate(false);
             setSwitching(false);
             setUnbindWarn(false);
+            setRecheckBusy(false);
+            setRecheckResult(null);
+            setAccountPageFailed(false);
         }
     }, [modalOpen]);
 
@@ -247,11 +264,31 @@ export default function ActivationModal() {
 
     /** C6（U3）：绑机冲突时的自助出口——打开服务端账户管理页解绑（地址由主进程持有） */
     const openAccountPage = async () => {
+        setAccountPageFailed(false);
         try {
             const url = await api.activation.getAccountPageUrl();
-            if (url) await api.system.openExternal(url);
+            if (!url) throw new Error('empty url');
+            await api.system.openExternal(url);
         } catch {
-            setMsg({type: 'err', text: t('license.errors.generic')});
+            // 只追加一条副文案：msg（含「已绑他机」提示与解绑按钮）必须原样留着，用户可重试
+            setAccountPageFailed(true);
+        }
+    };
+
+    /** D4：提醒横幅的出口——立刻问一次服务端，成功后 `refresh()` 让横幅当场消失 */
+    const doRecheckNow = async () => {
+        setRecheckBusy(true);
+        setRecheckResult(null);
+        try {
+            const result = await api.activation.recheckNow();
+            setRecheckResult(result);
+            await refresh();
+            // 停用后「已激活」视图会被卸载，横幅里的结论就上不了屏 → 走跨视图的 msg 区
+            if (result === 'disabled') {
+                setMsg({type: 'err', text: t('license.modal.recheckDisabled')});
+            }
+        } finally {
+            setRecheckBusy(false);
         }
     };
 
@@ -453,6 +490,25 @@ export default function ActivationModal() {
 
             {state.status === 'activated' && !switching && (
                 <div className="space-y-4">
+                    {/* D4（plan-1.0 / U1 提醒段）：功能不减，但要给出可见状态 + 自助出口，
+                        不能只让徽标亮着——用户点进来就是想知道「怎么办」。 */}
+                    {state.needsOnlineVerify && (
+                        <div className="px-3 py-2 rounded-md border border-[color-mix(in_srgb,var(--color-info)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-info)_10%,transparent)] text-[12px] text-[var(--color-info)] space-y-2">
+                            <p>{t('license.modal.needsOnlineVerifyHint')}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                    onClick={() => void doRecheckNow()}
+                                    disabled={recheckBusy}
+                                    className="px-3 py-1.5 rounded-md bg-[var(--color-info)] text-[var(--color-bg)] text-[12px] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
+                                >
+                                    {recheckBusy ? t('license.modal.recheckBusy') : t('license.modal.recheckNow')}
+                                </button>
+                                {recheckResult && recheckResult !== 'disabled' && (
+                                    <span className="opacity-90">{t(RECHECK_RESULT_KEY[recheckResult])}</span>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     {state.degraded === 'hardware_changed' && state.licenseKey && (
                         <div className="px-3 py-2 rounded-md bg-[color-mix(in_srgb,var(--color-warning)_10%,transparent)] border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] text-[12px] text-[var(--color-warning)]">
                             {t('license.modal.hardwareChanged', { days: 7 })}
@@ -530,6 +586,9 @@ export default function ActivationModal() {
                         </button>
                     )}
                 </div>
+            )}
+            {accountPageFailed && (
+                <p className="text-[12px] text-[var(--color-danger)]">{t('license.modal.accountPageFailed')}</p>
             )}
             {unbindWarn && (
                 <p className="text-[12px] text-[var(--color-warning)]">{t('license.modal.unbindFailed')}</p>

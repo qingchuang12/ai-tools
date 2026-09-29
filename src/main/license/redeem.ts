@@ -15,7 +15,7 @@
 
 import {dialog} from 'electron';
 import type {RedeemResult} from '../../shared/activation-types';
-import {PRODUCT_SKU} from '../../shared/license-constants';
+import {PRODUCT_CODE} from '../../shared/license-constants';
 import {
     ACCOUNT_PAGE_PATH,
     ACCOUNT_UNBIND_API_PATH,
@@ -110,14 +110,15 @@ function parseActivateResponse(body: unknown, status: number): RedeemFetchResult
  *
  * 查询参数即 plan-1.0 第 5 条要求的「机器码 + 待激活产品」两要素：
  * - `machineId`：支付完成后服务端据此**直签并绑定本机**，也用于付款后按机器码领取待激活授权；
- * - `productId`：产品级标识（本产品 `AI-TOOLS-PRO`）。收银台静态页的预选逻辑按**可售档位 SKU**
- *   （`pro-buyout` 等）匹配，故本参数当前在页面侧不参与预选，仅作为「从哪个产品跳来」的来源标识透传；
+ * - `product`：产品码（`PRODUCT_CODE`，与服务端 `products.product_code` 同值），收银台据此
+ *   **只列本产品的可售档位**；档位（买断/订阅 × Pro/Pro Plus）由**用户在页面自选**，
+ *   故不传 SKU 维度的 `productId`——预置它会与「用户自选 license 类型」冲突。
  *   真正的产品归属判定仍在离线验签（token `sku` ∈ `acceptedSkus`），不依赖此处自报参数。
  */
 export async function buildCheckoutUrl(): Promise<string> {
     const base = getConfig().serviceBaseUrl;
     const machineId = await getMachineCode();
-    return `${base}${CHECKOUT_PAGE_PATH}?machineId=${encodeURIComponent(machineId)}&productId=${encodeURIComponent(PRODUCT_SKU)}`;
+    return `${base}${CHECKOUT_PAGE_PATH}?machineId=${encodeURIComponent(machineId)}&product=${encodeURIComponent(PRODUCT_CODE)}`;
 }
 
 /**

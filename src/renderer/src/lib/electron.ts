@@ -27,6 +27,7 @@ import type {
     AccountProfile,
     ActivationApi,
     ActivationState,
+    ManualRecheckResult,
     RedeemResult
 } from '../../../shared/activation-types';
 // Skill 导出结果：与本文件共用（data 声明为 Uint8Array 而非 main 侧的 Node Buffer，
@@ -988,6 +989,8 @@ const mockAPI: ElectronAPI = {
         getMachineCode: async (): Promise<string> => 'AI-MOCK-MACHINE-CODE-0001',
         getPurchaseUrl: async (): Promise<string> => '',
         getAccountPageUrl: async (): Promise<string> => '',
+        // 浏览器预览态没有服务端可问：按「拿不到明确结论」回，与真机断网时的表现一致
+        recheckNow: async (): Promise<ManualRecheckResult> => 'unverified',
         redeem: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),
         importLicenseFile: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),
         importLicenseText: async (): Promise<RedeemResult> => ({success: false, error: 'Not available in browser'}),

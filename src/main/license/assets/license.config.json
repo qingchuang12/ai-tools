@@ -34,8 +34,7 @@
     "retryMs": 7200000,
     "offlineGraceDays": 30,
     "hardStopDays": 60,
-    "timeoutMs": 8000,
-    "rateLimitedRetryMs": 3600000
+    "timeoutMs": 8000
   },
   "features": {
     "proFeature": "pro",

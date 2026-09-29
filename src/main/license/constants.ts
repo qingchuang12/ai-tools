@@ -142,13 +142,15 @@ export const DEFAULT_RECHECK_ENABLED = true;
 
 /**
  * 复核间隔默认 **15 天**（plan-1.0 口径，原 24h）。
- * 服务端 verify 成功响应会下发 `nextCheckAfterMs`，客户端优先采用下发值——调节奏不必发版。
+ * 两条调参通道：① 包外 `license.config.json`（改配置重启即生效，不发版）；
+ * ② 服务端 verify 响应的 `nextCheckAfterMs`（审计 D8 接活，`recheck.ts#clampServerDelay` 夹安全区间）。
+ * 下发值只在**拿到明确结论**时参与排期，失败/429 仍走 `retryMs`。
  */
 export const DEFAULT_RECHECK_INTERVAL_MS = 15 * 24 * 60 * 60 * 1000;
 
 /**
- * 「拿不到明确结论」（网络/超时/5xx/畸形）后的重试间隔，默认 **2 小时**，持续到拿到明确答案
- * （plan-1.0 第 2 条）。429 不走这里，走 `rateLimitedRetryMs` 退避。
+ * 「拿不到明确结论」（网络/超时/5xx/畸形）与**命中 429** 后的重试间隔，默认 **2 小时**，
+ * 持续到拿到明确答案（plan-1.0 第 2 条 + 审计 D3 定案：两者同节奏，429 另加 0~10min 抖动）。
  */
 export const DEFAULT_RECHECK_RETRY_MS = 2 * 60 * 60 * 1000;
 
@@ -168,8 +170,19 @@ export const DEFAULT_RECHECK_HARD_STOP_DAYS = 60;
 /** 单次复核超时 8s：启动路径上的旁路请求，短于兑换（15s） */
 export const DEFAULT_RECHECK_TIMEOUT_MS = 8000;
 
-/** 命中 429 后退避 1h（429 照常累加宽限，免扣会让限流变成永久续命后门） */
-export const DEFAULT_RECHECK_RATE_LIMITED_RETRY_MS = 60 * 60 * 1000;
+/**
+ * 服务端下发 `nextCheckAfterMs` 的安全区间（审计 D8 接活时定的夹逼上下界）。
+ *
+ * - **下限 1 小时**：防服务端异常下发 0/负数把客户端打成狂查。打满 verify 限流（60/min）后拿到的全是 429，
+ *   而 429 **照常消耗离线宽限**（红线 3）→ 狂查不但没好处，还会加速停用，所以下界必须有。
+ * - **上限 30 天**：防下发超大值把下次复核推到有生之年（吊销/退款生效完全依赖这趟复核）。
+ *   取 30 天是与提醒段阈值 `offlineGraceDays`（默认 30）对齐的保守值——再大就会超过「用户还会被提醒」的窗口。
+ *
+ * 超出区间的值**夹到边界**而不是判为无效（无效仅限非有限数字），否则一次配错就退回本地默认，
+ * 运营侧看不出自己下发失败，反而更难排查。
+ */
+export const RECHECK_SERVER_DELAY_MIN_MS = 60 * 60 * 1000;
+export const RECHECK_SERVER_DELAY_MAX_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** 单公钥文件名（客户心智中的「那一个特殊文件」，上线前替换它即可） */
 export const PUBLIC_KEY_FILE_NAME = 'public.key';
@@ -247,7 +260,6 @@ export const DEFAULT_LICENSE_CONFIG: LicenseConfig = {
         offlineGraceDays: DEFAULT_RECHECK_WARN_AFTER_DAYS,
         hardStopDays: DEFAULT_RECHECK_HARD_STOP_DAYS,
         timeoutMs: DEFAULT_RECHECK_TIMEOUT_MS,
-        rateLimitedRetryMs: DEFAULT_RECHECK_RATE_LIMITED_RETRY_MS,
     },
     features: {
         proFeature: FEATURE_PRO,

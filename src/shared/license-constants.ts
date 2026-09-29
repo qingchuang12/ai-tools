@@ -7,10 +7,20 @@
  */
 
 /**
- * 产品 SKU：**展示与收银台用**的本产品标识。
+ * 产品 SKU：**展示与收银台档位预选用**的本产品标识。
  * 校验 token 的 `sku` 声明请用 `ACCEPTED_SKUS`（一个产品可对应多个可售 SKU）。
  */
 export const PRODUCT_SKU = 'AI-TOOLS-PRO';
+
+/**
+ * 产品码：**产品维度**的标识，与服务端 `products.product_code` 列同值（V10 迁移回填）。
+ *
+ * 收银台 URL 用它做**产品目录过滤**（`?product=ai-tools` 只显示本产品的可售档位），
+ * 档位本身（买断/订阅 × Pro/Pro Plus）由用户在页面选择——一个产品对应多个 SKU，
+ * 故客户端**不预选** `productId`：那是 SKU 维度的参数，与「用户自选 license 类型」冲突。
+ * 真正的产品归属判定仍在离线验签（token `sku` ∈ `acceptedSkus`），不依赖此处自报参数。
+ */
+export const PRODUCT_CODE = 'ai-tools';
 
 /**
  * 本产品**接受的**服务端可售 SKU（服务端 `products` 种子见 V4 迁移）。

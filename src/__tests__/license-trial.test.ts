@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => ({
         features: {proFeature: 'pro', gated: ['cloud_sync', 'remote_connect']},
         // 本文件早于 plan-7.0 复核特性编写，不覆盖停用闸门：关掉开关使 isDisabledByRecheck 恒 false，
         // 精确还原复核接入前的判定行为（与用例 13 的开关测试正交，避免误伤既有断言）。
-        recheck: {enabled: false, intervalMs: 86400000, offlineGraceDays: 7, timeoutMs: 8000, rateLimitedRetryMs: 3600000},
+        recheck: {enabled: false, intervalMs: 86400000, retryMs: 7200000, offlineGraceDays: 7, timeoutMs: 8000},
     },
     strong: 'AAAA-BBBB-CCCC-DDDD',
     soft: 'AAAA-BBBB-CCCC-EEEE',

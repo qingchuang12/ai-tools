@@ -26,9 +26,9 @@ import type {LicenseErrorCode} from './errors';
 export interface RecheckConfig {
     /** 总开关；关掉后完全忽略停用标记（资损事故回滚手段） */
     enabled: boolean;
-    /** 复核间隔（ms），默认 15 天；服务端 verify 响应下发 `nextCheckAfterMs` 时优先采用下发值 */
+    /** 复核间隔（ms），默认 15 天。调参走包外 license.config.json；服务端下发的 nextCheckAfterMs 目前未消费（设计文档 §7 第 15 条） */
     intervalMs: number;
-    /** 复核「拿不到明确结论」后的重试间隔（ms），默认 2 小时（持续到成功为止） */
+    /** 复核「拿不到明确结论」后的重试间隔（ms），默认 2 小时（持续到成功为止；429 同节奏，另加 0~10min 抖动） */
     retryMs: number;
     /** 进入「需联网验证」提醒段的天数阈值（提醒但不减功能），默认 30 天 */
     offlineGraceDays: number;
@@ -36,8 +36,6 @@ export interface RecheckConfig {
     hardStopDays: number;
     /** 单次请求超时（ms），默认 8s（短于兑换 15s：这是启动路径上的旁路请求） */
     timeoutMs: number;
-    /** 命中 429 后的退避间隔（ms），默认 1h */
-    rateLimitedRetryMs: number;
 }
 
 /** 授权配置（源码期落 `assets/license.config.json`，打包后包外 `resources/license/` 可覆盖） */

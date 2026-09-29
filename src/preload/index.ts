@@ -27,6 +27,7 @@ import type {
     AccountProfile,
     ActivationApi,
     ActivationState,
+    ManualRecheckResult,
     RedeemResult
 } from '../shared/activation-types';
 
@@ -646,6 +647,8 @@ const api = {
         getMachineCode: (): Promise<string> => ipcRenderer.invoke('activation:get-machine-code'),
         getPurchaseUrl: (): Promise<string> => ipcRenderer.invoke('activation:get-purchase-url'),
         getAccountPageUrl: (): Promise<string> => ipcRenderer.invoke('activation:get-account-url'),
+        // plan-1.0 审计 D4：提醒态横幅的「立即联网验证」
+        recheckNow: (): Promise<ManualRecheckResult> => ipcRenderer.invoke('activation:recheck-now'),
         redeem: (code: string, email: string, switchMode?: boolean): Promise<RedeemResult> =>
             ipcRenderer.invoke('activation:redeem', code, email, switchMode),
         importLicenseFile: (switchMode?: boolean): Promise<RedeemResult> =>

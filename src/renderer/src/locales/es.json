@@ -11,7 +11,8 @@
       "unitYear": "años",
       "unitHour": "h",
       "unitMin": "min",
-      "needsOnlineVerify": "Se requiere verificación en línea"
+      "needsOnlineVerify": "Se requiere verificación en línea",
+      "verifyShort": "Verificar"
     },
     "feature": {
       "cloudSync": "Sincronización en la nube",
@@ -48,11 +49,19 @@
       "remaining": "{{d}} d {{h}} h {{m}} min",
       "licenseKey": "Clave de licencia",
       "hardwareChanged": "Se ha detectado un cambio de hardware. Reactiva en un plazo de {{days}} días.",
+      "accountPageFailed": "No se pudo abrir la página de gestión de licencias. Revisa la conexión e inténtalo de nuevo.",
       "upgrade": "Mejorar",
       "needActivation": "Se requiere activación para usar la sincronización en la nube",
       "openFeatures": "Funciones desbloqueadas con la prueba o la activación",
       "featureLocked": "Bloqueado · disponible tras la prueba o la activación",
-      "openAccountPage": "Abrir gestión de licencias"
+      "openAccountPage": "Abrir gestión de licencias",
+      "needsOnlineVerifyHint": "Ha pasado un tiempo desde la última verificación en línea. Ninguna función se ha desactivado; verifica en línea para que la licencia no caduque automáticamente.",
+      "recheckNow": "Verificar en línea ahora",
+      "recheckBusy": "Verificando…",
+      "recheckVerified": "Verificación en línea correcta. La licencia es válida.",
+      "recheckUnverified": "No se pudo completar la verificación en línea. Inténtalo más tarde.",
+      "recheckDisabled": "La verificación falló y la licencia ya no está activa. Vuelve a activarla.",
+      "recheckSkipped": "Ahora no hace falta ninguna verificación en línea."
     },
     "errors": {
       "generic": "Error de activación. Comprueba el código de activación o contacta con el soporte.",

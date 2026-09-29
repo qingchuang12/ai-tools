@@ -16,12 +16,13 @@ classDiagram
     class RecheckConfig {
         +enabled: boolean
         +intervalMs: number
+        +retryMs: number
         +offlineGraceDays: number
+        +hardStopDays: number
         +timeoutMs: number
-        +rateLimitedRetryMs: number
     }
 
-    note for RecheckConfig "429 照常累加宽限，不做二次确认"
+    note for RecheckConfig "6 键（rateLimitedRetryMs 已删，429 同 retryMs 加抖动）；429 照常消耗宽限，不做二次确认"
 
     class LicenseVault {
         +signed_token: string | null
@@ -31,6 +32,7 @@ classDiagram
         +server_time_floor?: number | null
         +binding_reported?: boolean | null
         +last_checked_at?: number | null
+        +next_check_at?: number | null
         +last_verified_ok_at?: number | null
         +offline_grace_used_ms?: number
         +revoked_by_server?: boolean | null
@@ -48,13 +50,17 @@ classDiagram
         +runRecheck(nowMs?: number) Promise~RecheckOutcome~
         +startRecheckLoop() void
         +stopRecheckLoop() void
-        +isDisabledByRecheck(license, cfg) boolean
+        +isDisabledByRecheck(license, cfg, nowMs, attemptPending) boolean
+        +isRecheckAttentionNeeded(license, cfg, nowMs) boolean
     }
 
     class RecheckInternals {
         -fetchLicenseStatus(licenseKey) Promise~VerifyResponse~
         -classify(httpStatus, code, status) RecheckVerdict
-        -applyVerdict(vault, verdict, nowMs) ApplyResult
+        -applyVerdict(license, verdict, nowMs, serverTimeMs) ApplyResult
+        -graceBaseline(license, nowMs) number
+        -nextDelay(outcome) number
+        -initialDelay() Promise~number~
         -scheduleNext(delayMs) void
     }
 
@@ -69,6 +75,7 @@ classDiagram
         +getState(persisted) Promise~ActivationState~
         +assertFeature(feature) Promise~GateResult~
         +setStateChangeListener(fn) void
+        +recheckNow() Promise~ManualRecheckResult~
     }
 
     class FeatureGate {
@@ -83,13 +90,14 @@ classDiagram
     }
 
     LicenseConfig *-- RecheckConfig : 新增 recheck 段
-    LicenseVault ..> RecheckConfig : 宽限阈值 offlineGraceDays
+    LicenseVault ..> RecheckConfig : 分段阈值 offlineGraceDays / hardStopDays
     RecheckApi ..|> RecheckInternals : 组合
     RecheckApi ..> RecheckOutcome : 返回
     RecheckInternals ..> VerifyResponse : 解析 GET /api/licenses/verify/{key}
     RecheckApi --> VaultIo : 读/写 license 账本
-    RecheckApi ..> LicenseVault : 更新 4 个新字段
-    LicenseFacade --> RecheckApi : init 启动循环 + 首查
+    RecheckApi ..> LicenseVault : 更新 5 个新字段（含排期 next_check_at）
+    RecheckInternals ..> LicenseVault : graceBaseline 只读 server_time_floor
+    LicenseFacade --> RecheckApi : init 启动循环 + 首查 + recheckNow 手动复核
     LicenseFacade --> FeatureGate : 转发 assertFeature
     FeatureGate ..> RecheckApi : isDisabledByRecheck 闸门
     FeatureGate --> VaultIo : 读 token
