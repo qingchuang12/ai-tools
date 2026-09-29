@@ -26,7 +26,7 @@ import type {LicenseErrorCode} from './errors';
 export interface RecheckConfig {
     /** 总开关；关掉后完全忽略停用标记（资损事故回滚手段） */
     enabled: boolean;
-    /** 复核间隔（ms），默认 15 天。调参走包外 license.config.json；服务端下发的 nextCheckAfterMs 目前未消费（设计文档 §7 第 15 条） */
+    /** 复核间隔（ms），默认 15 天。调参走包外 license.config.json；服务端下发 nextCheckAfterMs 时优先用下发值（夹 `[1h,30d]`，设计文档 §7 第 15 条） */
     intervalMs: number;
     /** 复核「拿不到明确结论」后的重试间隔（ms），默认 2 小时（持续到成功为止；429 同节奏，另加 0~10min 抖动） */
     retryMs: number;

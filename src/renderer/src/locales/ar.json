@@ -12,7 +12,8 @@
       "unitHour": "ساعة",
       "unitMin": "دقيقة",
       "needsOnlineVerify": "يلزم التحقق عبر الإنترنت",
-      "verifyShort": "تحقق"
+      "verifyShort": "تحقق",
+      "remainShort": "متبقٍ {{time}}"
     },
     "feature": {
       "cloudSync": "مزامنة سحابية",

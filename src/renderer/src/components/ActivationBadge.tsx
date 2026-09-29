@@ -1,11 +1,12 @@
 /**
  * 激活状态指示器（调试器页左下角状态栏）
  * 点击打开激活管理弹窗。颜色随状态变化：未激活=灰、试用中=橙、已激活=绿、需联网验证=蓝（info）。
- * 试用/已激活态追加紧凑剩余时间（如「30天」「2年」）；文案与单位走 i18n（license.status.* / license.badge.*）。
+ * 徽标只放**状态词**（提醒态放短词），剩余时间挂 `title`；文案与单位走 i18n（license.status.* / license.badge.*）。
  *
- * 溢出治理（plan-1.0 审计 D4）：侧栏可拖到 160px，欧语系文案比中文长 2~3 倍，
- * 旧版 `whitespace-nowrap` + `shrink-0` 会让徽标顶出侧栏、盖住 `<main>` 首列。
- * 现改为「图标 + 单条 truncate 文本」，完整句子挂在 `title` 上兜底。
+ * 溢出治理（plan-1.0 审计 D4 → D7 收紧）：侧栏可拖到 160px，欧语系文案比中文长 2~3 倍，
+ * 旧版 `whitespace-nowrap` + `shrink-0` 会让徽标顶出侧栏、盖住 `<main>` 首列；改成「图标 + truncate 文本」后
+ * 溢出没了，但 D6 实测在**默认 200px** 下「已激活 · 2年」这类拼接文案仍有 7~8 种语言出省略号
+ * （常态就读不出来）→ 现只显状态词，完整信息（含剩余时间）由 `title` 与弹窗兜底。
  */
 
 import {useTranslation} from 'react-i18next';
@@ -61,17 +62,21 @@ export default function ActivationBadge() {
     // 只改配色与文案，**不减任何功能**；到失效阈值才由主进程降级为未激活。
     const needsOnline = status === 'activated' && state?.needsOnlineVerify === true;
     const shown = needsOnline ? NEEDS_VERIFY_STYLE : STYLE[status];
-    // 短词进徽标、整句进 title：窄侧栏下欧语系长文案会被截断，但信息不缺。
-    // 提醒态**只放短词、不拼「已激活 · 」**——浏览器预览态实测：160px 侧栏里版本号和徽标同排，
-    // 留给文字的空间只有 34px（200px 也才 74px），带 label 时 9 种语言**全部**出省略号，
-    // 等于把刚做的提醒态显示成「已激活 · …」。图标 + info 蓝已经表达了「已激活但需联网」，
-    // 完整句子由 title 兜底。
-    const text = needsOnline ? t('license.badge.verifyShort') : time ? `${label} · ${time}` : label;
+    // 徽标**只放状态词**（提醒态放短词）：审计 D7 实测——状态行里版本号固定占 57.5px 且 shrink-0，
+    // 侧栏 200px 时文字槽仅 74px、160px 时仅 34px，旧版拼「已激活 · 2年」(zh 72 / de 105 / ru 116 /
+    // ja 143) 在**默认宽度**下就有 7~8 种语言出省略号，等于常态读不出来。
+    // 剩余时间改为完整挂在 title 上（弹窗内另有精确到分的文案），info 蓝 + 感叹号仍表达提醒态。
+    const text = needsOnline ? t('license.badge.verifyShort') : label;
+    const title = needsOnline
+        ? t('license.badge.needsOnlineVerify')
+        : time
+            ? `${t('license.badge.tooltip')} · ${t('license.badge.remainShort', {time})}`
+            : t('license.badge.tooltip');
 
     return (
         <button
             onClick={openModal}
-            title={needsOnline ? t('license.badge.needsOnlineVerify') : t('license.badge.tooltip')}
+            title={title}
             className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-medium no-drag min-w-0 max-w-full transition-colors"
             style={{ background: shown.bg, color: shown.color }}
         >

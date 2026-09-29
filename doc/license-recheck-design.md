@@ -43,7 +43,7 @@
 
 | 维度 | plan-7.0 草案 | **现行（plan-1.0）** |
 | --- | --- | --- |
-| 心跳间隔 | 24h | `intervalMs` = **15 天**。**调参通道 = 包外 `license.config.json`**（改配置重启即生效，不发版）。服务端 verify 响应虽已下发 `nextCheckAfterMs`，但**客户端目前没有消费它**（`recheck.ts#VerifyData` 只取 `status`，`nextDelay()` 只读本地配置）——见 §7 待明确 15 |
+| 心跳间隔 | 24h | `intervalMs` = **15 天**。**两条调参通道**：① 包外 `license.config.json`（改配置重启即生效，不发版）；② 服务端 verify 响应的 `nextCheckAfterMs`（审计 D8 接活：`VerifyData` 解析 → 随 `RecheckOutcome.serverNextDelayMs` 传递 → `nextDelay()` 的终态分支优先采用，并经 `clampServerDelay()` 夹进 **`[1 小时, 30 天]`**）。**失败态（unknown / 429）不吃下发值**——那时服务端根本没答话，任何下发都不该延长「2 小时重试」。另注：`initialDelay()` 仍把启动等待量夹在本地 `intervalMs` 内，故服务端把间隔放得比本地大时，**重启会把下次复核提前**（刻意保守，见 §1.5 红线 1「回滚通道本地可达」） |
 | 问不到之后 | 仍 24h | `retryMs` = **2 小时**，直到拿到明确结论 |
 | 429 | 1h + jitter | **与普通失败同节奏**：`retryMs`（2 小时）+ 0~10min jitter（审计 D3 定案，`rateLimitedRetryMs` 键已删除），且**照常消耗宽限** |
 | 停用口径 | 方案 B（`offline_grace_used_ms` 钳制累加） | **方案 A（自然日，川哥 2026-09-24 拍板）**：`now - last_verified_ok_at`（缺失回落 `activated_at`）**现算** |
@@ -280,7 +280,7 @@ license: {
 export interface RecheckConfig {
     /** 总开关；关掉后 getState/assertFeature 完全忽略停用标记（资损事故回滚手段） */
     enabled: boolean;
-    /** 复核间隔（ms），默认 15 天；调参走包外 license.config.json（服务端下发的 nextCheckAfterMs 暂未消费，见 §7 第 15 条） */
+    /** 复核间隔（ms），默认 15 天；服务端下发 nextCheckAfterMs 时优先用下发值（夹 `[1h,30d]`），见 §7 第 15 条 */
     intervalMs: number;
     /** 复核「拿不到明确结论」后的重试间隔（ms），默认 2 小时（持续到成功为止；429 同节奏，另加 0~10min 抖动） */
     retryMs: number;
@@ -326,6 +326,8 @@ export interface RecheckOutcome {
     disabled: boolean;
     /** 落盘后的累计已耗宽限（ms） */
     graceUsedMs: number;
+    /** 服务端下发的下次复核间隔原值（ms，未夹逼）；null = 未下发/非数字（审计 D8） */
+    serverNextDelayMs: number | null;
 }
 
 /** 执行一次复核（纯逻辑，单测直接调；内部全流程 try/catch，绝不抛） */
@@ -389,8 +391,11 @@ function applyVerdict(
     serverTimeMs: number | null,
 ): {license: LicenseVault; disabled: boolean};
 
-/** 由 outcome 算下次间隔：429→retryMs+抖动；其它 unknown→retryMs；其余（active/revoked/skipped）→intervalMs（纯本地配置，见 §7 第 15 条） */
+/** 由 outcome 算下次间隔：429→retryMs+抖动；其它 unknown→retryMs；终态（active/revoked/skipped）→ **优先服务端下发值**（经 `clampServerDelay` 夹 `[1h,30d]`），未下发/畸形才回落 `intervalMs` */
 function nextDelay(outcome: RecheckOutcome): number;
+
+/** 服务端下发间隔的夹逼（导出给单测直调）：非有限数字→null（视为未下发，回落本地默认）；有值夹进 `[RECHECK_SERVER_DELAY_MIN_MS, _MAX_MS]` */
+export function clampServerDelay(ms: number | null | undefined): number | null;
 
 /** 递归 setTimeout + unref；delay 由 verdict 决定（15 天 / 2 小时，429 另加抖动），超 24 天分段挂载 */
 function scheduleNext(delayMs: number): void;
@@ -473,7 +478,7 @@ export function recheckNow(): Promise<ManualRecheckResult>;
 | **T04** | 单测 `license-recheck.test.ts`（另配套 `license-recheck-config.test.ts`、`license-purchase-poll.test.ts`、`activation-store-broadcast.test.ts`）：四态分类、30/60 分段阈值、429/5xx/网络、回拨防复活、停用与自愈、开关关闭、停用压过硬件宽限、排期跨重启、红线 4、长定时器分段 | `src/__tests__/license-recheck*.test.ts` 等（新增） | T02, T03 | **P0** |
 | **T05** | 运行态 UI 通知（P2）：主进程广播 → preload 订阅 → 渲染层 store 更新 | `src/main/index.ts`、`src/preload/index.ts`、`src/shared/activation-types.ts`、`src/renderer/src/store/activationStore.ts` | T03 | P1 |
 
-**T04 验收口径（现行 26 例，含 15a/b/c、23a/b 子例；分组；具体断言以 `src/__tests__/license-recheck.test.ts` 为准）**
+**T04 验收口径（现行 27 例，含 15a/b/c、23a/b、27a–e 子例；分组；具体断言以 `src/__tests__/license-recheck.test.ts` 为准）**
 
 - **四态分类（1–7）**：200+ACTIVE → active（刷新 `last_verified_ok_at`、清 `revoked_by_server` = **停用后自愈**）；400+`LICENSE_INVALID` / `LICENSE_EXPIRED` → revoked 单次即停用（无二次确认）；400+**`LICENSE_NOT_FOUND`** → unknown 不停用（核心防误杀）；429 空 body → unknown（必须先判 status 再 json）；网络/超时抛异常 → unknown；JSON 畸形 → unknown。
 - **阈值分段（8–10、22）**：停用阈值 = `hardStopDays`（阈值前一天 false、当天 true）；`last_verified_ok_at` 缺失回落 `activated_at`，两者皆无 → 不误杀；`revoked_by_server=true` 无视红线 4 与宽限一律禁用；纯函数按配置原样判定，阈值大小关系由 config 层 clamp 保证（用例 22）。
@@ -482,6 +487,7 @@ export function recheckNow(): Promise<ManualRecheckResult>;
 - **时钟回拨**：`now` 回退 → `last_checked_at` 不回退、`revoked_by_server` 不复活（由 `effectiveNow` + 三路下界保证，见 `license-clock-rollback` 套件）；宽限/停用侧的回拨续命由 `graceBaseline` + 排期夹逼封堵（用例 23–26）。
 - **配置层（`license-recheck-config.test.ts`，5 例）**：默认 15d/2h/30/60/8s（六键，无 `rateLimitedRetryMs`）；六键覆盖生效且**包外配置里已废弃的 `rateLimitedRetryMs` 残留键被忽略**（用例 2）；`offlineGraceDays` 抬到 `ceil(intervalMs/天)+5`；`hardStopDays >= offlineGraceDays`；非法值回落默认 / 非对象整段默认。
 - **审计 D1 新增（23–26）**：23 启动排期——处于提醒段强制返回 0（启动即查）/ 被时钟回拨放大的等待量夹到 `intervalMs`（夹完仍是未来时刻，不会变成狂查）；24 停用与提醒基准含 `server_time_floor`（把时钟回调不能凭空续命）；25 **基准只认服务端下界**——本地 `watermark` 被前拨抬高后不得反过来误杀付费用户；26 unknown/429 分支也先用 HTTP `Date` 抬 `server_time_floor`，**本次**停用判定即用新基准。
+- **审计 D8 新增（27）**：服务端下发 `nextCheckAfterMs` 参与排期。27a ACTIVE + 下发 3 天 → `next_check_at = now + 3 天`（不再走本地 15 天）；27b 下发 1 分钟 → 夹到下限 **1 小时**；27c 下发 400 天 → 夹到上限 **30 天**；27d 下发值为字符串 / `null`（畸形）→ 回落本地 `intervalMs`；27e **200 但 `status` 非 ACTIVE**（= `unknown`，没拿到明确结论）→ 仍按 `retryMs` 重试，**下发值不得延长失败重试**。
 
 ---
 
@@ -501,7 +507,10 @@ export function recheckNow(): Promise<ManualRecheckResult>;
 12. **被停用后的 UI 形态**：停用态复用既有 `degraded: 'token_invalid'` 的「重新激活」引导，不新增错误码。**提醒态 UI 已随审计 D4 落地**：侧栏徽标换独立 info 语义色 + 「需验证」短词（`truncate` + 完整 `title`），`ActivationModal` 已激活视图挂 info 横幅，横幅带「立即联网验证」按钮走新增 `activation:recheck-now` IPC（返回 `ManualRecheckResult` 四态枚举，服务端业务码不跨 IPC），文案覆盖 9 个 locale。仍待产品决策的是：要不要把「授权已失效」与「离线过久」拆成两种终态——那需要新增 `ActivationDegradedReason`（改动 `shared/activation-types.ts` 与全部多语言文案）。
 13. ~~**收银台 URL 的 `productId` 只是透传，服务端无产品维度**~~ —— **已做（plan-1.0 / D2）**：服务端加 `products.product_code` 列（`V10__product_code.sql`，现有商品回填 `ai-tools`）+ `GET /api/products?product=<产品码>` 过滤（无参数＝全量，向后兼容）+ 静态收银台按 `params.product` 取目录、`params.productId` 仍只作 SKU 预选、**过滤结果为空回退全量**（漏回填不得把收银台打成白页）。客户端改传 `product=ai-tools`（`PRODUCT_CODE`），**不预选 `productId`**——需求 #5 的「带待激活产品」是产品维度，档位由用户自选。**遗留**：V10 在测试 profile 下未被执行（服务端 `application-test.yml` 关了 Flyway），迁移真实执行随 E1 一并验。
 14. ~~**启动首查改为按 `next_check_at` 排期，削弱了启动即查的即时性**~~ —— **已收敛（审计 D1）**：`initialDelay()` 三条——进提醒段返回 0、未到点等待量夹到 `intervalMs` 上界、异常退化为立即查。既保住「不浪费限流额度」，又不再出现「退款后最坏等一整个排期点」。**回滚一行**仍然是把 `initialDelay()` 返回常量 `0`。
-15. **`nextCheckAfterMs` 服务端已下发、客户端未消费（写了没接上）**：服务端 `LicenseResponse` 已带该字段（由 `billing.license-check-interval-hours` 换算），但客户端 `recheck.ts#VerifyData` 只解析 `status`、`nextDelay()` 只读本地配置，**下发值对排期没有任何影响**。当前「不发版调节奏」的唯一通道是包外 `license.config.json`（同样满足运营诉求）。接不接是本 plan 的范围扩张项，**待用户拍板**：接 = 解析字段 → 随 outcome 传递 → `nextDelay` 的 active 分支优先用下发值（须加下限夹逼，防服务端异常下发 0 变成狂查）+ 补单测；不接 = 移除服务端字段或长期挂本文档口径，避免后人误以为可下发调参。
+15. ~~**`nextCheckAfterMs` 服务端已下发、客户端未消费（写了没接上）**~~ —— **已由审计 D8 接活（2026-09-29）**：`VerifyData.nextCheckAfterMs` 解析 → `VerifyResponse.serverNextDelayMs` → `RecheckOutcome.serverNextDelayMs` → `nextDelay()` 终态分支采用，`clampServerDelay()`（`recheck.ts` 导出，便于单测直调）夹进 `[RECHECK_SERVER_DELAY_MIN_MS=1h, RECHECK_SERVER_DELAY_MAX_MS=30d]`。三条口径务必守住，别在后续「顺手优化」时改掉：
+    - **只有终态吃下发值**：`unknown` / 429 仍走 `retryMs`（429 另加抖动）——下发值延长失败重试等于让服务端一句话废掉「失败后 2 小时重试」这条需求（用例 27e 守住）。
+    - **超界夹到边界，不判为无效**：只有非有限数字（`NaN`/`Infinity`/字符串/缺失）才回落本地 `intervalMs`。夹边界的理由是「运营配错」应表现为节奏偏保守而非**静默失效**——当初正是因为没人消费这个字段，文档才写了半年假口径（用例 27b/c/d 守住）。
+    - **上限 30 天不是随便取的**：与提醒段阈值 `offlineGraceDays`（默认 30）对齐，再大就超出「用户还会被提醒」的窗口；且 `initialDelay()` 仍按本地 `intervalMs` 夹上界，重启会提前首查，不会因一次下发就长期失联。
 
 ---
 

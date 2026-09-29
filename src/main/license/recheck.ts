@@ -336,12 +336,14 @@ export function setRecheckDisableHook(fn: DisableHook | null): void {
 }
 
 /**
- * 下一次排期间隔（plan-1.0 / C1 + 审计 D3 定案）：
+ * 下一次排期间隔（plan-1.0 / C1 + 审计 D3、D8 定案）：
  * - 429 → `retryMs` + 0~10min 抖动（与普通失败同节奏，抖动只是防同 NAT 群体同一秒回来）；
  * - `unknown`（网络/超时/5xx/畸形=**没拿到结论**）→ `retryMs`（默认 2 小时），持续到拿到明确答案；
- * - 其余（active / revoked / skipped 终态）→ `intervalMs`（默认 15 天）。
+ * - 其余（active / revoked / skipped 终态）→ **优先用服务端下发的 `nextCheckAfterMs`**（经 `clampServerDelay`
+ *   夹安全区间），未下发或非有限数字才回落本地 `intervalMs`（默认 15 天）。
  *
  * 注意 unknown 分支不能合并进「终态」用 15 天：那等于把「失败后 2 小时重试」这条需求丢掉。
+ * 同理，**下发值不参与失败分支**——失败时服务端根本没答话（429 body 为空），任何下发都不该延长重试。
  */
 function nextDelay(outcome: RecheckOutcome): number {
     const cfg = getConfig();
@@ -349,7 +351,18 @@ function nextDelay(outcome: RecheckOutcome): number {
         return cfg.recheck.retryMs + Math.floor(Math.random() * RATE_LIMIT_JITTER_MS);
     }
     if (outcome.verdict === 'unknown') return cfg.recheck.retryMs;
-    return cfg.recheck.intervalMs;
+    const fromServer = clampServerDelay(outcome.serverNextDelayMs);
+    return fromServer ?? cfg.recheck.intervalMs;
+}
+
+/**
+ * 服务端下发间隔的安全夹逼（审计 D8）：非有限数字＝无效 → null（调用方回落本地默认）；
+ * 有值则夹进 `[1 小时, 30 天]`。夹到边界而非判无效，是为了让「运营配错」表现为「节奏偏保守」
+ * 而不是「下发静默失效」——后者排查成本极高（曾因此把 `nextCheckAfterMs` 当成已生效的通道）。
+ */
+export function clampServerDelay(ms: number | null | undefined): number | null {
+    if (typeof ms !== 'number' || !Number.isFinite(ms)) return null;
+    return Math.min(Math.max(ms, RECHECK_SERVER_DELAY_MIN_MS), RECHECK_SERVER_DELAY_MAX_MS);
 }
 
 /**
@@ -437,8 +450,9 @@ function outcome(
     serverCode: string | null,
     disabled: boolean,
     graceUsedMs: number,
+    serverNextDelayMs: number | null = null,
 ): RecheckOutcome {
-    return {verdict, httpStatus, serverCode, disabled, graceUsedMs};
+    return {verdict, httpStatus, serverCode, disabled, graceUsedMs, serverNextDelayMs};
 }
 
 /**
@@ -492,6 +506,7 @@ export async function runRecheck(nowMs: number = Date.now()): Promise<RecheckOut
             res.code,
             applied.disabled,
             applied.license.offline_grace_used_ms ?? 0,
+            res.serverNextDelayMs,
         );
         // C1：排期与本次结论**同一次落盘**——`next_check_at` 是跨重启的下次发起时刻
         const scheduled: LicenseVault = {

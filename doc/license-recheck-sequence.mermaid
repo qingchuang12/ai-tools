@@ -50,7 +50,7 @@ sequenceDiagram
             Loop->>Vault: last_checked_at = max(last_checked_at, now)（单调，不累加 used）
         end
         Loop->>Loop: applyVerdict(license, verdict, now, serverTimeMs)<br/>→ 新账本 + 本次 disabled（unknown 分支内现算，且先抬 server_time_floor）
-        Loop->>Vault: writeVault()（同一次写入 next_check_at = now + nextDelay）
+        Loop->>Vault: writeVault()（同一次写入 next_check_at = now + nextDelay）<br/>nextDelay：unknown/429 → retryMs（<b>不吃</b>下发值）；终态 → 服务端 nextCheckAfterMs（夹 1h~30d）回落 intervalMs
         opt 本次判定为停用
             Loop->>Facade: disableHook() → 广播 activation:state-changed
         end

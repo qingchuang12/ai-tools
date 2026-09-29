@@ -12,7 +12,8 @@
       "unitHour": "小时",
       "unitMin": "分",
       "needsOnlineVerify": "需联网验证",
-      "verifyShort": "需验证"
+      "verifyShort": "需验证",
+      "remainShort": "剩余 {{time}}"
     },
     "feature": {
       "cloudSync": "云同步",

@@ -12,7 +12,8 @@
       "unitHour": "Std.",
       "unitMin": "Min.",
       "needsOnlineVerify": "Online-Prüfung erforderlich",
-      "verifyShort": "Prüfen"
+      "verifyShort": "Prüfen",
+      "remainShort": "noch {{time}}"
     },
     "feature": {
       "cloudSync": "Cloud-Sync",

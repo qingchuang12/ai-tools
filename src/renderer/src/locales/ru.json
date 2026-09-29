@@ -12,7 +12,8 @@
       "unitHour": "ч",
       "unitMin": "мин",
       "needsOnlineVerify": "Требуется онлайн-проверка",
-      "verifyShort": "Проверить"
+      "verifyShort": "Проверить",
+      "remainShort": "осталось {{time}}"
     },
     "feature": {
       "cloudSync": "Облачная синхронизация",

@@ -31,6 +31,9 @@
  *  24. 停用/提醒基准 = `max(now, server_time_floor)`：回拨时钟不能凭空续命
  *  25. 基准**不含** `watermark`：本地时钟前调抬高的 watermark 不得误杀付费用户
  *  26. unknown/429 也抬 `server_time_floor`（HTTP Date），本次停用即用新基准
+ *  —— plan-1.0 审计 D8（27）——
+ *  27. 服务端下发 `nextCheckAfterMs` 参与排期：正常态采用并夹 `[1h, 30d]`；畸形值回落本地 `intervalMs`；
+ *      失败态（unknown/429）**不吃**下发值，「失败后 2 小时重试」不受服务端影响
  *
  * 设计红线（务必在测试中守住）：
  * - 宁可放过不误杀：只有 LICENSE_INVALID / LICENSE_EXPIRED 立即停用，其余一律 unknown/grace。
@@ -49,6 +52,7 @@ import {DEFAULT_LICENSE_CONFIG} from '../main/license/constants';
 import {TEST_KEY_PAIR} from './helpers/license-test-keys';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 /** 固定基准时间，避免依赖 Date.now() 造成抖动 */
 const BASE = 1_700_000_000_000;
 
@@ -721,5 +725,44 @@ describe('recheck：开关、排期与宽限耗尽', () => {
         expect(outcome.verdict).toBe('unknown');
         expect(outcome.disabled).toBe(true);
         expect((await readVault()).license?.server_time_floor).toBe(BASE);
+    });
+
+    it('27) 服务端下发 nextCheckAfterMs 参与排期（审计 D8）：正常态采用并夹安全区间，失败态与畸形值不吃', async () => {
+        const cfg = defaultConfig();
+        const seed = () => seedLicense({last_verified_ok_at: BASE, activated_at: BASE});
+
+        // 27a：明确 ACTIVE + 下发 3 天 → 排期用下发值，不再走本地 intervalMs
+        await writeVault({trial: null, license: seed()});
+        stubFetch({status: 200, body: {success: true, code: 'SUCCESS', data: {status: 'ACTIVE', nextCheckAfterMs: 3 * DAY_MS}}});
+        await runRecheck(BASE);
+        expect((await readVault()).license?.next_check_at).toBe(BASE + 3 * DAY_MS);
+
+        // 27b：下发 1 分钟（异常小）→ 夹到下限 1 小时，防被打满 verify 限流后 429 狂耗宽限
+        await writeVault({trial: null, license: seed()});
+        stubFetch({status: 200, body: {data: {status: 'ACTIVE', nextCheckAfterMs: 60_000}}});
+        await runRecheck(BASE);
+        expect((await readVault()).license?.next_check_at).toBe(BASE + HOUR_MS);
+
+        // 27c：下发 400 天（异常大）→ 夹到上限 30 天，防复核被推到有生之年
+        await writeVault({trial: null, license: seed()});
+        stubFetch({status: 200, body: {data: {status: 'ACTIVE', nextCheckAfterMs: 400 * DAY_MS}}});
+        await runRecheck(BASE);
+        expect((await readVault()).license?.next_check_at).toBe(BASE + 30 * DAY_MS);
+
+        // 27d：畸形下发值（字符串 / null）→ 视为未下发，回落本地 intervalMs
+        for (const bad of ['3d', null]) {
+            await writeVault({trial: null, license: seed()});
+            stubFetch({status: 200, body: {data: {status: 'ACTIVE', nextCheckAfterMs: bad}}});
+            await runRecheck(BASE);
+            expect((await readVault()).license?.next_check_at).toBe(BASE + cfg.recheck.intervalMs);
+        }
+
+        // 27e：**200 但状态不是 ACTIVE = 没拿到明确结论** → 仍按 retryMs 重试，下发值不得延长重试
+        // （否则服务端一句异常就能把「失败后 2 小时重试」这条需求废掉）
+        await writeVault({trial: null, license: seed()});
+        stubFetch({status: 200, body: {data: {status: 'SUSPENDED', nextCheckAfterMs: 10 * DAY_MS}}});
+        const outcome = await runRecheck(BASE);
+        expect(outcome.verdict).toBe('unknown');
+        expect((await readVault()).license?.next_check_at).toBe(BASE + cfg.recheck.retryMs);
     });
 });

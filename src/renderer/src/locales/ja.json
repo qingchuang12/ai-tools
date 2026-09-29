@@ -12,7 +12,8 @@
       "unitHour": "時間",
       "unitMin": "分",
       "needsOnlineVerify": "オンライン確認が必要です",
-      "verifyShort": "要確認"
+      "verifyShort": "要確認",
+      "remainShort": "残り{{time}}"
     },
     "feature": {
       "cloudSync": "クラウド同期",

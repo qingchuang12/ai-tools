@@ -12,7 +12,8 @@
       "unitHour": "h",
       "unitMin": "min",
       "needsOnlineVerify": "Vérification en ligne requise",
-      "verifyShort": "Vérifier"
+      "verifyShort": "Vérifier",
+      "remainShort": "Reste {{time}}"
     },
     "feature": {
       "cloudSync": "Synchronisation cloud",

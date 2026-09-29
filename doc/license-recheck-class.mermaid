@@ -44,10 +44,12 @@ classDiagram
         +serverCode: string | null
         +disabled: boolean
         +graceUsedMs: number
+        +serverNextDelayMs: number | null
     }
 
     class RecheckApi {
         +runRecheck(nowMs?: number) Promise~RecheckOutcome~
+        +clampServerDelay(ms) number | null
         +startRecheckLoop() void
         +stopRecheckLoop() void
         +isDisabledByRecheck(license, cfg, nowMs, attemptPending) boolean
