@@ -142,6 +142,19 @@ function strOrNull(v: unknown): string | null {
     return typeof v === 'string' && v ? v : null;
 }
 
+/**
+ * C8 的三态字段，**必须原样保三态**：`undefined`＝从未联网问过（下次启动再问）、
+ * `null`＝问过但服务端没见过这台机器、`number`＝服务端记录的首见时刻。
+ * 折叠成 `null` 会让「问过了」与「没问过」混淆，折叠成 `undefined` 则每次启动都重发探测。
+ * 键缺失或值不可识别（字符串/NaN/Infinity）一律按 `undefined` 处理＝重新问一次，
+ * 以服务端为准；`JSON.stringify` 会丢掉 undefined 键，故写回后仍能读回同一态。
+ */
+function sanitizeMachineFirstSeen(v: unknown): number | null | undefined {
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
 function sanitizeTrial(raw: unknown): TrialVault | null {
     if (!isRecord(raw)) return null;
     if (typeof raw.first_run_at !== 'number' || !Number.isFinite(raw.first_run_at)) return null;
@@ -155,6 +168,7 @@ function sanitizeTrial(raw: unknown): TrialVault | null {
         hardware_grace_used: Math.max(0, Math.floor(numOr(raw.hardware_grace_used, 0))),
         hardware_grace_until: typeof raw.hardware_grace_until === 'number' ? raw.hardware_grace_until : null,
         server_time_floor: typeof raw.server_time_floor === 'number' ? raw.server_time_floor : null,
+        machine_first_seen_at: sanitizeMachineFirstSeen(raw.machine_first_seen_at),
     };
 }
 
@@ -237,9 +251,56 @@ export async function readVault(): Promise<VaultData> {
 }
 
 /**
- * 写 vault。加密失败时只记日志不抛错：授权判定不该因为「写不进去」而崩掉启动流程。
+ * F1：vault 的**所有**写入都排到同一条进程内 promise 链上。
+ *
+ * 原先 `writeVault` 是「读整个 vault → 改一个字段 → 整对象写回」，单次写原子（tmp+rename）
+ * 但跨调用无锁：recheck 定时器、渲染层 `activation:get-state`、支付到账轮询各自 read-modify-write，
+ * 后落盘者会用**旧对象整体覆盖**前者 → 水印回退（破红线 1「只增」）或刚领取的 token 被旧 license 覆盖。
+ * 注意：光把「写」串起来并不够——各调用点的 `readVault()` 发生在排队之前，读到的仍是旧值，
+ * lost update 照旧。故真正的修法是把**读-改-写整体**搬进串行段，即 `updateVault()`。
+ *
+ * 前一个任务失败也要继续跑后续任务（`then(task, task)`），否则一次写失败会永久卡死整条链。
+ */
+let writeChain: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = writeChain.then(task, task);
+    writeChain = run.then(
+        () => undefined,
+        () => undefined,
+    );
+    return run;
+}
+
+/**
+ * F1：在串行段内完成一次「读最新 → 改 → 落盘」。
+ *
+ * `mutator` 拿到的是**磁盘上的当前值**（不是调用方早先读到的快照），返回要落盘的新 vault；
+ * 返回 `null` 表示放弃这次写入（例如目标记录已被并发修改，写回去反而会覆盖别人的结论）。
+ *
+ * @returns 实际落盘的值；放弃写入时为 `null`
+ */
+export async function updateVault(mutator: (current: VaultData) => VaultData | null): Promise<VaultData | null> {
+    return enqueue(async () => {
+        const current = await readVault();
+        const next = mutator(current);
+        if (next === null) return null;
+        await writeVaultRaw(next);
+        return next;
+    });
+}
+
+/**
+ * 写 vault（整对象覆盖语义）。加密失败时只记日志不抛错：授权判定不该因为「写不进去」而崩掉启动流程。
+ *
+ * ⚠️ 生产路径请优先用 `updateVault()`：本函数**不重读磁盘**，调用方传进来的对象若基于早先的快照，
+ * 仍会覆盖掉期间别人的写入。保留它是因为「新建账本」「测试播种」这类场景确实需要整体覆盖。
  */
 export async function writeVault(data: VaultData): Promise<void> {
+    await enqueue(() => writeVaultRaw(data));
+}
+
+async function writeVaultRaw(data: VaultData): Promise<void> {
     const payload = JSON.stringify({
         trial: data.trial ? withTrialToken(data.trial) : null,
         license: data.license,
@@ -251,4 +312,9 @@ export async function writeVault(data: VaultData): Promise<void> {
     } catch (error) {
         logLicenseEvent('LIC_INTERNAL', {event: 'vault_write_failed', reason: (error as Error).name});
     }
+}
+
+/** @internal 仅测试用：清空写入链（各用例间隔离，避免上一个文件的排队任务串味）。 */
+export function resetVaultWriteChain(): void {
+    writeChain = Promise.resolve();
 }

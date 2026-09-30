@@ -55,6 +55,10 @@
       "needActivation": "Für Cloud-Sync ist eine Aktivierung erforderlich",
       "openFeatures": "Durch Testversion oder Aktivierung freigeschaltete Funktionen",
       "featureLocked": "Gesperrt · nach Testversion oder Aktivierung verfügbar",
+      "switch": "Lizenz wechseln",
+      "switchSuccess": "Gewechselt. Die neue Lizenz ist aktiv.",
+      "unbindFailed": "Die alte Lizenz konnte nicht freigegeben werden. Die neue Lizenz funktioniert weiterhin; versuchen Sie es später in der Ansicht „Aktiviert“ erneut.",
+      "cancelSwitch": "Wechsel abbrechen",
       "openAccountPage": "Lizenzverwaltung öffnen",
       "needsOnlineVerifyHint": "Die letzte Online-Prüfung ist länger her. Alle Funktionen bleiben verfügbar; bitte prüfe online, damit die Lizenz nicht automatisch ungültig wird.",
       "recheckNow": "Jetzt online prüfen",
@@ -1208,5 +1212,26 @@
   "errorBoundary": {
     "title": "Etwas ist schiefgelaufen",
     "retry": "Erneut versuchen"
+  },
+  "account": {
+    "title": "Konto",
+    "loginHint": "Melde dich an, um deine Lizenzen und Geräte über dein Konto zu verwalten.",
+    "login": "Anmelden",
+    "verify": "Prüfen",
+    "working": "Bitte warten…",
+    "cancel": "Abbrechen",
+    "logout": "Abmelden",
+    "loggedInAs": "Angemeldet als",
+    "emailLabel": "E-Mail",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Passwort",
+    "passwordPlaceholder": "Passwort eingeben",
+    "codeLabel": "Bestätigungscode",
+    "codePlaceholder": "6-stelliger Code",
+    "mfaHint": "Gib den Code aus deiner Authenticator-App oder deiner E-Mail ein.",
+    "errors": {
+      "generic": "Anmeldung fehlgeschlagen. Prüfe E-Mail und Passwort und versuche es erneut.",
+      "network": "Netzwerkverbindung fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut."
+    }
   }
 }

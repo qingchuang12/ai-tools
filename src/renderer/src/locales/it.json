@@ -55,6 +55,10 @@
       "needActivation": "Per usare la sincronizzazione cloud è necessaria l'attivazione",
       "openFeatures": "Funzioni sbloccate con la prova o l'attivazione",
       "featureLocked": "Bloccato · disponibile dopo la prova o l'attivazione",
+      "switch": "Cambia licenza",
+      "switchSuccess": "Licenza cambiata. La nuova licenza è attiva.",
+      "unbindFailed": "Non è stato possibile rilasciare la vecchia licenza. La nuova licenza funziona comunque; riprova più tardi dalla vista “Attivato”.",
+      "cancelSwitch": "Annulla il cambio",
       "openAccountPage": "Apri la gestione delle licenze",
       "needsOnlineVerifyHint": "L'ultima verifica online risale a tempo fa. Nessuna funzione è stata disattivata; esegui una verifica online per evitare la scadenza automatica della licenza.",
       "recheckNow": "Verifica online ora",
@@ -1208,5 +1212,26 @@
   "errorBoundary": {
     "title": "Si è verificato un errore",
     "retry": "Riprova"
+  },
+  "account": {
+    "title": "Account",
+    "loginHint": "Accedi per gestire le tue licenze e i tuoi dispositivi dal tuo account.",
+    "login": "Accedi",
+    "verify": "Verifica",
+    "working": "Attendere…",
+    "cancel": "Annulla",
+    "logout": "Esci",
+    "loggedInAs": "Accesso effettuato come",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Inserisci la tua password",
+    "codeLabel": "Codice di verifica",
+    "codePlaceholder": "Codice a 6 cifre",
+    "mfaHint": "Inserisci il codice dalla tua app di autenticazione o dall'email.",
+    "errors": {
+      "generic": "Accesso non riuscito. Controlla email e password, poi riprova.",
+      "network": "Connessione di rete non riuscita. Controlla la connessione e riprova."
+    }
   }
 }

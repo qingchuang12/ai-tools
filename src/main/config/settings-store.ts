@@ -8,6 +8,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import {randomBytes} from 'crypto';
 import type {ClientType, CustomClientDef, SkillClientType} from './types';
 
 /** 用户设置（持久化于 ~/.ai-tools/settings.json） */
@@ -22,10 +23,14 @@ export interface UserSettings {
 
 /**
  * 原子写：先写临时文件再 rename，避免崩溃/断电留下截断的 JSON/TOML 让客户端起不来（P0-4）
+ *
+ * F1：tmp 名带随机后缀。原先只有 `pid + Date.now()`，同毫秒内的两次并发写会**撞名**——
+ * 两次 `writeFile` 打到同一个 tmp，先完成的那次 `rename` 把文件移走，后一次 `rename` 就 ENOENT；
+ * 而调用方（如 `vault.writeVault`）把写失败只记一条 `LIC_INTERNAL` 就吞掉，等于**静默丢一次落盘**。
  */
 export async function writeFileAtomic(filePath: string, data: string): Promise<void> {
     await fs.mkdir(path.dirname(filePath), {recursive: true});
-    const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    const tmp = `${filePath}.${process.pid}.${Date.now()}.${randomBytes(6).toString('hex')}.tmp`;
     await fs.writeFile(tmp, data);
     await fs.rename(tmp, filePath);
 }

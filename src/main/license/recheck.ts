@@ -36,8 +36,8 @@ import {getConfig} from './config';
 import {LICENSE_VERIFY_API_PATH, RECHECK_SERVER_DELAY_MAX_MS, RECHECK_SERVER_DELAY_MIN_MS} from './constants';
 import {logLicenseEvent} from './errors';
 import {raiseLicenseServerFloor} from './trial';
-import type {LicenseConfig, LicenseVault, TrialVault} from './types';
-import {readVault, writeVault} from './vault';
+import type {LicenseConfig, LicenseVault} from './types';
+import {readVault, updateVault} from './vault';
 import {extractLicenseKeyFromToken} from './verifier';
 
 /** 一天的毫秒数（宽限天数换算用） */
@@ -151,20 +151,48 @@ export function isRecheckAttentionNeeded(
 }
 
 /**
- * 距上次成功复核的时间基准：本地传入时间与**服务端时间下界**（`server_time_floor`）取较大者。
+ * 距上次成功复核的时间基准：本地传入时间、**服务端时间下界**（`server_time_floor`）
+ * 与**进程内时间锚**三者取最大。
  *
  * 系统时间被往回调时 `nowMs` 会变小，直接用 `nowMs` 会让「已耗宽限」凭空缩水（回拨即续命）。
  * `server_time_floor` 只由 redeem 响应与复核响应的 HTTP `Date` 抬高（见 `applyVerdict`），
- * 本地时钟影响不到它，故用它做基准既能封死回拨，又不会反过来误杀：
- * **不能**换成 `licenseFloor`（含 `watermark`）或 vault 外锚——那两路由 `raiseLicenseWatermark`
- * 按本地时间推进，用户偶然把时钟往前调过一次就把下界永久抬高，回来就成了「60 天没复核」的假象，
- * 属付费用户被误杀（红线 2）。
+ * 本地时钟影响不到它，但它**要求真的连上过服务端**——全程离线时它一动不动，挡不住回拨。
+ *
+ * F5 丙补的就是这条离线路径：进程内锚记下「本次进程见过的最新时间」，回拨后仍以高水位算已耗时长。
+ * 它**故意不落盘**，重启即归零——落盘版本会让「用户偶然把时钟往前调过一次」变成永久抬高的下界，
+ * 之后一直被判「N 天没复核」，属付费用户被误杀（红线 2）。进程内的代价可控：真误伤了重启应用即恢复。
+ *
+ * 同理**不能**换成 `licenseFloor`（含 `watermark`）或 vault 外锚：那两路由 `raiseLicenseWatermark`
+ * 按本地时间推进且跨重启留存，误杀是永久的。
+ *
+ * ⚠️ 已知残留缺口（丙方案的取舍，非漏改）：「回拨 + 重启应用」这条组合仍推得后硬停——
+ * 重启后进程内锚归零，而离线状态下 `server_time_floor` 也不会涨。要彻底封死必须让某个跨重启的
+ * 下界参与停用判定，那就回到红线 2 的误杀问题，故按用户拍板保留现状。
  */
 function graceBaseline(license: LicenseVault, nowMs: number): number {
     const floor = typeof license.server_time_floor === 'number' && Number.isFinite(license.server_time_floor)
         ? license.server_time_floor
         : 0;
-    return Math.max(nowMs, floor);
+    return Math.max(nowMs, floor, observeProcessTime(nowMs));
+}
+
+// ── F5 丙：进程内时间锚（不落盘，重启归零）─────────────────────────────────
+let processTimeAnchorMs = 0;
+
+/**
+ * 记下本进程见过的最新时间并返回当前锚值。
+ * 放在 `graceBaseline` 内部调用，保证任何走停用判定的路径都自动参与，不会漏接某个调用点。
+ */
+function observeProcessTime(nowMs: number): number {
+    if (Number.isFinite(nowMs) && nowMs > processTimeAnchorMs) {
+        processTimeAnchorMs = nowMs;
+    }
+    return processTimeAnchorMs;
+}
+
+/** @internal 仅测试用：清空进程内锚（模拟应用重启）。 */
+export function resetProcessTimeAnchor(): void {
+    processTimeAnchorMs = 0;
 }
 
 /**
@@ -498,22 +526,33 @@ export async function runRecheck(nowMs: number = Date.now()): Promise<RecheckOut
             logLicenseEvent('LIC_RECHECK_UNKNOWN', {event: 'recheck_unknown', httpStatus: res.httpStatus});
         }
 
-        const applied = applyVerdict(license, verdict, nowMs, res.serverTimeMs);
-        const trial: TrialVault | null = vault.trial;
-        const result = outcome(
+        // C1：排期与本次结论**同一次落盘**——`next_check_at` 是跨重启的下次发起时刻。
+        // F1：整段「读 → applyVerdict → 排期」搬进串行段，基于**磁盘最新**授权计算；
+        // 否则并发的 getState（抬水印）会被这次整体覆盖，把水印压回旧值（破红线 1「只增」）。
+        // 期间授权被去激活／换绑（token 变了）→ 放弃落盘，绝不用入口读到的旧 license 盖回去
+        // （那会把用户刚清掉的授权复活）；此时按「本次结论未落盘」返回，disabled 一律 false（不误杀）。
+        let applied = {license, disabled: false};
+        let result = outcome(
             verdict,
             res.httpStatus,
             res.code,
-            applied.disabled,
-            applied.license.offline_grace_used_ms ?? 0,
+            false,
+            license.offline_grace_used_ms ?? 0,
             res.serverNextDelayMs,
         );
-        // C1：排期与本次结论**同一次落盘**——`next_check_at` 是跨重启的下次发起时刻
-        const scheduled: LicenseVault = {
-            ...applied.license,
-            next_check_at: nowMs + nextDelay(result),
-        };
-        await writeVault({trial, license: scheduled});
+        await updateVault((cur) => {
+            if (!cur.license || cur.license.signed_token !== token) return null;
+            applied = applyVerdict(cur.license, verdict, nowMs, res.serverTimeMs);
+            result = outcome(
+                verdict,
+                res.httpStatus,
+                res.code,
+                applied.disabled,
+                applied.license.offline_grace_used_ms ?? 0,
+                res.serverNextDelayMs,
+            );
+            return {trial: cur.trial, license: {...applied.license, next_check_at: nowMs + nextDelay(result)}};
+        });
 
         if (applied.disabled) {
             if (verdict === 'revoked') {

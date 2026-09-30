@@ -34,6 +34,10 @@
  *  —— plan-1.0 审计 D8（27）——
  *  27. 服务端下发 `nextCheckAfterMs` 参与排期：正常态采用并夹 `[1h, 30d]`；畸形值回落本地 `intervalMs`；
  *      失败态（unknown/429）**不吃**下发值，「失败后 2 小时重试」不受服务端影响
+ *  —— plan-1.0 审计 F5 / F1（28~30）——
+ *  28. F5 丙：全程离线时把时钟回拨，进程内锚挡住「已耗宽限凭空缩水」
+ *  29. F5 丙：时钟误调向前只在本次进程内生效（不落盘），重启即恢复 → 红线 2 不永久误杀
+ *  30. F1：复核请求在途时用户去激活 → 复核放弃落盘，不复活已清空的授权
  *
  * 设计红线（务必在测试中守住）：
  * - 宁可放过不误杀：只有 LICENSE_INVALID / LICENSE_EXPIRED 立即停用，其余一律 unknown/grace。
@@ -104,7 +108,8 @@ mocks.home = tmpHome;
  */
 vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
 
-const {isDisabledByRecheck, isRecheckAttentionNeeded, runRecheck, startRecheckLoop, stopRecheckLoop} = await import(
+const {isDisabledByRecheck, isRecheckAttentionNeeded, runRecheck, startRecheckLoop, stopRecheckLoop,
+    resetProcessTimeAnchor} = await import(
     '../main/license/recheck'
 );
 const {getState, deactivate} = await import('../main/license');
@@ -230,6 +235,10 @@ beforeEach(() => {
     mocks.mid = {strong: 'RECHECK-STRONG', soft: 'RECHECK-SOFT'};
     vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
     wipeHome();
+    // F5 丙：进程内时间锚是模块级状态，必须每个用例前清空（等价于「重启应用」）。
+    // 不清空会跨用例串味——本文件有用例走真 Date.now()（≈2026 年）调 getState()，
+    // 锚被抬到真实时间后，后续用 BASE（≈2023 年）判定的用例会被算成「已离线一千多天」而全部误判停用。
+    resetProcessTimeAnchor();
     // 默认桩：任何内部探测（machine-probe 等）一律 404，避免真实网络；具体用例再覆盖
     vi.stubGlobal('fetch', async () => ({status: 404, headers: {get: (): null => null}, json: async () => ({})}));
 });
@@ -764,5 +773,94 @@ describe('recheck：开关、排期与宽限耗尽', () => {
         const outcome = await runRecheck(BASE);
         expect(outcome.verdict).toBe('unknown');
         expect((await readVault()).license?.next_check_at).toBe(BASE + cfg.recheck.retryMs);
+    });
+
+    it('28) F5 丙：全程离线时把时钟回拨，进程内锚挡住「已耗宽限凭空缩水」', () => {
+        const cfg = defaultConfig();
+        // 末次成功复核在 55 天前，且 server_time_floor 为 null —— 模拟「激活后一直没连上过服务端」
+        const seed = () => seedLicense({
+            last_verified_ok_at: BASE - 55 * DAY_MS,
+            activated_at: BASE - 55 * DAY_MS,
+            server_time_floor: null,
+        });
+        const stopped = (license: LicenseVault, nowMs: number): boolean =>
+            isDisabledByRecheck(license, cfg, nowMs, false);
+
+        // 应用正常运行：先见到 BASE（55 天，未超 60 天阈值），再见到 6 天后（真到 61 天 → 停用）
+        expect(stopped(seed(), BASE)).toBe(false);
+        expect(stopped(seed(), BASE + 6 * DAY_MS)).toBe(true);
+
+        // 离线回拨到 BASE：旧实现 elapsed 缩回 55 天 → 停用被解除（回拨续命）；
+        // 丙方案下锚仍停在本进程见过的 BASE+6 天 → elapsed 仍是 61 天，停用照旧生效。
+        expect(stopped(seed(), BASE)).toBe(true);
+        // 提醒段同理，不因回拨而消失
+        expect(isRecheckAttentionNeeded(seed(), cfg, BASE)).toBe(true);
+    });
+
+    it('29) F5 丙：时钟被误调向前只在本次进程内生效，重启即恢复且不落盘（红线 2 不永久误杀）', async () => {
+        const cfg = defaultConfig();
+        // CMOS 电池没电 / VM 挂起恢复等都会让时钟一次性跳到未来，这属误伤而非作弊
+        const license = seedLicense({
+            last_verified_ok_at: BASE,
+            activated_at: BASE,
+            server_time_floor: null,
+        });
+        await writeVault({trial: null, license});
+
+        // 本次进程内：跳到 80 天后 → 被判停用（丙方案接受的代价，代价上界＝重启一次）
+        expect(isDisabledByRecheck(license, cfg, BASE + 80 * DAY_MS, false)).toBe(true);
+
+        // 关键区别：这次前调**没有**写进任何跨重启的下界（对照用例 25 的 watermark 路线是永久抬高）
+        const stored = await readVault();
+        expect(stored.license?.server_time_floor).toBeNull();
+
+        // 重启（锚归零）后同一张授权立刻恢复，不构成永久误杀
+        resetProcessTimeAnchor();
+        expect(isDisabledByRecheck(stored.license!, cfg, BASE, false)).toBe(false);
+        expect(isRecheckAttentionNeeded(stored.license!, cfg, BASE)).toBe(false);
+    });
+
+    it('30) F1：复核请求在途时用户去激活 → 复核放弃落盘，绝不把已清空的授权复活', async () => {
+        const now = BASE + 1000;
+        await writeVault({trial: null, license: seedLicense({last_verified_ok_at: BASE, activated_at: BASE})});
+
+        // 只把 verify 那一发停在网络往返上（其余请求照常 404），精确制造「结论已拿到、还没落盘」的窗口
+        let arrived!: () => void;
+        let release!: () => void;
+        const requestArrived = new Promise<void>((resolve) => {
+            arrived = resolve;
+        });
+        const mayReturn = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        vi.stubGlobal('fetch', async (url: string) => {
+            if (!String(url).includes('LIC-TEST-RECHECK-0001')) {
+                return {status: 404, headers: {get: (): null => null}, json: async () => ({})};
+            }
+            arrived();
+            await mayReturn;
+            return {
+                status: 200,
+                headers: {get: (): string | null => null},
+                json: async () => ({success: true, code: 'SUCCESS', data: {status: 'ACTIVE'}}),
+            };
+        });
+
+        const pending = runRecheck(now);
+        await requestArrived; // 复核已发出请求，正卡在网络往返上
+
+        await deactivate(); // 用户此刻点了「去激活」
+        release();
+        const outcome = await pending;
+
+        // 复核本身仍然成功（verdict 如实反映服务端答案），但结论**不落盘**、也不因未落盘而误判停用
+        expect(outcome.verdict).toBe('active');
+        expect(outcome.disabled).toBe(false);
+
+        const stored = await readVault();
+        expect(stored.license?.signed_token).toBeNull(); // 没有被复核结果整体盖回去
+        expect(stored.license?.last_checked_at).toBeNull();
+        expect(stored.license?.last_verified_ok_at).toBeNull();
+        expect(stored.license?.next_check_at).toBeNull(); // 排期也没写：去激活清掉的字段一个都没回来
     });
 });

@@ -55,6 +55,10 @@
       "needActivation": "Une activation est requise pour utiliser la synchronisation cloud",
       "openFeatures": "Fonctionnalités débloquées par l'essai ou l'activation",
       "featureLocked": "Verrouillé · disponible après essai ou activation",
+      "switch": "Changer de licence",
+      "switchSuccess": "Licence changée. La nouvelle licence est active.",
+      "unbindFailed": "L'ancienne licence n'a pas pu être libérée. La nouvelle licence fonctionne toujours ; réessayez plus tard depuis la vue « Activé ».",
+      "cancelSwitch": "Annuler le changement",
       "openAccountPage": "Ouvrir la gestion des licences",
       "needsOnlineVerifyHint": "La dernière vérification en ligne date. Aucune fonction n’est désactivée ; veuillez vérifier en ligne pour éviter l’expiration automatique de la licence.",
       "recheckNow": "Vérifier maintenant",
@@ -1208,5 +1212,26 @@
   "errorBoundary": {
     "title": "Une erreur est survenue",
     "retry": "Réessayer"
+  },
+  "account": {
+    "title": "Compte",
+    "loginHint": "Connecte-toi pour gérer tes licences et appareils depuis ton compte.",
+    "login": "Se connecter",
+    "verify": "Vérifier",
+    "working": "Veuillez patienter…",
+    "cancel": "Annuler",
+    "logout": "Se déconnecter",
+    "loggedInAs": "Connecté en tant que",
+    "emailLabel": "E-mail",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Mot de passe",
+    "passwordPlaceholder": "Saisis ton mot de passe",
+    "codeLabel": "Code de vérification",
+    "codePlaceholder": "Code à 6 chiffres",
+    "mfaHint": "Saisis le code de ton application d'authentification ou de ton e-mail.",
+    "errors": {
+      "generic": "Échec de la connexion. Vérifie ton e-mail et ton mot de passe, puis réessaie.",
+      "network": "Échec de la connexion réseau. Vérifie ta connexion et réessaie."
+    }
   }
 }

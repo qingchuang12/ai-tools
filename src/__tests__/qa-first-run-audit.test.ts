@@ -176,7 +176,11 @@ describe('A. 首次使用即试用（修复确实生效）', () => {
         expect(fs.existsSync(vaultFile())).toBe(false);
         expect(readFirstRunAt()).toBeNull();
 
+        // 相对夹逼：起点在「调用前后」这对墙钟之间即为合理，阈值不再把 getState 本身的
+        // 执行耗时算进去（历史 5s 固定阈值在负载高的 CI 上会 flaky）。
+        const before = Date.now();
         const state = await license.getState(null);
+        const after = Date.now();
 
         expect(state.status).toBe('trial');
         expect(state.source).toBe('trial');
@@ -184,8 +188,9 @@ describe('A. 首次使用即试用（修复确实生效）', () => {
         expect(state.trialExpiresAt).not.toBeNull();
         // 关键：窗口长度严格等于配置的 60 天，而不是写死的常量
         expect((state.trialExpiresAt ?? 0) - (state.trialStartsAt ?? 0)).toBe(mocks.config.trial.days * DAY_MS);
-        // 起点就是本次运行，误差 < 5s
-        expect(Math.abs((state.trialStartsAt ?? 0) - Date.now())).toBeLessThan(5000);
+        // 起点就是本次运行：落在 [before-1000, after+1000] 区间内（±1s 容文件系统时间戳抖动）
+        expect(state.trialStartsAt ?? 0).toBeGreaterThanOrEqual(before - 1000);
+        expect(state.trialStartsAt ?? 0).toBeLessThanOrEqual(after + 1000);
         // 账本已落盘，后续不会再发第二轮
         expect(readFirstRunAt()).not.toBeNull();
         for (const p of ledgerPaths()) expect(fs.existsSync(p)).toBe(true);
@@ -210,15 +215,17 @@ describe('A. 首次使用即试用（修复确实生效）', () => {
                 degraded: null,
             })
         );
-        // 旧版还会留下安装标记，这里以旧格式（纯 ISO 时间戳）复现
-        writeLegacyLedger(0, new Date(Date.now() - 5 * DAY_MS).toISOString());
+        // 旧版还会留下安装标记，这里以旧格式（纯 ISO 时间戳）复现。
+        // 起点固定成一个变量，断言与造数据用同一个基准，避免 Date.now() 二次求值把耗时算进误差。
+        const legacyStart = Date.now() - 5 * DAY_MS;
+        writeLegacyLedger(0, new Date(legacyStart).toISOString());
 
         // 走真实调用链：activation-store.getActivationState()
         const state = await activationStore.getActivationState();
 
         expect(state.status).toBe('trial');
         // 起点沿用 5 天前的旧标记，而不是「现在」——升级用户不该白拿一轮
-        expect(Math.abs((state.trialStartsAt ?? 0) - (Date.now() - 5 * DAY_MS))).toBeLessThan(5000);
+        expect(Math.abs((state.trialStartsAt ?? 0) - legacyStart)).toBeLessThan(1000);
         // 明文镜像已被回写为 trial
         expect(JSON.parse(fs.readFileSync(activationJson(), 'utf-8')).status).toBe('trial');
     });
@@ -297,10 +304,15 @@ describe('B. 防白嫖（删档 / 手改 / 时钟回拨）', () => {
         fs.rmSync(ledgerPaths()[0], {force: true});
         fs.rmSync(ledgerPaths()[1], {force: true});
         removeVault();
+        const beforeReset = Date.now();
         st = await license.getState(null);
+        const afterReset = Date.now();
         expect(st.status).toBe('trial');
         expect(st.trialStartsAt ?? 0).toBeGreaterThan(start);
-        expect(Math.abs((st.trialStartsAt ?? 0) - Date.now())).toBeLessThan(5000);
+        // 相对夹逼：重置后的起点落在 getState 调用前后这对墙钟之间（±1s 容时间戳抖动），
+        // 阈值不再把 getState 执行耗时算进去。
+        expect(st.trialStartsAt ?? 0).toBeGreaterThanOrEqual(beforeReset - 1000);
+        expect(st.trialStartsAt ?? 0).toBeLessThanOrEqual(afterReset + 1000);
 
         // 证据：两处账本不在同一父目录下（win32：USERPROFILE vs APPDATA）
         const [a, b] = ledgerPaths();

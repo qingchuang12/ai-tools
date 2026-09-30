@@ -57,7 +57,7 @@ import {
 } from './recheck';
 import {setPurchaseClaimHandler, startPurchasePolling} from './purchase-poll';
 import type {VaultData} from './vault';
-import {readVault, writeVault} from './vault';
+import {readVault, updateVault} from './vault';
 import {expToMs, extractLicenseKeyFromToken, resolveFeatures, verifyToken} from './verifier';
 import type {LicenseConfig, LicenseVault, TokenPayload, TrialVault} from './types';
 import {FEATURE_PRO} from '../../shared/license-constants';
@@ -219,10 +219,15 @@ async function resolveHardwareGrace(
     const softMatched = !!vault.license?.mid_soft_at_activation && vault.license.mid_soft_at_activation === pair.soft;
 
     if (trial && softMatched && factorsComplete && trial.hardware_grace_used < cfg.grace.maxAutoGrace) {
-        const granted = enterHardwareGrace(trial, cfg, effNow);
-        await writeVault({trial: granted, license: vault.license});
-        logLicenseEvent('LIC_OK', {event: 'hardware_grace_entered', days: cfg.grace.hardwareChangeDays});
-        return graceState(cfg, vault.license, persisted, pair.strong, granted.hardware_grace_until ?? effNow);
+        // F1：读-改-写整体进串行段；进锁后**重读并重判额度**，避免并发下同一台机器被授予两次宽限
+        const written = await updateVault((cur) => {
+            if (!cur.trial || cur.trial.hardware_grace_used >= cfg.grace.maxAutoGrace) return null;
+            return {trial: enterHardwareGrace(cur.trial, cfg, effNow), license: cur.license};
+        });
+        if (written?.trial) {
+            logLicenseEvent('LIC_OK', {event: 'hardware_grace_entered', days: cfg.grace.hardwareChangeDays});
+            return graceState(cfg, vault.license, persisted, pair.strong, written.trial.hardware_grace_until ?? effNow);
+        }
     }
 
     logLicenseEvent('LIC_MACHINE_MISMATCH', {event: 'hardware_grace_denied'});
@@ -284,8 +289,18 @@ async function ensureTrialLedger(
         last_run_at: nowMs,
     };
     const merged = applyMachineFirstSeen(granted, serverFirstSeen, nowMs) ?? granted;
-    await writeVault({trial: merged, license: vault.license});
-    return {trial: merged, created: true};
+    // F1：进锁后重读——并发的另一次调用可能已经建好账本，此时**以先落盘者为准**，
+    // 不覆盖（覆盖会把已记的运行次数与试用起点重置，等于白送一次试用）。
+    let raced: TrialVault | null = null;
+    const written = await updateVault((cur) => {
+        if (cur.trial) {
+            raced = cur.trial;
+            return null;
+        }
+        return {trial: merged, license: cur.license};
+    });
+    if (written) return {trial: written.trial ?? merged, created: true};
+    return {trial: raced ?? merged, created: false};
 }
 
 /**
@@ -309,10 +324,14 @@ async function backfillMachineFirstSeen(vault: VaultData): Promise<TrialVault | 
     const trial = vault.trial;
     if (!trial || trial.machine_first_seen_at !== undefined) return null;
     const firstSeenAt = await safeProbeMachineFirstSeen();
-    const merged = applyMachineFirstSeen(trial, firstSeenAt);
-    if (!merged) return null;
-    await writeVault({trial: merged, license: vault.license});
-    return merged;
+    // F1：进锁后按**磁盘上的最新账本**重算回溯，不用早先的快照覆盖掉期间的运行计数；
+    // 并重判「是否已问过」——期间的另一次写入可能已经补上了，再写一次就是重复落盘。
+    const written = await updateVault((cur) => {
+        if (!cur.trial || cur.trial.machine_first_seen_at !== undefined) return null;
+        const merged = applyMachineFirstSeen(cur.trial, firstSeenAt);
+        return merged ? {trial: merged, license: cur.license} : null;
+    });
+    return written?.trial ?? null;
 }
 
 /**
@@ -333,10 +352,18 @@ export async function getState(persisted: ActivationState | null = null): Promis
         // 付费态的单调下界自带一路（trial 在已激活分支不推进），再加 vault 外锚（R2），一起取 max。
         const floor = maxFloor(licenseFloor(vault.license), await readAnchorFloor());
         // ① 先推进付费水印与 vault 外锚：防回拨不受停用影响，这两步必须照常发生
-        const raised = raiseLicenseWatermark(vault.license, now);
-        if (raised) await writeVault({trial: vault.trial, license: raised});
+        // F1：水印只增（红线 1），必须在串行段内基于**磁盘最新值**抬升——
+        // 拿早先的快照整体写回，会把并发写入的更高水印压回去（等于给回拨开了口子）。
+        const raised = await updateVault((cur) => {
+            // 期间授权被换掉（重新激活／原子换绑）→ 不动它，本次沿用入口快照：
+            // 否则会出现「验的是旧 token、返回的却是新 license」的自相矛盾状态。
+            // 新授权落盘时已自带 `watermark: max(now, 旧下界)`，这一轮不抬也不会漏掉下界。
+            if (!cur.license || cur.license.signed_token !== token) return null;
+            const next = raiseLicenseWatermark(cur.license, now);
+            return next ? {trial: cur.trial, license: next} : null;
+        });
         await raiseAnchorFloor(now);
-        const license = raised ?? vault.license;
+        const license = raised?.license ?? vault.license;
         // ② 再判停用：优先级**高于**验签与硬件变更宽限。
         //    若只挂在「验签成功」分支，退款用户换一块硬盘 → mid 不匹配 → 命中 resolveHardwareGrace
         //    → 又白得 7 天可用期（真实绕过）。故必须放在验签之前。
@@ -394,8 +421,9 @@ export async function getState(persisted: ActivationState | null = null): Promis
 
     // 新建时已在 ensureTrialLedger 里落盘（含本次运行计数），避免首跑被重复计数
     if (!ensured.created) {
-        const updated = touchTrial(trial, now);
-        await writeVault({trial: updated, license: vault.license});
+        // F1：`trial_count` 是 +1 累加，必须在串行段内基于**磁盘最新值**累加——
+        // 两个并发调用各自「读 5 → 写 6」就白送一次运行，试用次数上限被绕过。
+        await updateVault((cur) => (cur.trial ? {trial: touchTrial(cur.trial, now), license: cur.license} : null));
     }
     return trialState(ev, pair.strong);
 }
@@ -420,9 +448,13 @@ async function reportBindingOnStartup(signedToken: string, machineId: string): P
         // 服务端重签的 token 才是「已绑本机」的权威件，先本地验签再落盘（与 applySignedToken 同口径）
         const applied = await applySignedToken(r.token, r.serverTimeMs ?? null);
         if (!applied.success) return;
-        const vault = await readVault();
-        if (!vault.license) return;
-        await writeVault({trial: vault.trial, license: {...vault.license, binding_reported: true}});
+        // F1：置位放进串行段内重读，省掉「先 readVault 再 writeVault」这个会被覆盖的窗口；
+        // 且只对**同一张 token** 置位——期间若又换了授权，新授权自己会再走一次补报。
+        await updateVault((cur) =>
+            cur.license && cur.license.signed_token === r.token
+                ? {trial: cur.trial, license: {...cur.license, binding_reported: true}}
+                : null,
+        );
     } catch (error) {
         logLicenseEvent('LIC_INTERNAL', {event: 'report_binding_unexpected', reason: (error as Error).name});
     }
@@ -510,16 +542,17 @@ export function currentPayload(): TokenPayload | null {
 
 /** 去激活：只清 token，不重置试用（plan 待明确 #17：不允许去激活后重新试用） */
 export async function deactivate(): Promise<ActivationState> {
-    const vault = await readVault();
-    await writeVault({
-        trial: vault.trial,
+    // F1：清理动作在串行段内基于**磁盘最新值**执行。否则两个方向都会出错：
+    // 并发的复核排期写入会被这次整体覆盖丢掉；反过来这次清理也可能被并发的旧快照盖回去（去激活没生效）。
+    await updateVault((cur) => ({
+        trial: cur.trial,
         // 显式列出而非依赖「字面量未列出即被丢弃」：去激活必须清干净复核状态，
         // 否则「停用 → 去激活 → 重新激活」可能继承旧的 revoked_by_server 标记。
         // 川哥拍板（2026-09-24）：watermark / server_time_floor 两个防改系统时间的单调水位必须保留——
         // 它们是反回拨下界，去激活后保留才能防止「改系统时间 + 重新激活」回拨续命；
         // 只把该清的（token / 激活时间 / mid / 复核字段）置空，binding_reported 也清（换 token 需重新上报）。
         license: {
-            ...vault.license,
+            ...cur.license,
             signed_token: null,
             activated_at: null,
             mid_at_activation: null,
@@ -532,7 +565,7 @@ export async function deactivate(): Promise<ActivationState> {
             next_check_at: null,
             binding_reported: null,
         },
-    });
+    }));
     payloadCache = null;
     return getState(null);
 }
@@ -567,33 +600,39 @@ async function applySignedToken(token: string, serverTimeMs: number | null): Pro
     }
     const pair = await getMachineCodePair();
     const now = Date.now();
-    let trial = vault.trial;
-    if (trial && cfg.clock.useServerTimeFloor && typeof serverTimeMs === 'number') {
-        trial = raiseServerTimeFloor(trial, serverTimeMs);
-    }
-    // 付费态自己的单调时钟：沿用上一张授权已攒下的时间下界，再按本次时序抬高，只增不减
-    let license: LicenseVault = {
-        signed_token: token,
-        activated_at: now,
-        mid_at_activation: pair.strong,
-        mid_soft_at_activation: pair.soft,
-        watermark: Math.max(now, licenseFloor(vault.license) ?? 0),
-        server_time_floor: vault.license?.server_time_floor ?? null,
-        // 新授权不继承旧授权的复核状态：否则「被停用 → 重新激活」会立刻又被判停用，用户无法自救。
-        // 复核从零开始（下次启动即首查），由服务端重新给出权威答案。
-        last_checked_at: null,
-        last_verified_ok_at: null,
-        offline_grace_used_ms: 0,
-        revoked_by_server: false,
-        // 新 token 尚未补报本机机器码（与既有「新激活需补绑」语义一致）
-        binding_reported: null,
-    };
-    if (cfg.clock.useServerTimeFloor && typeof serverTimeMs === 'number' && Number.isFinite(serverTimeMs)) {
-        license = raiseLicenseServerFloor(license, serverTimeMs) ?? license;
-    }
     // R2：激活/换发即推进 vault 外锚（服务端时间比本地更可信时用它抬下界）
     await raiseAnchorFloor(maxFloor(now, serverTimeMs) ?? now);
-    await writeVault({trial, license});
+    // F1：新授权要**继承上一张攒下的时间下界**（watermark / server_time_floor），这份继承必须基于
+    // 磁盘最新值——按早先的快照继承，会把并发复核刚抬高的水印又压回旧值（红线 1「只增」被破）。
+    // 整段读-改-写进串行段，也就顺手封掉了「刚领取的 token 被并发的旧 license 覆盖」这条资损路径。
+    const written = await updateVault((cur) => {
+        let trial = cur.trial;
+        if (trial && cfg.clock.useServerTimeFloor && typeof serverTimeMs === 'number') {
+            trial = raiseServerTimeFloor(trial, serverTimeMs);
+        }
+        // 付费态自己的单调时钟：沿用上一张授权已攒下的时间下界，再按本次时序抬高，只增不减
+        let license: LicenseVault = {
+            signed_token: token,
+            activated_at: now,
+            mid_at_activation: pair.strong,
+            mid_soft_at_activation: pair.soft,
+            watermark: Math.max(now, licenseFloor(cur.license) ?? 0),
+            server_time_floor: cur.license?.server_time_floor ?? null,
+            // 新授权不继承旧授权的复核状态：否则「被停用 → 重新激活」会立刻又被判停用，用户无法自救。
+            // 复核从零开始（下次启动即首查），由服务端重新给出权威答案。
+            last_checked_at: null,
+            last_verified_ok_at: null,
+            offline_grace_used_ms: 0,
+            revoked_by_server: false,
+            // 新 token 尚未补报本机机器码（与既有「新激活需补绑」语义一致）
+            binding_reported: null,
+        };
+        if (cfg.clock.useServerTimeFloor && typeof serverTimeMs === 'number' && Number.isFinite(serverTimeMs)) {
+            license = raiseLicenseServerFloor(license, serverTimeMs) ?? license;
+        }
+        return {trial, license};
+    });
+    const license = written?.license ?? null;
     payloadCache = outcome.payload;
     return {success: true, state: activatedState(outcome.payload, cfg, license, null, pair.strong)};
 }

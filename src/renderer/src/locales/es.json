@@ -55,6 +55,10 @@
       "needActivation": "Se requiere activación para usar la sincronización en la nube",
       "openFeatures": "Funciones desbloqueadas con la prueba o la activación",
       "featureLocked": "Bloqueado · disponible tras la prueba o la activación",
+      "switch": "Cambiar licencia",
+      "switchSuccess": "Licencia cambiada. La nueva licencia está activa.",
+      "unbindFailed": "No se pudo liberar la licencia anterior. La nueva licencia sigue funcionando; inténtalo de nuevo más tarde desde la vista «Activado».",
+      "cancelSwitch": "Cancelar el cambio",
       "openAccountPage": "Abrir gestión de licencias",
       "needsOnlineVerifyHint": "Ha pasado un tiempo desde la última verificación en línea. Ninguna función se ha desactivado; verifica en línea para que la licencia no caduque automáticamente.",
       "recheckNow": "Verificar en línea ahora",
@@ -1208,5 +1212,26 @@
   "errorBoundary": {
     "title": "Algo salió mal",
     "retry": "Reintentar"
+  },
+  "account": {
+    "title": "Cuenta",
+    "loginHint": "Inicia sesión para gestionar tus licencias y dispositivos desde tu cuenta.",
+    "login": "Iniciar sesión",
+    "verify": "Verificar",
+    "working": "Por favor, espera…",
+    "cancel": "Cancelar",
+    "logout": "Cerrar sesión",
+    "loggedInAs": "Sesión iniciada como",
+    "emailLabel": "Correo electrónico",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Contraseña",
+    "passwordPlaceholder": "Introduce tu contraseña",
+    "codeLabel": "Código de verificación",
+    "codePlaceholder": "Código de 6 dígitos",
+    "mfaHint": "Introduce el código de tu aplicación de autenticación o del correo.",
+    "errors": {
+      "generic": "Error al iniciar sesión. Comprueba tu correo y contraseña e inténtalo de nuevo.",
+      "network": "Error de conexión de red. Comprueba tu conexión e inténtalo de nuevo."
+    }
   }
 }

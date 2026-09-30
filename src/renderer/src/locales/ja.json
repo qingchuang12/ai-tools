@@ -55,6 +55,10 @@
       "needActivation": "クラウド同期を利用するにはアクティベーションが必要です",
       "openFeatures": "トライアル／アクティベートで開放される機能",
       "featureLocked": "未開放 · トライアルまたはアクティベート後に利用可能",
+      "switch": "ライセンスを切り替え",
+      "switchSuccess": "切り替えました。新しいライセンスが有効です。",
+      "unbindFailed": "古いライセンスを解除できませんでした。新しいライセンスは引き続き使えます。あとで「アクティベート済み」画面から再試行してください。",
+      "cancelSwitch": "切り替えをキャンセル",
       "openAccountPage": "ライセンス管理を開く",
       "needsOnlineVerifyHint": "前回のオンライン確認から時間が経っています。機能は利用できますが、ライセンスの自動失効を防ぐためオンラインで確認してください。",
       "recheckNow": "今すぐオンライン確認",
@@ -1208,5 +1212,26 @@
   "errorBoundary": {
     "title": "問題が発生しました",
     "retry": "再試行"
+  },
+  "account": {
+    "title": "アカウント",
+    "loginHint": "ログインすると、アカウントからライセンスとデバイスを管理できます。",
+    "login": "ログイン",
+    "verify": "認証",
+    "working": "お待ちください…",
+    "cancel": "キャンセル",
+    "logout": "ログアウト",
+    "loggedInAs": "ログイン中：",
+    "emailLabel": "メールアドレス",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "パスワード",
+    "passwordPlaceholder": "パスワードを入力",
+    "codeLabel": "認証コード",
+    "codePlaceholder": "6 桁のコード",
+    "mfaHint": "認証アプリまたはメールで受け取ったコードを入力してください。",
+    "errors": {
+      "generic": "ログインに失敗しました。メールアドレスとパスワードを確認して再試行してください。",
+      "network": "ネットワーク接続に失敗しました。接続を確認して再試行してください。"
+    }
   }
 }
