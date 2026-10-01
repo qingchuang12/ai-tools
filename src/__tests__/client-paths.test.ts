@@ -29,7 +29,7 @@ describe('computeDefaultSkillsPaths', () => {
 describe('resolveSkillsPath（单一来源）', () => {
     it('优先使用自定义客户端的 skillsPath', () => {
         const result = resolveSkillsPath('cursor', {
-            customClients: [{id: 'cursor', skillsPath: '/custom/cursor/skills'}],
+            customClients: [{id: 'cursor', name: 'Cursor', configPath: '/custom/cursor/mcp.json', supportsSkills: true, skillsPath: '/custom/cursor/skills'}],
             customSkillsPaths: {cursor: '/global/cursor/skills'},
         });
         expect(result).toBe('/custom/cursor/skills');

@@ -12,10 +12,8 @@
  */
 
 import {sign} from 'node:crypto';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {afterAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {createHomeSandbox} from './helpers/isolate-home';
 import {TEST_KEY_PAIR} from './helpers/license-test-keys';
 
 const mocks = vi.hoisted(() => ({
@@ -77,9 +75,7 @@ vi.mock('../main/license/keys', async () => {
 });
 
 // ── 隔离必须在被测模块被 import 之前生效（vault 路径在模块加载时就算好）────────
-const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-tools-clock-'));
-mocks.home = tmpHome;
-vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
+const clockSandbox = createHomeSandbox(mocks, 'ai-tools-clock-');
 
 const {readVault, writeVault} = await import('../main/license/vault');
 const {licenseFloor, raiseLicenseServerFloor, raiseLicenseWatermark, LICENSE_WATERMARK_STEP_MS} = await import(
@@ -104,9 +100,7 @@ function makeToken(expSec: number): string {
 }
 
 function wipeHome(): void {
-    for (const entry of fs.readdirSync(tmpHome)) {
-        fs.rmSync(path.join(tmpHome, entry), {recursive: true, force: true});
-    }
+    clockSandbox.wipe();
 }
 
 describe('licenseFloor（付费账本时间下界）', () => {
@@ -140,6 +134,7 @@ describe('付费态时钟回拨', () => {
 
     afterAll(() => {
         vi.useRealTimers();
+        clockSandbox.cleanup();
     });
 
     it('订阅过期后再把系统时间调回过去：状态仍是未激活（expired），且 gate 关闭', async () => {

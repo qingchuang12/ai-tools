@@ -85,6 +85,8 @@ describe('readSkillFile', () => {
             expect(res.success).toBe(true);
             if (res.success) {
                 expect(res.mode).toBe('editable');
+            }
+            if (res.success && res.mode === 'editable') {
                 expect(res.content).toBe('console.log(1)');
             }
             const md = await new SkillsManager().readSkillFile('files-demo', 'cursor', 'references/a.md');
@@ -100,6 +102,8 @@ describe('readSkillFile', () => {
             expect(res.success).toBe(true);
             if (res.success) {
                 expect(res.mode).toBe('readonly');
+            }
+            if (res.success && res.mode === 'readonly') {
                 expect(res.reason).toBe('binary');
             }
         });
@@ -112,6 +116,8 @@ describe('readSkillFile', () => {
             expect(res.success).toBe(true);
             if (res.success) {
                 expect(res.mode).toBe('readonly');
+            }
+            if (res.success && res.mode === 'readonly') {
                 expect(res.reason).toBe('too_large');
             }
         });

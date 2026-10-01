@@ -8,7 +8,7 @@
  *   ① `?search=&category=X` 报 400 —— 元凶是**空 search**（INVALID_QUERY），category 无辜；
  *   ② 用了错参数名 `categorySlug` —— 被静默忽略（200 但结果不变）；
  *   ③ 拿站点上的**父域** slug（development/devops/tools…）去试 —— 上游只认叶子，故 400。
- * 完整取证（含排序真相）见 doc/plan-13.0.md 模块 F。
+ * 完整取证原登于 `doc/plan-13.0.md` 模块 F（该文件已不在仓内、git 历史亦无）；现行结论以下方端点模板注释为准。
  */
 import type {
     CategoryNode,

@@ -14,6 +14,7 @@ import {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import Modal from './Modal';
 import {useActivationStore} from '../store/activationStore';
+import {useNow} from '../hooks/useNow';
 import {useElectronAPI} from '../lib/electron';
 import {FEATURE_CLOUD_SYNC} from '../../../shared/license-constants';
 import type {ManualRecheckResult, RedeemResult} from '../../../shared/activation-types';
@@ -29,9 +30,9 @@ const RECHECK_RESULT_KEY: Record<ManualRecheckResult, string> = {
     skipped: 'license.modal.recheckSkipped',
 };
 
-function formatRemaining(ms: number | null, t: (k: string, opts?: Record<string, unknown>) => string): string {
+function formatRemaining(ms: number | null, t: (k: string, opts?: Record<string, unknown>) => string, now: number): string {
     if (ms === null) return t('license.modal.permanent');
-    const diff = ms - Date.now();
+    const diff = ms - now;
     if (diff <= 0) return t('license.modal.expired');
     const d = Math.floor(diff / 86400000);
     const h = Math.floor((diff % 86400000) / 3600000);
@@ -119,8 +120,16 @@ function FeatureList({
 
 export default function ActivationModal() {
     const { t } = useTranslation();
-    const { state, modalOpen, closeModal, refresh, hasFeature } = useActivationStore();
+    // 分项 selector 订阅：只在真正相关的字段变化时重渲染，不整包订阅 store
+    const state = useActivationStore((s) => s.state);
+    const modalOpen = useActivationStore((s) => s.modalOpen);
+    const closeModal = useActivationStore((s) => s.closeModal);
+    const refresh = useActivationStore((s) => s.refresh);
+    const hasFeature = useActivationStore((s) => s.hasFeature);
     const api = useElectronAPI();
+    // 倒计时驱动下沉到本组件：仅在弹窗打开且处于有到期时间的状态时逐秒 tick，
+    // 避免 store 每秒整体重渲染（F12）
+    const now = useNow(1000, modalOpen && (state?.status === 'trial' || state?.status === 'activated'));
     const [mode, setMode] = useState<Mode>('choose');
     const [code, setCode] = useState('');
     const [email, setEmail] = useState('');
@@ -475,7 +484,7 @@ export default function ActivationModal() {
                     <p className="text-[13px] text-[var(--color-text)]">
                         {t('license.modal.trialRemaining')}
                         <span className="font-semibold text-[var(--color-warning)] ms-1">
-                            {formatRemaining(state.trialExpiresAt, t)}
+                            {formatRemaining(state.trialExpiresAt, t, now)}
                         </span>
                     </p>
                     <button
@@ -517,7 +526,7 @@ export default function ActivationModal() {
                     <p className="text-[13px] text-[var(--color-text)]">
                         {t('license.modal.activatedRemaining')}
                         <span className="font-semibold text-[var(--color-success)] ms-1">
-                            {formatRemaining(state.activatedExpiresAt, t)}
+                            {formatRemaining(state.activatedExpiresAt, t, now)}
                         </span>
                     </p>
                     {state.licenseKey && (

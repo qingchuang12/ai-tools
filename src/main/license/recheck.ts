@@ -462,7 +462,7 @@ async function initialDelay(): Promise<number> {
     }
 }
 
-/** 停止循环（测试/退出用） */
+/** 停止循环（测试/退出用） @internal 生产无调用点，仅测试用 */
 export function stopRecheckLoop(): void {
     loopStopped = true;
     if (loopTimer) {

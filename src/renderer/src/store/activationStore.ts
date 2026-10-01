@@ -1,8 +1,8 @@
 /**
  * 激活状态 store（渲染层）
  *
- * 全局单例：从主进程加载激活状态，每秒 ticker 用于倒计时显示；
- * 当试用 / 激活到期时触发刷新，由主进程持久化降级为「未激活」。
+ * 全局单例：从主进程加载激活状态；当试用 / 激活到期时触发刷新，由主进程持久化降级为「未激活」。
+ * 状态只在真实跃迁时更新（不再每秒 set），倒计时重渲染由显示它的组件各自用 useNow 驱动（F12）。
  * 弹窗开关也在此管理。状态本身以主进程 ~/.ai-tools/activation.json 为权威来源。
  */
 
@@ -39,7 +39,9 @@ export const useActivationStore = create<ActivationStore>((set, get) => ({
         } catch {
             /* 浏览器预览态无该通道：靠 ticker 兜底 */
         }
-        // 单例 ticker：每秒刷新倒计时；到期则触发主进程降级并落盘
+        // 单例 ticker：只负责「到期后拉一次主进程降级状态」，不再每秒 set state。
+        // 倒计时重渲染已下沉到显示倒计时的组件（useNow），全局每秒 set({state:{...s}})
+        // 会让所有 store 订阅者每秒重渲染（plan-1.0 / F12）。
         setInterval(() => {
             const s = get().state;
             if (!s) return;
@@ -47,9 +49,6 @@ export const useActivationStore = create<ActivationStore>((set, get) => ({
                 const exp = s.status === 'trial' ? s.trialExpiresAt : s.activatedExpiresAt;
                 if (exp && Date.now() > exp) {
                     void get().refresh();
-                } else {
-                    // 触发重渲染以更新剩余时间显示
-                    set({ state: { ...s } });
                 }
             }
         }, 1000);

@@ -21,7 +21,7 @@
     "link:deps": "node scripts/link-pnpm-deps.cjs",
     "build:main": "tsc -p tsconfig.main.json && node scripts/copy-platform-data.mjs && node scripts/gen-build-flags.mjs && node scripts/obfuscate-main.mjs && node scripts/copy-license-assets.mjs",
     "build:renderer": "cross-env CONTINUOUS_INTEGRATION=1 vite build",
-    "typecheck": "npx tsc -p tsconfig.main.json --noEmit && npx tsc -p tsconfig.json --noEmit",
+    "typecheck": "npx tsc -p tsconfig.main.json --noEmit && npx tsc -p tsconfig.json --noEmit && npx tsc -p tsconfig.test.json --noEmit",
     "aggregate:registry": "node scripts/aggregate-mcp-registry.mjs",
     "precache:npm-servers": "node scripts/precache-npm-servers.mjs",
     "start": "node scripts/electron-dev-launch.cjs .",

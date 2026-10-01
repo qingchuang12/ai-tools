@@ -211,7 +211,7 @@ export function getConfig(): LicenseConfig {
     return cached;
 }
 
-/** 清缓存（包外配置被替换后可重新加载） */
+/** 清缓存（包外配置被替换后可重新加载） @internal 仅测试调用 */
 export function resetConfigCache(): void {
     cached = null;
 }

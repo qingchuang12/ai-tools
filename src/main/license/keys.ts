@@ -141,7 +141,7 @@ export function getPublicKey(kid: string): KeyObject | null {
     return publicKey;
 }
 
-/** 清缓存（运维替换包外公钥后需要重新加载时使用） */
+/** 清缓存（运维替换包外公钥后需要重新加载时使用） @internal 生产无调用点，仅测试用 */
 export function clearKeyCache(): void {
     keyCache.clear();
 }

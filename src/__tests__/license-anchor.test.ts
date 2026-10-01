@@ -12,10 +12,10 @@
 
 import {sign} from 'crypto';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import type {LicenseConfig} from '../main/license/types';
+import {createHomeSandbox} from './helpers/isolate-home';
 import {TEST_KEY_PAIR} from './helpers/license-test-keys';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => ({
         features: {proFeature: 'pro', gated: ['cloud_sync']},
         // 本文件早于 plan-7.0 复核特性编写，不覆盖停用闸门：关掉开关使 isDisabledByRecheck 恒 false，
         // 精确还原复核接入前的判定行为（与用例 13 的开关测试正交，避免误伤既有断言）。
-        recheck: {enabled: false, intervalMs: 86400000, retryMs: 7200000, offlineGraceDays: 7, timeoutMs: 8000},
+        recheck: {enabled: false, intervalMs: 86400000, retryMs: 7200000, offlineGraceDays: 7, hardStopDays: 60, timeoutMs: 8000},
     },
     strong: 'AAAA-BBBB-CCCC-DDDD',
     soft: 'AAAA-BBBB-CCCC-EEEE',
@@ -74,9 +74,8 @@ vi.mock('../main/license/keys', async () => {
     };
 });
 
-const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-tools-anchor-'));
-mocks.home = tmpHome;
-vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
+const anchorSandbox = createHomeSandbox(mocks, 'ai-tools-anchor-');
+const tmpHome = anchorSandbox.home;
 
 const ANCHOR_FILE = path.join(tmpHome, '.ai-tools', 'license-anchor.json');
 
@@ -94,7 +93,7 @@ afterEach(() => {
 
 afterAll(() => {
     vi.useRealTimers();
-    fs.rmSync(tmpHome, {recursive: true, force: true});
+    anchorSandbox.cleanup();
 });
 
 /** 签一张 30 天后过期的订阅令牌 */

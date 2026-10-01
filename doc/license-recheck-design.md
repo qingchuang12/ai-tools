@@ -163,6 +163,7 @@ export function isDisabledByRecheck(
 3. 复核成功时读 HTTP `Date` 响应头（GMT，无时区歧义）→ `raiseLicenseServerFloor(license, dateMs)` 抬高 `server_time_floor`（**已存在的函数，直接复用**）。拿不到就跳过，不影响主流程。
 4. `revoked_by_server` 一旦置 true，**只有下次复核成功才能清 false**，本地改时间无法复活。
 5. 停用后**继续按 `intervalMs`（15 天）轮询** → 若属误判，服务端恢复后自动自愈（`applyVerdict` 的 active 分支会清 `revoked_by_server`）。
+6. **停用判定还叠一个「进程内时间锚」**（plan-1.0 F5 定案）：`recheck.ts` 的模块级 `processTimeAnchorMs`，观测内联在 `graceBaseline()` 里（`Math.max(nowMs, floor, observeProcessTime(nowMs))`）——因为 `graceBaseline` 是停用/提醒判定的唯一共同下游，内联可保证任何走该判定的路径都自动参与、不会漏接调用点。它**不落盘、重启归零**；跨重启的下界仍只有 `server_time_floor`（只由服务端 HTTP `Date` 抬高）。⚠️ **任何想让它跨重启持久化的改法都会退回本节的红线 2**（用户把时钟前调 → watermark 被永久抬高 → 调回来就凭空被判停用）。已知取舍：「回拨 + 重启」仍推得后硬停，而「时钟一次性跳到未来」（CMOS 没电／VM 恢复）会让付费用户在本次进程内被判停用、自愈手段是重启——两条红线互斥，是取舍不是漏改。
 
 ### 1.6 停用如何生效（「马上不能用」的两个闸门）
 
@@ -267,7 +268,7 @@ license: {
 | 10 | `src/__tests__/license-recheck.test.ts` | **新增** | 单测（见 T04） |
 | 11 | `src/main/index.ts` | 改 | 注册状态变化广播：`license.setStateChangeListener(state => …webContents.send('activation:state-changed', state))`（P2 已落地） |
 | 12 | `src/preload/index.ts`、`src/shared/activation-types.ts`、`src/renderer/src/store/activationStore.ts` | 改 | `onStateChanged(cb)` 订阅 + store 更新（运行中被停用/进入提醒态的 UI 反馈，P2 已落地） |
-| 13 | `src/main/license/redeem.ts`、`purchase-poll.ts`、`verifier.ts` | 配套 | plan-1.0 的配套能力：收银台 URL 带**产品码** `?machineId=&product=ai-tools`（走新常量 `PRODUCT_CODE`；**不预选 `productId`**，档位/SKU 由用户在收银台自选，见 §7 第 13 条）、按机器码领取待激活授权（`fetchPendingLicenses`）+ 支付后轮询、错误码白名单 `publicErrorFor` 与「打开授权管理页」引导。详见 `D:/ProductSpace/plan-1.0.md` |
+| 13 | `src/main/license/redeem.ts`、`purchase-poll.ts`、`verifier.ts` | 配套 | plan-1.0 的配套能力：收银台 URL 带**产品码** `?machineId=&product=ai-tools`（走新常量 `PRODUCT_CODE`；**不预选 `productId`**，档位/SKU 由用户在收银台自选，见 §7 第 13 条）、按机器码领取待激活授权（`fetchPendingLicenses`）+ 支付后轮询、错误码白名单 `publicErrorFor` 与「打开授权管理页」引导。原登记于跨仓 plan `plan-1.0`（D2/F 轮），该 plan 已于 2026-10-01 清理，未完成项落在 `billing-license-service/docs/plan-7.0.md`「结转自 `plan-1.0`」段 |
 
 ---
 
@@ -442,7 +443,7 @@ export function recheckNow(): Promise<ManualRecheckResult>;
 4. `verdict === 'revoked'` 或宽限耗尽 → 调 `setRecheckDisableHook` 注入的回调广播状态。
 5. `scheduleNext(nextDelay(outcome))`。
 6. 之后每次 `getState()` / `assertFeature()` 都会过 `isDisabledByRecheck()` 闸门；`getState()` 另过 `isRecheckAttentionNeeded()` 置提醒态 `needsOnlineVerify`（不减功能）。
-7. 支付到账旁路：打开收银台 → `startPurchasePolling()` → 每 60s 问 `/api/licenses/pending?machineId=` → 命中即本地验签落盘激活（窗口 30 分钟，细节见 plan-1.0）。
+7. 支付到账旁路：打开收银台 → `startPurchasePolling()` → 每 60s 问 `/api/licenses/pending?machineId=` → 命中即本地验签落盘激活（窗口 30 分钟；实现见 `src/main/license/purchase-poll.ts`，现行口径见本文件 §0.4，服务端契约见 `billing-license-service/docs/接口调用时序图.md`）。
 
 ---
 
@@ -518,10 +519,12 @@ export function recheckNow(): Promise<ManualRecheckResult>;
 
 - **时间单位**：token 内 `iat/exp/nbf` 是**秒**；vault / `ActivationState` 一律**毫秒**。秒↔毫秒转换**只允许**在 `verifier.ts` 的 `expToMs()` 一处。
 - **时间基准（两套，勿统一）**：**到期/验签**判定用 `effectiveNow(trial, now, maxFloor(licenseFloor(license), await readAnchorFloor()))`；**宽限/停用/提醒**判定用 `recheck.ts#graceBaseline(license, nowMs)=max(nowMs, server_time_floor)`。两者都**禁止裸 `Date.now()`**，但下界来源刻意不同——理由见 §1.5 第 1 条，把两条「顺手统一」成三路下界会误杀付费用户。
-- **对外文案**：一律 `license.errors.*` 统一 i18n key（`PUBLIC_ERROR_KEY` / `PUBLIC_NETWORK_ERROR_KEY` / `PUBLIC_LOCKED_KEY`）。**绝不回传服务端错误码或 message**（防账号/授权枚举）。服务端 `code` 只进 `logLicenseEvent`。
+- **对外文案**：一律 `license.errors.*` 统一 i18n key（`PUBLIC_ERROR_KEY` / `PUBLIC_NETWORK_ERROR_KEY` / `PUBLIC_LOCKED_KEY`）。**默认绝不回传服务端错误码或 message**（防账号/授权枚举）。服务端 `code` 只进 `logLicenseEvent`。**唯一例外**（plan-1.0 U3 有意收窄，`errors.ts` 的 `SERVER_ERROR_KEYS`）：白名单**只放开三类** `MACHINE_MISMATCH` / `LICENSE_NOT_ACTIVE` / `LOGIN_REQUIRED` → 各专用文案，且只有 `MACHINE_MISMATCH` 带 `action:'openAccount'`（去账户页解绑）；依据是「用户能否据此自救」——三类都有唯一自助出口。其余码（限流、兑换码不存在、金额不符等）继续一律 generic，**不许扩表**。
 - **日志脱敏**：`logLicenseEvent` 会自动对含 token/secret/key/password 的键做指纹替换；不要手打 licenseKey 原文。
 - **不阻塞启动**：复核全部 fire-and-forget，`timer.unref()`。
-- **vault 新字段必须进 `sanitizeLicense`**，否则写入后读不出来。
+- **vault 新字段必须进 `sanitizeLicense`（或 `sanitizeTrial`）白名单**，否则落盘再读即被丢弃、跨重启排期静默失效。`next_check_at`、试用侧 `machine_first_seen_at` 都属此类。
+- **写 vault 一律走 `updateVault(mutator)` 回调式，禁止「先 `readVault()` 取快照、改完再 `writeVault()`」**（plan-1.0 F1 定案）：9 处 read-modify-write 已全部改造（`license/index.ts` ×8 + `recheck.ts` ×1），`writeVault` 在 `src/main` 内**零调用点**（仅测试播种用），函数上留 ⚠️ 注释。**光把「写」串进队列不够**——各调用点的读发生在排队之前、拿到的仍是旧值，必须把**读-改-写整体**搬进串行段。**「按字段 max / 或语义重放」是错的**，会破坏三处故意的降级写：`deactivate`／换发主动写 `revoked_by_server: false` 与 `last_checked_at: null`（或语义会让刚清掉的字段复活）、`applyMachineFirstSeen` 用 `Math.min` **故意把 `first_run_at` 往回拨**。整体覆盖处用**身份守卫**（比较 `signed_token`，变了就放弃本次写入）而非字段合并——既防把用户刚清掉/刚换上的授权盖回去，也不动任何降级写。队列用 `enqueue.then(task, task)`，前一个写失败不卡死整条链。
+- **试用域两件事不可碰**（plan-1.0 F2 定案）：① `sanitizeTrial` 白名单**必须含** `machine_first_seen_at`，漏登 → `backfillMachineFirstSeen` 的 `!== undefined` 恒真 → 每次启动重发机器码首见探测（「问过就不再问」失效）；三态语义严格保留（`undefined`＝从未问过 / `null`＝问过但服务端没见过 / `number`＝首见时刻），垃圾值退化为 `undefined`。② 反过来 `computeTrialToken` 的 canonical 列表**绝不可含**它——一旦加入，所有已部署 vault 的 HMAC 对不上 → `readVault` 判废回 `emptyVault()`＝**全员掉激活**（资损级）。因该字段不参与 HMAC、且 `applyMachineFirstSeen` 只把 `first_run_at` 往早挪，故也不构成「篡改延长试用」路径。
 - **无新增第三方依赖**：`fetch` / `AbortSignal.timeout` / `setTimeout` 均为运行时内置；测试沿用 vitest 现有 `vi.mock` / `vi.stubGlobal('fetch', ...)` 约定（参见 `src/__tests__/license-redeem.test.ts`）。
 
 ---

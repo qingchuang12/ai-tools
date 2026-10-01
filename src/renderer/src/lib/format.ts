@@ -34,10 +34,11 @@ export function formatRelativeTime(t: TFunction, dateStr: string): string {
 /**
  * 紧凑剩余时长（用于激活/试用徽标）：自动取最大单位，避免过长影响排版。
  * 例：30天 / 2年 / 12小时 / 45分；过期返回 i18n「已过期」；expiresAt 为 null 返回空串（调用方省略时间段）。
+ * `now` 由调用方的 useNow 时钟传入（默认取当前时间），使本函数保持纯、可测。
  */
-export function formatCompactDuration(t: TFunction, expiresAt: number | null): string {
+export function formatCompactDuration(t: TFunction, expiresAt: number | null, now: number = Date.now()): string {
   if (expiresAt == null) return '';
-  const diff = expiresAt - Date.now();
+  const diff = expiresAt - now;
   if (diff <= 0) return t('license.modal.expired');
   const days = Math.floor(diff / 86400000);
   if (days >= 365) return `${Math.floor(days / 365)}${t('license.badge.unitYear')}`;

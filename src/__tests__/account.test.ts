@@ -50,7 +50,7 @@ vi.mock('../main/secret-store', () => ({
 }));
 
 const {
-    login, verifyMfa, logout, getProfile, isLoggedIn, getPersistedAccessToken,
+    login, verifyMfa, logout, getProfile, isLoggedIn,
 } = await import('../main/account');
 const {unbindPriorOnServer} = await import('../main/license/redeem');
 const {extractLicenseKeyFromToken} = await import('../main/license/verifier');

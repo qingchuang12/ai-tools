@@ -56,7 +56,7 @@ async function makeSkill(dirName: string): Promise<string> {
 describe('exportSkillsToZip', () => {
     it('单 skill：递归打包全部文件，zip 内路径带 {skillName}/ 前缀', async () => {
         const dir = await makeSkill('demo');
-        const res = await exportSkillsToZip(['demo'], () => ({byClient: {cursor: [{name: 'demo', path: dir, source: null} as any]}}));
+        const res = await exportSkillsToZip(['demo'], async () => ({byClient: {cursor: [{name: 'demo', path: dir, source: null} as any]}}));
         expect(res.ok).toBe(true);
         expect(res.fileName).toBe('demo.zip');
         const names = listZipNames(res.data!).sort();
@@ -71,7 +71,7 @@ describe('exportSkillsToZip', () => {
     it('多 skill：打成一个 zip，各自独立目录', async () => {
         const dirA = await makeSkill('alpha');
         const dirB = await makeSkill('beta');
-        const res = await exportSkillsToZip(['alpha', 'beta'], () => ({
+        const res = await exportSkillsToZip(['alpha', 'beta'], async () => ({
             byClient: {
                 cursor: [
                     {name: 'alpha', path: dirA, source: null},
@@ -90,7 +90,7 @@ describe('exportSkillsToZip', () => {
 
     it('找不到目录 → 报错', async () => {
         await makeSkill('demo');
-        const res = await exportSkillsToZip(['ghost'], () => ({byClient: {cursor: [{
+        const res = await exportSkillsToZip(['ghost'], async () => ({byClient: {cursor: [{
             name: 'demo', path: path.join(root, 'demo'), source: null,
         } as any]}}));
         expect(res.ok).toBe(false);
@@ -98,7 +98,7 @@ describe('exportSkillsToZip', () => {
     });
 
     it('空列表 → 报错', async () => {
-        const res = await exportSkillsToZip([], () => ({byClient: {}}));
+        const res = await exportSkillsToZip([], async () => ({byClient: {}}));
         expect(res.ok).toBe(false);
     });
 });

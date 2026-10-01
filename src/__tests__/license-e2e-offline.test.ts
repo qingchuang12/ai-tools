@@ -13,10 +13,8 @@
  */
 
 import {sign} from 'node:crypto';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
+import {createHomeSandbox} from './helpers/isolate-home';
 import {TEST_KEY_PAIR} from './helpers/license-test-keys';
 
 const ORIGINAL_MID = {strong: 'AAAA-BBBB-CCCC-DDDD', soft: 'AAAA-BBBB-CCCC-EEEE'};
@@ -81,9 +79,7 @@ vi.mock('../main/license/keys', async () => {
 });
 
 // ── 隔离必须在被测模块被 import 之前生效 ─────────────────────────────────────
-const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-tools-e2e-'));
-mocks.home = tmpHome;
-vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
+const e2eSandbox = createHomeSandbox(mocks, 'ai-tools-e2e-');
 
 const license = await import('../main/license');
 
@@ -122,14 +118,12 @@ function tamperSignature(token: string): string {
 }
 
 function wipeHome(): void {
-    for (const entry of fs.readdirSync(tmpHome)) {
-        fs.rmSync(path.join(tmpHome, entry), {recursive: true, force: true});
-    }
+    e2eSandbox.wipe();
 }
 
 describe('授权链路离线端到端', () => {
     beforeAll(() => wipeHome());
-    afterAll(() => wipeHome());
+    afterAll(() => e2eSandbox.cleanup());
 
     it('全新环境 → 试用 → 激活 → 付费功能放行 → 伪造/过期/换机被拦 → 应急开关 → 去激活回试用', async () => {
         // ① 全新环境：首次使用即进试用，且试用期内所有 gate 全量放行

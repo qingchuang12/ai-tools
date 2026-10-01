@@ -186,6 +186,7 @@ describe('首次使用进入试用（vault 缺失自愈）', () => {
             features: [],
             source: 'none' as const,
             degraded: null,
+            needsOnlineVerify: false,
         };
         const state = await license.getState(persisted);
         expect(state.status).toBe('trial');
@@ -381,6 +382,7 @@ describe('门面状态机', () => {
             features: [],
             source: 'license' as const,
             degraded: null,
+            needsOnlineVerify: false,
         };
         const state = await license.getState(persisted);
         expect(state.status).toBe('inactive');

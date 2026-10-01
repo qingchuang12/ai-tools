@@ -257,8 +257,8 @@ describe('npmAdapter', () => {
         expect(detail.extra?.repository).toEqual({url: 'git+https://github.com/modelcontextprotocol/servers.git'});
     });
 
-    it('getFacets 返回 6 个扁平顶层弱分类（5 规则 + mcp 兜底）与排序选项', () => {
-        const facets = npmAdapter.getFacets!('mcp');
+    it('getFacets 返回 6 个扁平顶层弱分类（5 规则 + mcp 兜底）与排序选项', async () => {
+        const facets = await npmAdapter.getFacets!('mcp');
         expect(facets.categories).toEqual([
             {id: 'devtools', name: '开发工具'},
             {id: 'database', name: '数据库'},
@@ -271,8 +271,9 @@ describe('npmAdapter', () => {
         expect(facets.sortOptions.map(s => s.id)).toEqual(['relevance', 'downloads']);
     });
 
-    it('getFacets 的分类 id 不与其他平台冲突（search 为 modelscope/skillhub 共用）', () => {
-        const ids = npmAdapter.getFacets!('mcp').categories.map(c => c.id);
+    it('getFacets 的分类 id 不与其他平台冲突（search 为 modelscope/skillhub 共用）', async () => {
+        const facets = await npmAdapter.getFacets!('mcp');
+        const ids = facets.categories.map(c => c.id);
         // ServerCard/SkillCard 对所有平台都用统一的 category.${cat} 解析，npm 不得复用 'search'
         expect(ids).not.toContain('search');
         expect(ids).toContain('web-search');
@@ -365,10 +366,11 @@ describe('npm 弱分类 classifyNpmPackage', () => {
         expect(classifyNpmPackage({name: 'pkg', keywords: ['mcp', 'calendar']})).toEqual(['office']);
     });
 
-    it('mcp 兜底类可被分类筛选项触达（getFacets 末尾有 mcp 面）', () => {
+    it('mcp 兜底类可被分类筛选项触达（getFacets 末尾有 mcp 面）', async () => {
         const fallback = classifyNpmPackage({name: 'pkg', keywords: ['mcp']});
         expect(fallback).toEqual(['mcp']);
-        expect(npmAdapter.getFacets!('mcp').categories.map(c => c.id)).toContain('mcp');
+        const facets = await npmAdapter.getFacets!('mcp');
+        expect(facets.categories.map(c => c.id)).toContain('mcp');
     });
 });
 

@@ -65,7 +65,8 @@ describe('CacheManager 容量上限（D12）', () => {
         const cm = newManager(999, 3);
         const keys = ['platform-search-d1', 'platform-search-d2', 'platform-search-d3', 'platform-search-d4', 'platform-search-d5'];
         for (const k of keys) {
-            await cm.set(k, {k});
+            // keys 字面量均匹配 platform-search 前缀；staggerMtimes 需要 string[]，故数组元素保持宽类型，写缓存时按 CacheKey 的模板字面量收窄
+            await cm.set(k as `platform-search-${string}`, {k});
         }
         const cacheDir = cm.getCacheDirectory();
         staggerMtimes(cacheDir, keys);

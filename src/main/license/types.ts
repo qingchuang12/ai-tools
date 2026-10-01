@@ -122,7 +122,7 @@ export interface TokenPayload {
     oid?: string;
     /**
      * 更新权益截止（秒，Unix epoch）；缺失 = 不限制。
-     * **当前仅解析、不据此拦截**——硬阻断 vs 更新门控属产品策略（见 plan-2.4 的 C5（已拍板：软门控））。
+     * **已落地为「更新权益软门控」**（2026-10-01 核实 `src/main/updater.ts:79` → `license/update-gate.ts`：只拦新版本更新，不拦当前版本运行；payload 为 null 即放行）。
      */
     update_until?: number | null;
     /** 允许使用的大版本上限；缺失 = 不限制。同 `update_until`，当前不拦截 */
@@ -201,7 +201,8 @@ export interface LicenseVault {
     /** 上次服务端**明确回答 ACTIVE** 的时刻，ms；只进日志与自愈观测 */
     last_verified_ok_at?: number | null;
     /**
-     * 已消耗的离线宽限（ms），默认 0；复核成功即清零。
+     * 已消耗的离线宽限（ms），默认 0。**方案 A（自然日）下不再累加、不参与停用判定**，
+     * 仅保留兼容与自愈观测字段；停用与否由 `isDisabledByRecheck()` 现算（见 recheck.ts）。
      * 老 vault 缺失按 0 是**刻意**的：升级用户不会因为一断网就被停用（宁可放过也不误杀）。
      */
     offline_grace_used_ms?: number;

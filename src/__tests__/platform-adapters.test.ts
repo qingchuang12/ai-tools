@@ -13,6 +13,7 @@ import {mapMCPServer, mapSkill, modelscopeAdapter} from '../main/platforms/model
 import {bailianAdapter, mapServer} from '../main/platforms/bailian';
 import {cozeAdapter, mapCozeSkill} from '../main/platforms/coze';
 import {getAdapter, listAdapters} from '../main/platforms/registry';
+import {platformTypeToSupported} from '../main/platforms/types';
 import {toListItem} from '../main/resolvers/pagination';
 import {
     OFFLINE_INDEX_PLATFORMS,
@@ -26,10 +27,17 @@ import {
 // （调用方始终传入对象，null/undefined 不在契约内，故不测）
 const NASTY_INPUTS = [{}, {unknownField: 'x'}, {id: ''}, {slug: null}, {native: {skill: {categories: null}}}];
 
+// 下列 mapEntry 测试刻意喂「契约外」的缺字段 / 畸形 raw，验证防御式映射不抛错。
+// Raw* 是各自适配器内的私有严格类型（如 RawSkillhub 要求 slug/name），故用 Parameters<> 取回入参类型做定点收窄，
+// 仍受该函数签名约束，不是 `as any` 兜底。
+const clawRaw = (o: unknown): Parameters<typeof mapClawhub>[0] => o as Parameters<typeof mapClawhub>[0];
+const skillRaw = (o: unknown): Parameters<typeof mapSkillhub>[0] => o as Parameters<typeof mapSkillhub>[0];
+const bailianRaw = (o: unknown): Parameters<typeof mapServer>[0] => o as Parameters<typeof mapServer>[0];
+
 describe('clawhub.mapEntry', () => {
     it('缺字段不抛错，id 兜底为空串', () => {
         for (const raw of NASTY_INPUTS) {
-            expect(() => mapClawhub(raw)).not.toThrow();
+            expect(() => mapClawhub(clawRaw(raw))).not.toThrow();
         }
         const item = mapClawhub({});
         expect(item.source).toBe('clawhub');
@@ -115,28 +123,28 @@ describe('clawhub.fetchSkillDownload ownerHandle（P0 修复）', () => {
 describe('skillhub.mapEntry', () => {
     it('缺字段不抛错', () => {
         for (const raw of NASTY_INPUTS) {
-            expect(() => mapSkillhub(raw)).not.toThrow();
+            expect(() => mapSkillhub(skillRaw(raw))).not.toThrow();
         }
-        const item = mapSkillhub({});
+        const item = mapSkillhub(skillRaw({}));
         expect(item.source).toBe('skillhub');
         expect(item.sourceUrl).toContain('skillhub.cn');
     });
 
     it('categoryName 映射官方中文名', () => {
-        const item = mapSkillhub({slug: 'x', category: 'office-efficiency'});
+        const item = mapSkillhub(skillRaw({slug: 'x', category: 'office-efficiency'}));
         expect(item.categoryName).toBe('办公效率');
         // 未命中官方分类的 slug 回退为空，避免显示英文 slug
-        expect(mapSkillhub({slug: 'y', category: 'not-a-cat'}).categoryName).toBeUndefined();
+        expect(mapSkillhub(skillRaw({slug: 'y', category: 'not-a-cat'})).categoryName).toBeUndefined();
     });
 
     // E1（plan-9.0）：downloadUrl 对齐 D3 口径——GitHub upstream 保留，SPA 详情页改给 zip 直链
     it('downloadUrl：GitHub upstream 保留，详情页地址改给 zip 直链', () => {
-        const gh = mapSkillhub({slug: 'foo', upstream_url: 'https://github.com/o/r'});
+        const gh = mapSkillhub(skillRaw({slug: 'foo', upstream_url: 'https://github.com/o/r'}));
         expect(gh.downloadUrl).toBe('https://github.com/o/r');
-        const zip = mapSkillhub({slug: 'tencent-docs'});
+        const zip = mapSkillhub(skillRaw({slug: 'tencent-docs'}));
         expect(zip.downloadUrl).toBe('https://api.skillhub.cn/api/v1/download?slug=tencent-docs');
         // upstream 为非 GitHub 站点时同样走 zip 直链
-        expect(mapSkillhub({slug: 'bar', upstream_url: 'https://example.com/a'}).downloadUrl).toBe(
+        expect(mapSkillhub(skillRaw({slug: 'bar', upstream_url: 'https://example.com/a'})).downloadUrl).toBe(
             'https://api.skillhub.cn/api/v1/download?slug=bar'
         );
     });
@@ -191,8 +199,8 @@ describe('skillsmp.mapEntry', () => {
     });
 
     describe('skillsmp.getFacets（F：上游真实支持叶子分类过滤）', () => {
-        it('声明 12 父域 + 63 叶子分类，且每个父域都有叶子', () => {
-            const f = skillsmpAdapter.getFacets!('skills');
+        it('声明 12 父域 + 63 叶子分类，且每个父域都有叶子', async () => {
+            const f = await skillsmpAdapter.getFacets!('skills');
             expect(f.supportsSubcategories).toBe(true);
             expect(f.categories).toHaveLength(12);
             const leaves = f.categories.flatMap(d => d.children ?? []);
@@ -203,8 +211,8 @@ describe('skillsmp.mapEntry', () => {
             expect(new Set(leaves.map(l => l.id)).size).toBe(63);
         });
 
-        it('父域 slug 不得混进叶子集合（上游对父域一律 400 INVALID_CATEGORY）', () => {
-            const f = skillsmpAdapter.getFacets!('skills');
+        it('父域 slug 不得混进叶子集合（上游对父域一律 400 INVALID_CATEGORY）', async () => {
+            const f = await skillsmpAdapter.getFacets!('skills');
             const leafIds = new Set(f.categories.flatMap(d => (d.children ?? []).map(l => l.id)));
             for (const domainId of ['development', 'devops', 'tools', 'databases', 'research', 'business']) {
                 expect(leafIds.has(domainId)).toBe(false);
@@ -215,8 +223,8 @@ describe('skillsmp.mapEntry', () => {
             }
         });
 
-        it('排序只声明上游真做到的 stars / updated（假控件「相关度」已下线）', () => {
-            const f = skillsmpAdapter.getFacets!('skills');
+        it('排序只声明上游真做到的 stars / updated（假控件「相关度」已下线）', async () => {
+            const f = await skillsmpAdapter.getFacets!('skills');
             expect(f.sortOptions.map(s => s.id)).toEqual(['stars', 'updated']);
             // updated 的上游 sortBy 值是 recent（实测有效），映射信息必须保留
             expect(f.sortOptions.find(s => s.id === 'updated')?.field).toBe('recent');
@@ -318,7 +326,7 @@ describe('modelscope.mapSkill / mapMCPServer', () => {
 describe('bailian.mapServer', () => {
     it('缺字段不抛错，id 采用稳定编码且与下标无关', () => {
         for (const raw of NASTY_INPUTS) {
-            expect(() => mapServer(raw, 0)).not.toThrow();
+            expect(() => mapServer(bailianRaw(raw), 0)).not.toThrow();
         }
         const item = mapServer({serverName: 'svc', source: 'ALIYUN'}, 3);
         expect(item.id).toBe('bailian:ALIYUN:svc');
@@ -351,7 +359,7 @@ describe('bailian.mapServer', () => {
  */
 describe('bailian.fetchServerDetail', () => {
     it('使用列表稳定 ID 回查离线索引，并返回远程托管详情', async () => {
-        const page = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 1, baseUrl: ''});
+        const page = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 1, baseUrl: ''});
         const listItem = page.items[0];
         const detail = await bailianAdapter.fetchServerDetail!({query: '', page: 1, pageSize: 1, baseUrl: ''}, listItem.id);
 
@@ -387,19 +395,19 @@ describe('bailian 客户端排序', () => {
     const isDesc = (a: number[]) => a.every((v, i) => i === 0 || a[i - 1] >= v);
 
     it('users 按 activateUserCount 降序（修复前恒等于原始序）', async () => {
-        const r = await bailianAdapter.searchServers(params('users'));
+        const r = await bailianAdapter.searchServers!(params('users'));
         const v = nums(r.items, 'activateUserCount');
         expect(v.length).toBeGreaterThan(1);
         expect(isDesc(v)).toBe(true);
     });
 
     it('calls（默认）按 callTotalCount 降序', async () => {
-        const r = await bailianAdapter.searchServers(params('calls'));
+        const r = await bailianAdapter.searchServers!(params('calls'));
         expect(isDesc(nums(r.items, 'callTotalCount'))).toBe(true);
     });
 
     it('name 按名称升序', async () => {
-        const r = await bailianAdapter.searchServers(params('name'));
+        const r = await bailianAdapter.searchServers!(params('name'));
         const names = r.items.map(i => i.name);
         expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
     });
@@ -407,7 +415,7 @@ describe('bailian 客户端排序', () => {
     it('sortOptions 的 field 被真实消费（id 不再被当字段名）', async () => {
         const facets = await bailianAdapter.getFacets!();
         expect(facets.sortOptions.find(s => s.id === 'users')?.field).toBe('activateUserCount');
-        const r = await bailianAdapter.searchServers(params('users'));
+        const r = await bailianAdapter.searchServers!(params('users'));
         expect(nums(r.items, 'activateUserCount')).toEqual(
             [...nums(r.items, 'activateUserCount')].sort((a, b) => b - a)
         );
@@ -424,28 +432,29 @@ describe('bailian 客户端排序', () => {
  */
 describe('bailian 「全部」哨兵值（渲染层契约）', () => {
     it("渲染层默认值 category='all' 不过滤任何条目", async () => {
-        const baseline = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 20, baseUrl: ''});
-        const r = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 20, category: 'all', baseUrl: ''});
+        const baseline = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 20, baseUrl: ''});
+        const r = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 20, category: 'all', baseUrl: ''});
         expect(baseline.pageInfo.total).toBeGreaterThan(0);
         expect(r.pageInfo.total).toBe(baseline.pageInfo.total);
     });
 
     it("渲染层默认值 source='all' 不过滤任何条目", async () => {
-        const baseline = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 20, baseUrl: ''});
-        const r = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 20, source: 'all', baseUrl: ''});
+        const baseline = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 20, baseUrl: ''});
+        const r = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 20, source: 'all', baseUrl: ''});
         expect(r.pageInfo.total).toBe(baseline.pageInfo.total);
     });
 
     it("category 与 source 同时为 'all'（商店默认请求形态）返回全量", async () => {
-        const r = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 20, category: 'all', source: 'all', baseUrl: ''});
+        const r = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 20, category: 'all', source: 'all', baseUrl: ''});
         expect(r.pageInfo.total).toBeGreaterThan(0);
     });
 
     it('具体值仍真实过滤（哨兵修复不得破坏筛选）', async () => {
-        const all = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 20, category: 'all', source: 'all', baseUrl: ''});
-        const aliyun = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 20, category: 'all', source: 'ALIYUN', baseUrl: ''});
+        const all = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 20, category: 'all', source: 'all', baseUrl: ''});
+        const aliyun = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 20, category: 'all', source: 'ALIYUN', baseUrl: ''});
         expect(aliyun.pageInfo.total).toBeGreaterThan(0);
-        expect(aliyun.pageInfo.total).toBeLessThan(all.pageInfo.total);
+        expect(all.pageInfo.total).toBeGreaterThan(0);
+        expect(aliyun.pageInfo.total).toBeLessThan(all.pageInfo.total!);
     });
 });
 
@@ -551,8 +560,8 @@ describe('coze.mapCozeSkill', () => {
 });
 
 describe('coze.getFacets', () => {
-    it('返回官方 8 分类与白名单排序', () => {
-        const f = cozeAdapter.getFacets!('skills');
+    it('返回官方 8 分类与白名单排序', async () => {
+        const f = await cozeAdapter.getFacets!('skills');
         expect(f.categories).toHaveLength(8);
         expect(f.categories[0].id).toBe('效率工具');
         expect(f.categories[0].name).toBe('效率工具');
@@ -569,7 +578,11 @@ describe('coze.getFacets', () => {
 describe('PLATFORM_SKILL_DOWNLOAD 与适配器实现同步', () => {
     it('正向：列表内的平台必须实现 fetchSkillDownload', () => {
         for (const p of PLATFORM_SKILL_DOWNLOAD) {
-            const adapter = getAdapter(p);
+            // PLATFORM_SKILL_DOWNLOAD 登记项均为平台直连源（coze/modelscope/clawhub/skillhub），
+            // 落在 SupportedPlatform 值域内；常量类型放宽为 PlatformType[] 是连接配置层复用所致，此处按搜索层语义收窄。
+            const supported = platformTypeToSupported(p);
+            expect(supported, `平台 ${p} 不在 SupportedPlatform 值域`).not.toBeNull();
+            const adapter = getAdapter(supported!);
             expect(adapter, `平台 ${p} 缺少适配器`).not.toBeNull();
             expect(typeof adapter!.fetchSkillDownload, `平台 ${p} 未实现 fetchSkillDownload`).toBe('function');
         }

@@ -47,10 +47,8 @@
  */
 
 import {sign} from 'node:crypto';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterAll, afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {createHomeSandbox} from './helpers/isolate-home';
 import type {LicenseConfig, LicenseVault, TrialVault} from '../main/license/types';
 import {DEFAULT_LICENSE_CONFIG} from '../main/license/constants';
 import {TEST_KEY_PAIR} from './helpers/license-test-keys';
@@ -98,15 +96,14 @@ vi.mock('../main/license/keys', async () => {
     };
 });
 
-const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-tools-recheck-'));
-mocks.home = tmpHome;
-
 /**
- * `os.homedir()` 必须**每个用例前**重新 spy：`afterEach` 的 `restoreAllMocks()` 会把它还原成真实家目录，
- * 于是第 2 个用例起 `vault.ts` / `anchor.ts` 就往开发者自己的 `~/.ai-tools/` 里写——
- * 覆写的是真实的 license-vault.json / license-anchor.json（真激活数据，且 mock 密文让本机授权直接失效）。
+ * `os.homedir()`（及 win32 的 `%APPDATA%`，first-run 第二处 marker 落点）必须**每个用例前**重新接管：
+ * `afterEach` 的 `restoreAllMocks()` 会把 homedir 还原成真实家目录，于是第 2 个用例起
+ * `vault.ts` / `anchor.ts` 就往开发者自己的 `~/.ai-tools/` 里写——覆写的是真实的
+ * license-vault.json / license-anchor.json（真激活数据，且 mock 密文让本机授权直接失效）。
+ * 故 beforeEach 调 `recheckSandbox.arm()` 重新接管，见下方钩子。
  */
-vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
+const recheckSandbox = createHomeSandbox(mocks, 'ai-tools-recheck-');
 
 const {isDisabledByRecheck, isRecheckAttentionNeeded, runRecheck, startRecheckLoop, stopRecheckLoop,
     resetProcessTimeAnchor} = await import(
@@ -192,7 +189,8 @@ function seedTrial(nowMs: number): TrialVault {
 }
 
 interface FetchSpec {
-    status: number;
+    /** throws 为真时 fetch 先抛、用不到 status，故可选；正常响应桩必须显式传 */
+    status?: number;
     body?: unknown;
     date?: string | null;
     throws?: boolean;
@@ -215,9 +213,7 @@ function stubFetch(spec: FetchSpec): void {
 }
 
 function wipeHome(): void {
-    for (const entry of fs.readdirSync(tmpHome)) {
-        fs.rmSync(path.join(tmpHome, entry), {recursive: true, force: true});
-    }
+    recheckSandbox.wipe();
 }
 
 /** 轮询等待后台链路的副作用（fs 写入 + fetch 都是真异步，固定 sleep 在 CI 上不稳） */
@@ -233,7 +229,7 @@ async function until(cond: () => boolean, timeoutMs = 3000): Promise<boolean> {
 beforeEach(() => {
     mocks.config = defaultConfig();
     mocks.mid = {strong: 'RECHECK-STRONG', soft: 'RECHECK-SOFT'};
-    vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
+    recheckSandbox.arm();
     wipeHome();
     // F5 丙：进程内时间锚是模块级状态，必须每个用例前清空（等价于「重启应用」）。
     // 不清空会跨用例串味——本文件有用例走真 Date.now()（≈2026 年）调 getState()，
@@ -249,6 +245,8 @@ afterEach(() => {
     vi.restoreAllMocks();
     wipeHome();
 });
+
+afterAll(() => recheckSandbox.cleanup());
 
 describe('recheck：服务端响应 → 四态分类与禁用判定', () => {
     it('1) 200 + ACTIVE → verdict=active，不禁用，并刷新 last_verified_ok_at', async () => {

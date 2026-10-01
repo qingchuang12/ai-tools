@@ -37,7 +37,7 @@ export function setPurchaseClaimHandler(fn: PurchaseClaimHandler | null): void {
     claimHandler = fn;
 }
 
-/** 正在轮询中（单测与 UI 观测用） */
+/** 正在轮询中（单测与 UI 观测用） @internal 生产无调用点，仅测试/观测用 */
 export function isPollingForPurchase(): boolean {
     return pollTimer !== null;
 }

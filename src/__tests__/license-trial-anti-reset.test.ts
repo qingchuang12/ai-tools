@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
         clock: {skewToleranceMs: 2 * 60 * 60 * 1000, useServerTimeFloor: true},
         grace: {hardwareChangeDays: 7, maxAutoGrace: 1},
         features: {proFeature: 'pro', gated: ['cloud_sync']},
+        recheck: {enabled: false, intervalMs: 86400000, retryMs: 7200000, offlineGraceDays: 7, hardStopDays: 60, timeoutMs: 8000},
     },
     mid: 'AAAA-BBBB-CCCC-DDDD',
 }));

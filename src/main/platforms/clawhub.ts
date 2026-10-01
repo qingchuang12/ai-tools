@@ -110,7 +110,7 @@ export function mapEntry(raw: RawClawhub): PlatformSkillListItem {
     const repo = raw.repoUrl || raw.repo || `https://clawhub.ai/skills/${slug}`;
     // downloadUrl 对齐 D3 口径：repo 是真 GitHub 仓库时保留（走 GitHub 解析通道），
     // 否则给站内 zip 直链——不再把平台详情页地址当下载地址（点开必失败）。
-    // zip 通道只服务 clawhub 原生技能（skills-sh 镜像 slug 实测 404，见 plan-9.0），
+    // zip 通道只服务 clawhub 原生技能（skills-sh 镜像 slug 实测 404），
     // 这类条目的 repo 字段指向其 GitHub 仓库，恰好由上面的 GitHub 分支接管。
     // 歧义 slug 必须带 ownerHandle 才能拿到 zip（否则 409），故 downloadUrl 一并拼上。
     const isGithubRepo = /^https?:\/\/(?:www\.)?github\.com\//i.test(repo);

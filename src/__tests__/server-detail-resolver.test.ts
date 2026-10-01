@@ -4,7 +4,7 @@ import {fetchPlatformServerDetail} from '../main/resolvers/servers';
 
 describe('fetchPlatformServerDetail adapter delegation', () => {
     it('delegates bailian details to the registered offline adapter', async () => {
-        const page = await bailianAdapter.searchServers({query: '', page: 1, pageSize: 1, baseUrl: ''});
+        const page = await bailianAdapter.searchServers!({query: '', page: 1, pageSize: 1, baseUrl: ''});
         const detail = await fetchPlatformServerDetail('bailian', '', null, page.items[0].id);
 
         expect(detail.id).toBe(page.items[0].id);

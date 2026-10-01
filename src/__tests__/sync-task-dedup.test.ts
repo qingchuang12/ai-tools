@@ -1,6 +1,7 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import path from 'path';
 import os from 'os';
+import {SyncTaskManager} from '../main/sync-task-manager';
 
 vi.mock('electron', () => ({
     app: {
@@ -15,8 +16,6 @@ const fakePull = vi.fn(async () => ({ok: true, message: 'ok'}));
 vi.mock('../main/cloud-sync-service', () => ({
     getCloudSyncService: () => ({push: fakePush, pull: fakePull}),
 }));
-
-import {SyncTaskManager} from '../main/sync-task-manager';
 
 function fresh(): SyncTaskManager {
     const mgr = new SyncTaskManager(() => {});

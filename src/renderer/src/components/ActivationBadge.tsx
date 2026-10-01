@@ -13,6 +13,7 @@ import {useTranslation} from 'react-i18next';
 import {useActivationStore} from '../store/activationStore';
 import type {ActivationStatus} from '../lib/electron';
 import {formatCompactDuration} from '../lib/format';
+import {useNow} from '../hooks/useNow';
 import {ErrorIcon} from './Icons';
 
 // 三态配色全部引用主题令牌（style 内联支持 CSS 变量与 color-mix，Electron 130+ 生效），
@@ -57,7 +58,10 @@ export default function ActivationBadge() {
         status === 'trial' ? (state?.trialExpiresAt ?? null)
             : status === 'activated' ? (state?.activatedExpiresAt ?? null)
                 : null;
-    const time = formatCompactDuration(t, expiresAt);
+    // 倒计时只在「有到期时间」时按秒推进（挂 title 上），无到期 / 未激活即停表——
+    // store 不再每秒 set，重渲染范围收敛到本徽标（plan-1.0 / F12）。
+    const now = useNow(1000, expiresAt !== null);
+    const time = formatCompactDuration(t, expiresAt, now);
     // C2（plan-1.0 / U1 分段）：已激活但长时间没联上服务端 → 蓝色提醒「需联网验证」。
     // 只改配色与文案，**不减任何功能**；到失效阈值才由主进程降级为未激活。
     const needsOnline = status === 'activated' && state?.needsOnlineVerify === true;

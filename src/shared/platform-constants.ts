@@ -89,7 +89,7 @@ export const SKILL_PLATFORM_TYPES: PlatformType[] = [
  * - coze：下载需绑定 API Key，由适配器换取 zip 直链；
  * - modelscope：原生 Skill 走匿名 zip 直链
  *   `/skills/<owner>/<slug>/archive/zip/master`（source_url 为空的技能只有这一条通道）；
- * - clawhub / skillhub：站内 zip 直链 `?slug=<slug>`（E1，见 plan-9.0）。
+ * - clawhub / skillhub：站内 zip 直链 `?slug=<slug>`（clawhub 的 zip 通道只服务其原生技能，见 `src/main/platforms/clawhub.ts:113`）。
  */
 export const PLATFORM_SKILL_DOWNLOAD: PlatformType[] = ['coze', 'modelscope', 'clawhub', 'skillhub'];
 

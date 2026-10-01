@@ -13,12 +13,10 @@
  * 隔离：所有文件写在临时 HOME 下，不碰用户真实的 ~/.ai-tools。
  */
 
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import {describe, expect, it, vi} from 'vitest';
+import {afterAll, describe, expect, it, vi} from 'vitest';
 import type {LicenseConfig, LicenseVault, TrialVault} from '../main/license/types';
 import type {VaultData} from '../main/license/vault';
+import {createHomeSandbox} from './helpers/isolate-home';
 
 const mocks = vi.hoisted(() => ({
     config: {
@@ -79,11 +77,11 @@ vi.mock('../main/license/machine-code', () => ({
 }));
 
 // ── 隔离必须在被测模块 import 之前生效（vault 路径在模块加载时就算好）────────
-const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-tools-vault-'));
-mocks.home = tmpHome;
-vi.spyOn(os, 'homedir').mockImplementation(() => mocks.home);
+const vaultSandbox = createHomeSandbox(mocks, 'ai-tools-vault-');
 
 const {readVault, writeVault} = await import('../main/license/vault');
+
+afterAll(() => vaultSandbox.cleanup());
 
 const NOW = Date.parse('2026-09-29T00:00:00Z');
 

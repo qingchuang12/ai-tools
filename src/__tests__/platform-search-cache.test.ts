@@ -18,6 +18,7 @@ function okPage(n: number): PlatformSearchPage {
             name: `skill-${i}`,
             description: '',
             source: 'modelscope',
+            sourceUrl: `https://example.test/s${i}`,
         })),
         pageInfo: {page: 1, pageSize: 20, total: n, totalPages: 1, hasMore: false},
     };

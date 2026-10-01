@@ -372,7 +372,8 @@ describe('TRAE IDE 家族读写（官方形态无 type，停用字段为 disable
         const servers = readClientConfig(client, traeRaw).mcpServers!;
         expect(servers['Figma Desktop']).toEqual({url: 'http://127.0.0.1:3845/mcp', type: 'http', enable: false});
         expect(servers['Chrome DevTools MCP'].enable).toBe(false);
-        expect(servers['Chrome DevTools MCP'].fromGalleryId).toBe('byted-mcp.chrome-devtools-mcp');
+        // fromGalleryId 是 trae 原始条目的扩展字段：适配器「除映射项外原样保留」，但不在 McpServerConfig 声明内，故断言时按透传形状取值
+        expect((servers['Chrome DevTools MCP'] as {fromGalleryId?: string}).fromGalleryId).toBe('byted-mcp.chrome-devtools-mcp');
         expect(servers.codegraph.enable).toBeUndefined();
     });
 

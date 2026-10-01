@@ -108,7 +108,8 @@ function parseActivateResponse(body: unknown, status: number): RedeemFetchResult
 /**
  * 按服务地址拼出收银台 URL（页面与 API 同源，均由 billing-license-service 托管）。
  *
- * 查询参数即 plan-1.0 第 5 条要求的「机器码 + 待激活产品」两要素：
+ * 查询参数只有「机器码 + 待激活产品」两要素（原跨仓 plan-1.0 需求 #5，该 plan 已于 2026-10-01 清理，
+ * 现行口径见 `ai-tools/doc/license-recheck-design.md` §0.4 与 §7 第 13 条）：
  * - `machineId`：支付完成后服务端据此**直签并绑定本机**，也用于付款后按机器码领取待激活授权；
  * - `product`：产品码（`PRODUCT_CODE`，与服务端 `products.product_code` 同值），收银台据此
  *   **只列本产品的可售档位**；档位（买断/订阅 × Pro/Pro Plus）由**用户在页面自选**，

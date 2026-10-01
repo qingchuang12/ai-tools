@@ -41,7 +41,7 @@ export type LicenseErrorCode =
     | 'LIC_CLAIM_FAILED'          // A9：登录后自动到账激活失败（best-effort，不影响登录态）
     | 'LIC_UNBIND_SKIPPED'        // R6：未登录或取不到 licenseKey，跳过换绑解绑
     | 'LIC_RECHECK_NETWORK'       // 复核：网络层失败（fetch 抛异常 / 超时）
-    | 'LIC_RECHECK_RATE_LIMITED'  // 复核：命中 429（照常累加宽限，免扣会让限流变成续命后门）
+    | 'LIC_RECHECK_RATE_LIMITED'  // 复核：命中 429（方案 A 下不累加 offline_grace_used_ms，停用与否由 isDisabledByRecheck 现算）
     | 'LIC_RECHECK_BAD_RESPONSE'  // 复核：响应 JSON 畸形或结构非法
     | 'LIC_RECHECK_REVOKED'       // 复核：服务端明确回答吊销 / 过期 → 停用
     | 'LIC_RECHECK_GRACE_EXHAUSTED' // 复核：离线宽限耗尽 → 停用
@@ -60,7 +60,7 @@ export const PUBLIC_LOCKED_KEY = 'license.errors.locked';
 /**
  * C6（plan-1.0 / U3）：服务端业务码 → **专用文案**白名单。
  *
- * 这是对「绝不回传错误码」既有约定（`doc/plan-4.1.md`）的一次**有意收窄**，只放开三类：
+ * 这是对「绝不回传错误码」既有约定（`doc/license-recheck-design.md` §8「对外文案」）的一次**有意收窄**，只放开三类：
  * 判定依据是「用户能否据此自救」——这三类都有唯一的自助出口（去账户页解绑 / 联系支持 / 先登录），
  * 报出来不给破解者定位信息，却能省掉一大类客诉。其余码（限流、兑换码不存在、金额不符等）
  * 继续一律 `generic`，绝不放开。
