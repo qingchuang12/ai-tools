@@ -62,17 +62,8 @@ export default function ConsistencyCompareModal({
         setFullView(false);
         setLoading(true);
         setEndsByClient({});
-        const clients = item.localClients;
-        if (clients.length === 0) {
-            // 仅云端存在（cloud_only，P2-b）：本地无任何持有客户端，只取云端内容展示（左栏留空）
-            api.cloudSync.readEnds({kind: item.kind, name: item.name, localClient: 'cloud'})
-                .catch(() => ({local: null, cloud: null}))
-                .then(ends => setEndsByClient({cloud: ends}))
-                .finally(() => setLoading(false));
-            return;
-        }
         // 逐个客户端读取本地端内容（用于顶部「本地客户端内容是否一致」的说明）
-        Promise.all(clients.map(client =>
+        Promise.all(item.localClients.map(client =>
             api.cloudSync.readEnds({kind: item.kind, name: item.name, localClient: client})
                 .catch(() => ({local: null, cloud: null}))
                 .then(ends => ({client, ends}))
@@ -96,9 +87,8 @@ export default function ConsistencyCompareModal({
         : item.localClients[0];
     const leftEnds = leftClient ? endsByClient[leftClient] : undefined;
     let rightClient: string | undefined;
-    // 常规模式：右栏 = 云端内容（任何本地客户端读到的 cloud 都来自同一云端路径）；
-    // cloud_only 无本地客户端，改用 sentinel 读取的云端内容
-    let rightText: string | null = leftEnds?.cloud ?? endsByClient.cloud?.cloud ?? null;
+    // 常规模式：右栏 = 云端内容（任何本地客户端读到的 cloud 都来自同一云端路径）
+    let rightText: string | null = leftEnds?.cloud ?? null;
     if (isLocalDiverged && leftClient) {
         const leftContent = (leftEnds?.local ?? null) ?? '';
         rightClient = item.localClients.find(
