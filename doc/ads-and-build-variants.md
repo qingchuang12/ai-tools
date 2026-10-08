@@ -21,9 +21,10 @@
 
 - `@overwolf/ow-electron` 是 Electron 的 drop-in 替换（fork），官方支持与普通 electron 并存（加脚本变体即可，不强制全量换底座）。
 - 广告用 `<owadview/>` 标签：内置自管理广告容器，自动拉取/刷新/静音，需标准 IAB 尺寸容器。
-- **底座已切换完毕**（原「项目锁 electron 43.0.0、换底座须降至 42」的风险已消除）：`package.json:68` 以别名 `"electron": "npm:@overwolf/ow-electron@42.7.1"` 锁定，`:69` 打包器 `@overwolf/ow-electron-builder ^26.9.3`，`package`/`package:win|mac|linux` 四条脚本（`:29-32`）已直接调 `ow-electron-builder`；`node_modules/electron` 实际解析为 `@overwolf/ow-electron` 42.7.1，`node_modules/electron/dist/electron.exe` 存在。
+- **底座已切换完毕**（原「项目锁 electron 43.0.0、换底座须降至 42」的风险已消除）：`package.json:68` 以别名 `"electron": "npm:@overwolf/ow-electron@42.11.4"` 锁定，`:69` 打包器 `@overwolf/ow-electron-builder ^26.9.3`，`package`/`package:win|mac|linux` 四条脚本（`:29-32`）已直接调 `ow-electron-builder`；`node_modules/electron` 实际解析为 `@overwolf/ow-electron` 42.11.4，`node_modules/electron/dist/electron.exe` 存在。
 - 发布链前置：Console 注册 App UID + 联系 Overwolf 开通广告；发布需 Overwolf 签名 + 开发者代码签名双签（上商店则 DSC 强制）。测试可用 `ow-electron --test-ad` 免开通跑通。
-- 稳定版上限：ow-electron 最新仅 **42.7.1（无 43 线）**——日后升级 electron 主线前必须先确认 Overwolf 是否跟进。
+- 版本可选性（2026-10-08 npm registry 实测）：42 线已到 **42.11.4**（`latest`），仍**无 43 线**；`42-x-y` dist-tag 只指向 `42.7.1-beta.9`，所以**必须锁精确版本、别用 dist-tag**。日后升级 electron 主线前须先确认 Overwolf 是否跟进。
+- 换版本后 `node_modules/electron/dist/` 可能不落地（`pnpm install` 只更新了包元数据）：本机的 `allowBuilds['@overwolf/ow-electron']` 与 devDependencies 别名 `electron` 是否匹配**未核实**，脚本被跳过时手动 `node node_modules/electron/install.js` 补下载二进制。
 
 ## 三、国内渠道：360 联盟
 

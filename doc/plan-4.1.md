@@ -6,7 +6,7 @@
 
 ## TODOS（仅未完成）
 
-- [ ] **【需你处理】ow-electron 底座实机验证 + 打包链实跑** 前置**已解除**（2026-10-01 实测）：`package.json:68` 已用别名锁 `@overwolf/ow-electron@42.7.1`，`node_modules/electron/dist/electron.exe` 存在，`node_modules/@overwolf`（含 `ow-electron-builder`）与 `7zip-bin` 均已装。待做：① `webviewTag:true` + `ow-electron --test-ad` 实机跑通 `<owadview/>`（需 GUI）；② `pnpm package:win` 打包链实跑。**未核实项**：本机 `pnpm install` 反复报 `os error 2/5/183`（符号链接/文件已存在/拒绝访问）本轮未复现，若重跑仍失败须先修文件系统或安全软件拦截，勿改包版本。
+- [ ] **【需你处理】ow-electron 底座实机验证 + 打包链实跑** 前置**已解除**（2026-10-01 实测）：`package.json:68` 已用别名锁 `@overwolf/ow-electron`（2026-10-08 由 42.7.1 升至 **42.11.4**，`build.electronVersion` 同步；换版后 `pnpm install` 只落元数据，`dist/electron.exe` 需手动 `node node_modules/electron/install.js` 补）；`node_modules/@overwolf`（含 `ow-electron-builder`）与 `7zip-bin` 均已装。待做：① `webviewTag:true` + `ow-electron --test-ad` 实机跑通 `<owadview/>`（需 GUI）；② `pnpm package:win` 打包链实跑（**未验**：ow-electron-builder 26.9.3 对 42.11.x 的适配）。**未核实项**：本机 `pnpm install` 反复报 `os error 2/5/183`（符号链接/文件已存在/拒绝访问）本轮未复现，若重跑仍失败须先修文件系统或安全软件拦截，勿改包版本。
 - [ ] **【需你处理】免费版1/2 GUI 冒烟** dev 下按 `AI_TOOLS_EDITION` 组合核对广告位与云同步入口显隐、激活态切换（变体矩阵与 flag 短路见 `doc/ads-and-build-variants.md` 第一节）。
 - [ ] **【需你处理】真实后端端到端冒烟** `fetchRedeem` / `unbind` / `activate` / 登录 + MFA 走真实私钥与账号链路（阻塞：需真实后端实例 + 可登录账号）。
 - [ ] **【需你处理】360 联盟商务对接** 确认 PC 桌面 SDK 是否存在并取文档 → 按 `AdProvider` 接口补实现（`union.360.cn` 三次超时不可达，公开渠道只有移动端 API 文档，桌面端支持仍未确认）。

@@ -249,8 +249,8 @@ importers:
         specifier: ^10.1.0
         version: 10.1.0
       electron:
-        specifier: npm:@overwolf/ow-electron@42.7.1
-        version: '@overwolf/ow-electron@42.7.1(supports-color@8.1.1)'
+        specifier: npm:@overwolf/ow-electron@42.11.4
+        version: '@overwolf/ow-electron@42.11.4(supports-color@8.1.1)'
       javascript-obfuscator:
         specifier: 4.2.2
         version: 4.2.2
@@ -689,8 +689,8 @@ packages:
     engines: {node: '>=14.0.0'}
     hasBin: true
 
-  '@overwolf/ow-electron@42.7.1':
-    resolution: {integrity: sha512-qx9HTKsNHhC9AYdtaLPXDyUbSdL9Krq6G9AXXQf3RCtPCXk/4AdRTlzT73PZdLhmkpVoW7YwXZJ9Is86tPXV8w==}
+  '@overwolf/ow-electron@42.11.4':
+    resolution: {integrity: sha512-wLHN8wwZrx+Z5CgxSmhVseoE6XShkQMzpZZptcnHdBUvWDRjsRKvDm9wR/6ocD0zi5lcC3064gCMzA92lcx/Gw==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -3712,7 +3712,7 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
-  '@overwolf/ow-electron@42.7.1(supports-color@8.1.1)':
+  '@overwolf/ow-electron@42.11.4(supports-color@8.1.1)':
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
       '@electron/get': 5.1.0(supports-color@8.1.1)

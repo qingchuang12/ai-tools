@@ -65,7 +65,7 @@
     "autoprefixer": "^10.4.16",
     "concurrently": "^9.2.4",
     "cross-env": "^10.1.0",
-    "electron": "npm:@overwolf/ow-electron@42.7.1",
+    "electron": "npm:@overwolf/ow-electron@42.11.4",
     "@overwolf/ow-electron-builder": "^26.9.3",
     "javascript-obfuscator": "4.2.2",
     "postcss": "^8.4.32",
@@ -79,7 +79,7 @@
   },
   "build": {
     "appId": "com.ai-tools.app",
-    "electronVersion": "42.7.1",
+    "electronVersion": "42.11.4",
     "npmRebuild": false,
     "overwolf": {
       "requireSigning": false
